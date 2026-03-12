@@ -662,6 +662,11 @@ function PlayerStore() {
                       )}
                       <h4 className="product-name">{product.name}</h4>
                       <div style={{ fontSize: '0.85rem', opacity: 0.7, marginBottom: '0.3rem' }}>{product.category}</div>
+                      {product.description && (
+                        <div style={{ fontSize: '0.9rem', opacity: 0.8, marginBottom: '0.4rem' }}>
+                          {product.description.length > 100 ? product.description.slice(0, 100) + '...' : product.description}
+                        </div>
+                      )}
                       <div style={{ marginBottom: '0.3rem' }}>{renderPrice(product.price)}</div>
                       <div style={{ fontSize: '0.8rem', opacity: 0.7, marginBottom: '0.35rem' }}>Available: {product.availability}</div>
                       {images.length > 1 && (
@@ -973,7 +978,7 @@ function PlayerStore() {
       >
         <img
           src={lightbox.images[lightbox.index]}
-          alt={`Image ${lightbox.index + 1}`}
+          alt=""
           className="lightbox-img"
           style={{ transform: `scale(${lightbox.zoom})` }}
           draggable={false}

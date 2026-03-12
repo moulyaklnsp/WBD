@@ -705,6 +705,9 @@ function StoreManagement() {
                       )}
                       <div style={{ padding: '1rem' }}>
                         <h4 style={{ color: 'var(--sea-green)', marginBottom: '0.5rem' }}>{p.name}</h4>
+                        {p.description ? (
+                          <p style={{ fontSize: '0.9rem', color: 'var(--muted-text)', marginBottom: '0.5rem' }}>{String(p.description).length > 140 ? String(p.description).slice(0, 140) + '...' : p.description}</p>
+                        ) : null}
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.5rem' }}>
                           <span>{'\u20B9'}{p.price}</span>
                           <span>Stock: {p.availability}</span>
