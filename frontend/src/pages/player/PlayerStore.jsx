@@ -76,9 +76,6 @@ function PlayerStore() {
   const [purchaseStep, setPurchaseStep] = useState('confirm'); // confirm | gateway | processing | success | error
   const [purchaseError, setPurchaseError] = useState('');
 
-  // Delivery OTP modal
-  const [deliveryOtpModal, setDeliveryOtpModal] = useState({ open: false, orderId: null, otp: '', loading: false, error: '' });
-
   const flash = (msg, isError = false) => {
     if (isError) { setErrorMsg(msg); setSuccessMsg(''); }
     else { setSuccessMsg(msg); setErrorMsg(''); }
@@ -265,29 +262,6 @@ function PlayerStore() {
         flash(d.message || 'Cancel failed', true);
       }
     } catch (e) { flash(e.message || 'Cancel failed', true); }
-  };
-
-  const openDeliveryOtpModal = (orderId) => {
-    setDeliveryOtpModal({ open: true, orderId, otp: '', loading: false, error: '' });
-  };
-
-  const closeDeliveryOtpModal = () => setDeliveryOtpModal({ open: false, orderId: null, otp: '', loading: false, error: '' });
-
-  const verifyDeliveryOtp = async () => {
-    if (!deliveryOtpModal.orderId) return;
-    setDeliveryOtpModal((s) => ({ ...s, loading: true, error: '' }));
-    try {
-      const res = await fetchAsPlayer('/player/api/verify-delivery-otp', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: deliveryOtpModal.orderId, otp: deliveryOtpModal.otp })
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || data.message || 'Verification failed');
-      flash(data.message || 'Delivery verified');
-      closeDeliveryOtpModal();
-      await loadOrders();
-    } catch (err) {
-      setDeliveryOtpModal((s) => ({ ...s, loading: false, error: err.message || 'Verification failed' }));
-    }
   };
 
   const viewTracking = async (orderId) => {
@@ -880,11 +854,6 @@ function PlayerStore() {
                     <button className="btn ghost" style={{ fontSize: '0.8rem' }} onClick={() => viewTracking(order._id)}>
                       <i className="fas fa-truck" /> Track
                     </button>
-                    {!order.delivery_verified && order.status !== 'delivered' && order.status !== 'cancelled' && (
-                      <button className="btn primary" style={{ fontSize: '0.8rem' }} onClick={() => openDeliveryOtpModal(order._id)}>
-                        <i className="fas fa-key" /> Verify OTP
-                      </button>
-                    )}
                   </div>
                 </div>
               </div>
@@ -967,11 +936,6 @@ function PlayerStore() {
                     {order.status !== 'cancelled' && order.status !== 'delivered' && (
                       <button className="btn danger" style={{ fontSize: '0.8rem' }} onClick={() => cancelOrder(order._id)}>
                         <i className="fas fa-times-circle" /> Cancel Order
-                      </button>
-                    )}
-                    {!order.delivery_verified && order.status !== 'delivered' && order.status !== 'cancelled' && (
-                      <button className="btn primary" style={{ fontSize: '0.8rem' }} onClick={() => openDeliveryOtpModal(order._id)}>
-                        <i className="fas fa-key" /> Verify OTP
                       </button>
                     )}
                   </div>
@@ -1061,32 +1025,6 @@ function PlayerStore() {
     </div>
   </div>
 )}
-      {deliveryOtpModal.open && (
-        <div className="lightbox-overlay" onClick={closeDeliveryOtpModal}>
-          <div className="review-inner" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520, padding: '1.25rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-              <h3 style={{ margin: 0 }}>Verify Delivery OTP</h3>
-              <button className="btn" onClick={closeDeliveryOtpModal}><i className="fas fa-times" /></button>
-            </div>
-            <div style={{ marginTop: '0.5rem' }}>
-              <input
-                className="form-input"
-                placeholder="Enter OTP received via email"
-                value={deliveryOtpModal.otp}
-                onChange={(e) => setDeliveryOtpModal((s) => ({ ...s, otp: e.target.value }))}
-                style={{ marginBottom: 8 }}
-              />
-              {deliveryOtpModal.error && <div style={{ color: '#c62828', marginBottom: 8 }}>{deliveryOtpModal.error}</div>}
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button className="btn-primary" onClick={verifyDeliveryOtp} disabled={deliveryOtpModal.loading}>
-                  {deliveryOtpModal.loading ? 'Verifying...' : 'Verify OTP'}
-                </button>
-                <button className="btn" onClick={closeDeliveryOtpModal}>Cancel</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
         {/* ─── Purchase Confirmation Modal ─── */}
         {purchaseModal && purchaseStep !== 'gateway' && (

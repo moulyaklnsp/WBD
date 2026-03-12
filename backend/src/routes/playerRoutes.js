@@ -468,7 +468,6 @@ router.get('/api/orders', playerController.getOrders);
 router.post('/api/orders', playerController.createOrder);
 router.post('/api/orders/:orderId/cancel', playerController.cancelOrder);
 router.get('/api/orders/:orderId/tracking', playerController.getOrderTracking);
-router.post('/api/verify-delivery-otp', playerController.verifyDeliveryOtp);
 
 // ─── Store suggestions ────────────────────────────────────────────────────────
 

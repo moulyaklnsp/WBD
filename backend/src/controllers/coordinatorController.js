@@ -3,7 +3,6 @@ const moment = require('moment');
 const helpers = require('../utils/helpers');
 const { uploadImageBuffer, destroyImage, cloudinary } = require('../utils/cloudinary');
 const { ObjectId } = require('mongodb');
-const { sendOtpEmail } = require('../services/emailService');
 const path = require('path');
 const Player = require('../models/Player');
 const Team = require('../models/Team');
@@ -3369,44 +3368,6 @@ const getOrderAnalytics = async (req, res) => {
   }
 };
 
-// POST /coordinator/api/store/orders/:id/send-delivery-otp
-const sendDeliveryOtp = async (req, res) => {
-  try {
-    const orderId = req.params.id || req.params.orderId;
-    if (!orderId || !ObjectId.isValid(orderId)) return res.status(400).json({ error: 'Invalid order ID' });
-
-    const db = await connectDB();
-    const order = await db.collection('orders').findOne({ _id: new ObjectId(orderId) });
-    if (!order) return res.status(404).json({ error: 'Order not found' });
-
-    // Verify coordinator owns at least one product in this order
-    const ownerIdentifiers = await getCoordinatorOwnerIdentifiers(db, req.session);
-    const ownerRegexes = ownerIdentifiers.map((v) => new RegExp(`^${escapeRegExp(v)}$`, 'i'));
-    const productIds = (order.items || []).map(i => i.productId).filter(Boolean).map(String);
-    const productObjectIds = productIds.filter(pid => ObjectId.isValid(pid)).map(pid => new ObjectId(pid));
-    const coordinatorProducts = await db.collection('products').find({ _id: { $in: productObjectIds }, coordinator: { $in: ownerRegexes } }).toArray();
-    if ((coordinatorProducts || []).length === 0) return res.status(403).json({ error: 'Access denied' });
-
-    const playerEmail = String(order.user_email || '').trim();
-    if (!playerEmail) return res.status(400).json({ error: 'Player email not available for order' });
-
-    // Generate OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
-
-    // Store OTP
-    await db.collection('otps').insertOne({ email: playerEmail, otp, type: 'delivery', expires_at: expiresAt, used: false, orderId: order._id });
-
-    // Send email
-    await sendOtpEmail(playerEmail, otp, `Delivery OTP for Order ${String(order._id).slice(-8)}`);
-
-    return res.json({ success: true, message: 'OTP sent to player email' });
-  } catch (err) {
-    console.error('Error sending delivery OTP:', err);
-    return res.status(500).json({ error: 'Failed to send delivery OTP' });
-  }
-};
-
 // ── Blogs ───────────────────────────────────────────────────────
 
 const getProductAnalyticsDetails = async (req, res) => {
@@ -4174,7 +4135,6 @@ module.exports = {
   deleteProduct,
   toggleComments,
   getOrders,
-  sendDeliveryOtp,
   updateOrderStatus,
   getOrderAnalytics,
   getProductAnalyticsDetails,

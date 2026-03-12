@@ -257,18 +257,6 @@ function StoreManagement() {
     }
   };
 
-  const sendDeliveryOtp = async (orderId) => {
-    try {
-      const res = await fetchAsCoordinator(`/coordinator/api/store/orders/${orderId}/send-delivery-otp`, { method: 'POST' });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || data.message || 'Failed to send OTP');
-      showMessage(data.message || 'OTP sent to customer', 'success');
-      await fetchOrders();
-    } catch (err) {
-      showMessage(err.message || 'Failed to send OTP', 'error');
-    }
-  };
-
   const updateOrderStatus = async (orderId, status) => {
     if (!status) return;
     try {
@@ -676,14 +664,6 @@ function StoreManagement() {
                       >
                         Clear Filters
                       </button>
-                      <button
-                        type="button"
-                        className="btn"
-                        onClick={() => fetchOrders()}
-                        style={{ padding: '0.55rem 0.8rem' }}
-                      >
-                        Refresh Orders
-                      </button>
                       <div style={{ fontSize: '0.85rem', opacity: 0.75 }}>
                         Showing {filteredOrders.length} of {orders.length} orders
                       </div>
@@ -717,28 +697,21 @@ function StoreManagement() {
                                 <td>{'\u20B9'}{Number(o.coordinatorAmount ?? o.totalAmount ?? o.total ?? 0).toFixed(2)}</td>
                                 <td><span className={`status-badge status-${status}`}>{formatOrderStatus(status)}</span></td>
                                 <td>
-                                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                                    {nextOptions.length > 0 ? (
-                                      <select
-                                        className="form-input"
-                                        style={{ padding: '0.4rem', width: 'auto' }}
-                                        onChange={(e) => updateOrderStatus(o._id, e.target.value)}
-                                        value=""
-                                      >
-                                        <option value="" disabled>Update Status</option>
-                                        {nextOptions.map((opt) => (
-                                          <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                        ))}
-                                      </select>
-                                    ) : (
-                                      <span style={{ opacity: 0.75, fontSize: '0.85rem' }}>No actions</span>
-                                    )}
-                                    {!o.delivery_verified && (
-                                      <button className="btn-primary" onClick={() => sendDeliveryOtp(o._id)} style={{ padding: '0.45rem 0.6rem' }}>
-                                        <i className="fas fa-paper-plane" /> Send OTP
-                                      </button>
-                                    )}
-                                  </div>
+                                  {nextOptions.length > 0 ? (
+                                    <select
+                                      className="form-input"
+                                      style={{ padding: '0.4rem', width: 'auto' }}
+                                      onChange={(e) => updateOrderStatus(o._id, e.target.value)}
+                                      value=""
+                                    >
+                                      <option value="" disabled>Update Status</option>
+                                      {nextOptions.map((opt) => (
+                                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                      ))}
+                                    </select>
+                                  ) : (
+                                    <span style={{ opacity: 0.75, fontSize: '0.85rem' }}>No actions</span>
+                                  )}
                                 </td>
                               </tr>
                             );

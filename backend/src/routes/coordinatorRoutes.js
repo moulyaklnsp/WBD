@@ -287,7 +287,6 @@ router.patch('/api/store/products/:id/toggle-comments', coordinatorController.to
  *         description: Orders list
  */
 router.get('/api/store/orders', coordinatorController.getOrders);
-router.post('/api/store/orders/:id/send-delivery-otp', coordinatorController.sendDeliveryOtp);
 router.patch('/api/store/orders/:id/status', coordinatorController.updateOrderStatus);
 router.get('/api/store/analytics', coordinatorController.getOrderAnalytics);
 router.get('/api/store/analytics/products/:productId', coordinatorController.getProductAnalyticsDetails);
