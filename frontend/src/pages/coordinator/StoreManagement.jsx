@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchProducts, addProduct } from '../../features/products/productsSlice';
 import '../../styles/playerNeoNoir.css';
@@ -6,7 +7,7 @@ import { motion } from 'framer-motion';
 import usePlayerTheme from '../../hooks/usePlayerTheme';
 import AnimatedSidebar from '../../components/AnimatedSidebar';
 import { coordinatorLinks } from '../../constants/coordinatorLinks';
-import { fetchAsCoordinator } from '../../utils/fetchWithRole';
+import { fetchAsCoordinator, safePut } from '../../utils/fetchWithRole';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -52,6 +53,7 @@ const sectionVariants = {
 function StoreManagement() {
   const [isDark, toggleTheme] = usePlayerTheme();
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const productState = useSelector((s) => s.products || {});
   const [activeTab, setActiveTab] = useState('products');
   const [message, setMessage] = useState(null);
@@ -90,6 +92,15 @@ function StoreManagement() {
   const [selectedProductForReviews, setSelectedProductForReviews] = useState(null);
   const [reviews, setReviews] = useState([]);
   const [reviewsLoading, setReviewsLoading] = useState(false);
+  // --- Edit product modal state ---
+  const [editProduct, setEditProduct] = useState(null);
+  const [editForm, setEditForm] = useState({ name: '', category: '', price: '', availability: '', description: '' });
+  const [editImageFiles, setEditImageFiles] = useState([]);
+  const [editImagePreviews, setEditImagePreviews] = useState([]);
+  const [editRemovePublicIds, setEditRemovePublicIds] = useState([]);
+  const [editRemoveUrls, setEditRemoveUrls] = useState([]);
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState('');
 
   const showMessage = (text, type = 'success') => {
     setMessage({ type, text });
@@ -187,6 +198,119 @@ function StoreManagement() {
     const files = Array.from(e.target.files || []);
     setProductImageFiles(files);
     setProductImagePreviews(files.map((f) => URL.createObjectURL(f)));
+  };
+
+  // --- Edit product handlers ---
+  const openEditProduct = (product) => {
+    setEditError('');
+    setEditProduct(product);
+    setEditForm({
+      name: product.name || '',
+      category: product.category || '',
+      price: product.price != null ? String(product.price) : '',
+      availability: product.availability != null ? String(product.availability) : '',
+      description: product.description || ''
+    });
+    setEditImageFiles([]);
+    setEditImagePreviews([]);
+    setEditRemovePublicIds([]);
+    setEditRemoveUrls([]);
+  };
+
+  const openCombinedProduct = async (product) => {
+    openEditProduct(product);
+    // load analytics into productAnalyticsDetails/selectedProductAnalytics
+    try {
+      await fetchProductAnalyticsDetails(product);
+    } catch (e) {
+      // ignore analytics errors here; edit view should still open
+    }
+  };
+
+  const handleEditFiles = (e) => {
+    const files = Array.from(e.target.files || []);
+    setEditImageFiles(files);
+    setEditImagePreviews(files.map((f) => URL.createObjectURL(f)));
+  };
+
+  const getPublicIdForImage = (product, img) => {
+    if (!product) return '';
+    // Try to find img in image_urls array and map to image_public_ids by index
+    const urls = Array.isArray(product.image_urls)
+      ? product.image_urls
+      : (typeof product.image_urls === 'string' ? product.image_urls.split(',').map(s => s.trim()) : []);
+    const pubIds = Array.isArray(product.image_public_ids) ? product.image_public_ids : (product.image_public_id ? [product.image_public_id] : []);
+    const idx = urls.findIndex(u => String(u).trim() === String(img).trim());
+    if (idx >= 0 && pubIds[idx]) return pubIds[idx];
+    // fallback: if single image_url matches product.image_url
+    if (String(product.image_url || '').trim() === String(img).trim()) return product.image_public_id || '';
+    return '';
+  };
+
+  const toggleRemoveImage = (product, img) => {
+    // Determine public id for this image; if exists, toggle in publicIds list, otherwise toggle URL list
+    const pubId = getPublicIdForImage(product, img);
+    if (pubId) {
+      setEditRemovePublicIds((prev) => (prev.includes(pubId) ? prev.filter(p => p !== pubId) : [...prev, pubId]));
+    } else {
+      setEditRemoveUrls((prev) => (prev.includes(img) ? prev.filter(u => u !== img) : [...prev, img]));
+    }
+  };
+
+  const saveProductUpdate = async () => {
+    if (!editProduct) return;
+    setEditLoading(true);
+    setEditError('');
+    try {
+      // If no new files and no removals requested, send JSON PUT (simpler, avoids multipart)
+      let res;
+      if ((editImageFiles || []).length === 0 && (editRemovePublicIds || []).length === 0 && (editRemoveUrls || []).length === 0) {
+        const payload = {
+          name: editForm.name || '',
+          category: editForm.category || '',
+          price: editForm.price || '',
+          availability: editForm.availability || '',
+          description: editForm.description || ''
+        };
+        res = await safePut(`/coordinator/api/store/products/${editProduct._id}`, payload);
+      } else {
+        const fd = new FormData();
+        fd.append('name', editForm.name || '');
+        fd.append('category', editForm.category || '');
+        fd.append('price', editForm.price || '');
+        fd.append('availability', editForm.availability || '');
+        if (editForm.description != null) fd.append('description', editForm.description);
+        if (editRemovePublicIds.length > 0) fd.append('removeImagePublicIds', editRemovePublicIds.join(','));
+        if (editRemoveUrls.length > 0) fd.append('removeImageUrls', editRemoveUrls.join(','));
+        for (const f of editImageFiles) fd.append('files', f);
+        res = await fetchAsCoordinator(`/coordinator/api/store/products/${editProduct._id}`, { method: 'PUT', body: fd });
+      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Request failed with status ${res.status}`);
+      showMessage('Product updated', 'success');
+      setEditProduct(null);
+      dispatch(fetchProducts('coordinator'));
+    } catch (err) {
+      console.error('Update failed', err);
+      setEditError(err.message || 'Update failed');
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  const confirmDeleteProduct = async (productId) => {
+    if (!productId) return;
+    if (!window.confirm('Delete this product? This cannot be undone.')) return;
+    try {
+      const res = await fetchAsCoordinator(`/coordinator/api/store/products/${productId}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Failed to delete product');
+      showMessage('Product deleted', 'success');
+      setEditProduct(null);
+      dispatch(fetchProducts('coordinator'));
+    } catch (err) {
+      showMessage(err.message || 'Delete failed', 'error');
+    }
   };
 
   const toggleReviewVisibility = async (productId) => {
@@ -435,7 +559,7 @@ function StoreManagement() {
         .analytics-table th { color:var(--sea-green); font-family:'Cinzel', serif; }
         .stat-card { background:rgba(var(--sea-green-rgb), 0.05); padding:1.5rem; border-radius:12px; border:1px solid rgba(var(--sea-green-rgb), 0.2); text-align:center; }
         .stat-val { font-size:2rem; font-weight:bold; color:var(--sea-green); margin:0.5rem 0; }
-        .review-modal { position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.8); z-index:2000; display:flex; justify-content:center; alignItems:center; padding:2rem; }
+        .review-modal { position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.8); z-index:2000; display:flex; justify-content:center; align-items:center; padding:2rem; }
         .review-content { background:var(--card-bg); padding:2rem; borderRadius:15px; width:100%; max-width:600px; max-height:80vh; overflow-y:auto; position:relative; }
         .analytics-detail-content { background:var(--card-bg); padding:2rem; border-radius:15px; width:100%; max-width:900px; max-height:85vh; overflow-y:auto; position:relative; }
       `}</style>
@@ -552,7 +676,8 @@ function StoreManagement() {
                       <img
                         src={currentImage}
                         alt={p.name}
-                        style={{ width: '100%', height: '150px', objectFit: 'cover' }}
+                        style={{ width: '100%', height: '150px', objectFit: 'cover', cursor: 'pointer' }}
+                        onClick={(e) => { e.stopPropagation(); navigate(`/coordinator/store_management/product/${p._id}`); }}
                       />
                       {images.length > 1 && (
                         <div style={{ display: 'flex', gap: '0.35rem', padding: '0.5rem 0.5rem 0', overflowX: 'auto' }}>
@@ -909,6 +1034,91 @@ function StoreManagement() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {editProduct && (
+        <div className="review-modal">
+          <div className="edit-product-content" style={{ maxWidth: 760, width: '95%', padding: '1.25rem', position: 'relative' }}>
+            <button
+              onClick={() => setEditProduct(null)}
+              style={{ position: 'absolute', top: '0.8rem', right: '0.8rem', background: 'none', border: 'none', color: 'var(--text-color)', fontSize: '1.4rem', cursor: 'pointer' }}
+            >
+              <i className="fas fa-times" />
+            </button>
+            <h3 style={{ marginBottom: '0.75rem' }}>Edit Product: {editProduct.name}</h3>
+            {productAnalyticsLoading ? (
+              <div style={{ marginBottom: '0.75rem' }}>Loading analytics...</div>
+            ) : productAnalyticsError ? (
+              <div style={{ marginBottom: '0.75rem', color: '#c62828' }}>{productAnalyticsError}</div>
+            ) : productAnalyticsDetails ? (
+              <div style={{ marginBottom: '1rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                <div style={{ padding: '0.75rem 1rem', borderRadius: 10, background: 'rgba(46,139,87,0.06)', border: '1px solid rgba(46,139,87,0.12)' }}>
+                  <div style={{ fontSize: '0.85rem', color: 'var(--sea-green)' }}>Units Sold</div>
+                  <div style={{ fontWeight: 'bold', fontSize: '1.4rem' }}>{Number(productAnalyticsDetails.unitsSold || 0)}</div>
+                </div>
+                <div style={{ padding: '0.75rem 1rem', borderRadius: 10, background: 'rgba(46,139,87,0.06)', border: '1px solid rgba(46,139,87,0.12)' }}>
+                  <div style={{ fontSize: '0.85rem', color: 'var(--sea-green)' }}>Revenue</div>
+                  <div style={{ fontWeight: 'bold', fontSize: '1.4rem' }}>₹{Number(productAnalyticsDetails.totalRevenue || 0).toFixed(2)}</div>
+                </div>
+                <div style={{ marginLeft: 'auto' }}>
+                  <button className="btn ghost" onClick={() => fetchProductAnalyticsDetails(editProduct)} style={{ padding: '0.45rem 0.7rem' }}>Refresh Analytics</button>
+                </div>
+              </div>
+            ) : null}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', alignItems: 'start' }}>
+              <div>
+                <label className="form-label">Name</label>
+                <input className="form-input" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
+
+                <label className="form-label" style={{ marginTop: '0.5rem' }}>Category</label>
+                <input className="form-input" value={editForm.category} onChange={(e) => setEditForm({ ...editForm, category: e.target.value })} />
+
+                <label className="form-label" style={{ marginTop: '0.5rem' }}>Price</label>
+                <input className="form-input" value={editForm.price} onChange={(e) => setEditForm({ ...editForm, price: e.target.value })} />
+
+                <label className="form-label" style={{ marginTop: '0.5rem' }}>Stock</label>
+                <input className="form-input" value={editForm.availability} onChange={(e) => setEditForm({ ...editForm, availability: e.target.value })} />
+
+                <label className="form-label" style={{ marginTop: '0.5rem' }}>Description</label>
+                <textarea className="form-input" style={{ minHeight: 100 }} value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} />
+              </div>
+              <div>
+                <label className="form-label">Existing Images</label>
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+                  {getProductImages(editProduct).map((img, idx) => {
+                    const pubId = getPublicIdForImage(editProduct, img) || '';
+                    const marked = (pubId && editRemovePublicIds.includes(pubId)) || editRemoveUrls.includes(img);
+                    return (
+                      <div key={`${editProduct._id}-${idx}`} style={{ position: 'relative' }}>
+                        <img src={img} alt={`img-${idx}`} style={{ width: 90, height: 90, objectFit: 'cover', borderRadius: 8, border: marked ? '2px solid rgba(198,40,40,0.9)' : '1px solid var(--card-border)' }} />
+                        <button type="button" onClick={() => toggleRemoveImage(editProduct, img)} style={{ position: 'absolute', top: 6, right: 6, background: 'rgba(0,0,0,0.5)', color: '#fff', border: 'none', borderRadius: 6, padding: '0.15rem 0.35rem', cursor: 'pointer' }}>
+                          {marked ? 'Undo' : 'Remove'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <label className="form-label">Upload New Images</label>
+                <input type="file" accept="image/*" multiple onChange={handleEditFiles} className="form-input" />
+                {editImagePreviews.length > 0 && (
+                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+                    {editImagePreviews.map((url, i) => (
+                      <img key={i} src={url} alt={`new-${i}`} style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 8 }} />
+                    ))}
+                  </div>
+                )}
+
+                {editError && <div style={{ color: '#c62828', marginTop: '0.5rem' }}>{editError}</div>}
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.8rem' }}>
+                  <button className="btn-primary" onClick={saveProductUpdate} disabled={editLoading}>{editLoading ? 'Saving...' : 'Save'}</button>
+                  <button className="btn danger" onClick={() => confirmDeleteProduct(editProduct._id)} disabled={editLoading}>Delete</button>
+                  <button className="btn ghost" onClick={() => setEditProduct(null)} disabled={editLoading}>Cancel</button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}

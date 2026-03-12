@@ -2903,34 +2903,126 @@ const checkDateConflict = async (req, res) => {
 const updateProduct = async (req, res) => {
   try {
     const productId = req.params.productId || req.params.id;
-    const updates = req.body;
-
     if (!ObjectId.isValid(productId)) return res.status(400).json({ error: 'Invalid product ID' });
 
     const db = await connectDB();
-    const coordinatorEmail = req.session.userEmail;
 
-    // Verify coordinator owns the product
-    const product = await db.collection('products').findOne({
-      _id: new ObjectId(productId),
-      coordinator: coordinatorEmail
-    });
-    if (!product) return res.status(404).json({ error: 'Product not found or access denied' });
+    // Fetch product first and verify ownership using coordinator identifiers (username or email)
+    const product = await db.collection('products').findOne({ _id: new ObjectId(productId) });
+    if (!product) return res.status(404).json({ error: 'Product not found' });
 
-    // Remove fields that shouldn't be updated directly
-    delete updates._id;
-    delete updates.coordinator;
-    delete updates.college;
+    const ownerIdentifiers = await getCoordinatorOwnerIdentifiers(db, req.session);
+    const productOwner = String(product.coordinator || '').trim();
+    const ownerSet = new Set((ownerIdentifiers || []).map((v) => String(v).trim()));
+    if (!ownerSet.has(productOwner) && !ownerSet.has(productOwner.toLowerCase())) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
 
-    await db.collection('products').updateOne(
-      { _id: new ObjectId(productId) },
-      { $set: updates }
-    );
+    // Support multipart uploads for adding images
+    const files = [];
+    if (multer && (req.headers['content-type'] || '').includes('multipart/form-data')) {
+      const uploader = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 * 1024 * 1024, files: 8 } }).any();
+      await new Promise((resolve, reject) => {
+        uploader(req, res, (err) => (err ? reject(err) : resolve()));
+      });
+    }
 
-    res.json({ success: true });
+    if (Array.isArray(req.files) && req.files.length > 0) {
+      files.push(...req.files);
+    }
+
+    const body = req.body || {};
+    const updates = {};
+
+    // Allowed scalar fields to update
+    if (body.name != null) updates.name = safeTrim(body.name);
+    if (body.category != null) updates.category = safeTrim(body.category);
+    if (body.price != null && body.price !== '') {
+      const p = parseFloat(body.price);
+      if (!Number.isNaN(p) && p >= 0) updates.price = p;
+    }
+    if (body.availability != null && body.availability !== '') {
+      const a = parseInt(body.availability);
+      if (!Number.isNaN(a) && a >= 0) updates.availability = a;
+    }
+    if (body.description != null) updates.description = safeTrim(body.description);
+    if (body.comments_enabled != null) updates.comments_enabled = !!(body.comments_enabled === true || body.comments_enabled === 'true' || body.comments_enabled === '1' || body.comments_enabled === 1);
+
+    const uploadedImageUrls = [];
+    const uploadedPublicIds = [];
+    if (files.length > 0) {
+      for (const file of files) {
+        try {
+          const result = await uploadImageBuffer(file.buffer, {
+            folder: 'chesshive/product-images',
+            public_id: `product_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+            overwrite: false
+          });
+          if (result?.secure_url) uploadedImageUrls.push(result.secure_url);
+          if (result?.public_id) uploadedPublicIds.push(result.public_id);
+        } catch (e) {
+          console.warn('Failed to upload product image:', e.message);
+        }
+      }
+    }
+
+    // Handle image URLs/public IDs provided in body (CSV or array)
+    const bodyImageUrls = Array.isArray(body.imageUrls) ? body.imageUrls : (typeof body.imageUrls === 'string' ? body.imageUrls.split(',').map(s => s.trim()).filter(Boolean) : []);
+    const bodyPublicIds = Array.isArray(body.imagePublicIds) ? body.imagePublicIds : (typeof body.imagePublicIds === 'string' ? body.imagePublicIds.split(',').map(s => s.trim()).filter(Boolean) : []);
+
+    // Handle removals requested by client
+    const removeImagePublicIds = Array.isArray(body.removeImagePublicIds) ? body.removeImagePublicIds : (typeof body.removeImagePublicIds === 'string' ? body.removeImagePublicIds.split(',').map(s => s.trim()).filter(Boolean) : []);
+    const removeImageUrls = Array.isArray(body.removeImageUrls) ? body.removeImageUrls : (typeof body.removeImageUrls === 'string' ? body.removeImageUrls.split(',').map(s => s.trim()).filter(Boolean) : []);
+
+    // Build DB update document
+    const dbUpdate = {};
+    if (Object.keys(updates).length > 0) dbUpdate.$set = { ...updates, updated_date: new Date() };
+
+    // Add new images to arrays
+    const addToSet = {};
+    if (uploadedImageUrls.length > 0 || bodyImageUrls.length > 0) {
+      addToSet.image_urls = { $each: [...new Set([...(bodyImageUrls || []), ...uploadedImageUrls]) ] };
+      // if no primary image_url present, set to first available
+      if (!product.image_url && (uploadedImageUrls.length > 0 || bodyImageUrls.length > 0)) {
+        dbUpdate.$set = dbUpdate.$set || {};
+        dbUpdate.$set.image_url = (bodyImageUrls[0] || uploadedImageUrls[0] || '').toString();
+      }
+    }
+    if (uploadedPublicIds.length > 0 || bodyPublicIds.length > 0) {
+      addToSet.image_public_ids = { $each: [...new Set([...(bodyPublicIds || []), ...uploadedPublicIds]) ] };
+    }
+    if (Object.keys(addToSet).length > 0) dbUpdate.$addToSet = addToSet;
+
+    // Remove requested images (and attempt Cloudinary cleanup)
+    if (removeImagePublicIds.length > 0) {
+      dbUpdate.$pull = dbUpdate.$pull || {};
+      dbUpdate.$pull.image_public_ids = { $in: removeImagePublicIds };
+      // attempt to destroy each
+      for (const pid of removeImagePublicIds) {
+        try { await destroyImage(pid); } catch (e) { console.warn('Failed to destroy image:', pid, e.message); }
+      }
+    }
+    if (removeImageUrls.length > 0) {
+      dbUpdate.$pull = dbUpdate.$pull || {};
+      dbUpdate.$pull.image_urls = { $in: removeImageUrls };
+    }
+
+    // If client explicitly set a primary image_url
+    if (body.imageUrl || body.image_url) {
+      dbUpdate.$set = dbUpdate.$set || {};
+      dbUpdate.$set.image_url = (body.imageUrl || body.image_url).toString();
+    }
+
+    // Execute update if there is something to change
+    if (Object.keys(dbUpdate).length > 0) {
+      await db.collection('products').updateOne({ _id: new ObjectId(productId) }, dbUpdate);
+    }
+
+    const updated = await db.collection('products').findOne({ _id: new ObjectId(productId) });
+    return res.json({ success: true, product: updated });
   } catch (error) {
     console.error('Error updating product:', error);
-    res.status(500).json({ error: 'Failed to update product' });
+    return res.status(500).json({ error: 'Failed to update product' });
   }
 };
 
@@ -2940,14 +3032,16 @@ const deleteProduct = async (req, res) => {
     if (!ObjectId.isValid(productId)) return res.status(400).json({ error: 'Invalid product ID' });
 
     const db = await connectDB();
-    const coordinatorEmail = req.session.userEmail;
 
-    // Verify coordinator owns the product
-    const product = await db.collection('products').findOne({
-      _id: new ObjectId(productId),
-      coordinator: coordinatorEmail
-    });
-    if (!product) return res.status(404).json({ error: 'Product not found or access denied' });
+    const product = await db.collection('products').findOne({ _id: new ObjectId(productId) });
+    if (!product) return res.status(404).json({ error: 'Product not found' });
+
+    const ownerIdentifiers = await getCoordinatorOwnerIdentifiers(db, req.session);
+    const productOwner = String(product.coordinator || '').trim();
+    const ownerSet = new Set((ownerIdentifiers || []).map((v) => String(v).trim()));
+    if (!ownerSet.has(productOwner) && !ownerSet.has(productOwner.toLowerCase())) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
 
     // Delete associated image(s) from Cloudinary
     const publicIds = Array.isArray(product.image_public_ids)

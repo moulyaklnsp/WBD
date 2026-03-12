@@ -45,6 +45,7 @@ import CoordinatorPairings from '../pages/coordinator/CoordinatorPairings';
 import CoordinatorPlayerStats from '../pages/coordinator/CoordinatorPlayerStats';
 import CoordinatorRankings from '../pages/coordinator/CoordinatorRankings';
 import StoreManagement from '../pages/coordinator/StoreManagement';
+import ProductDetail from '../pages/coordinator/ProductDetail';
 import TournamentManagement from '../pages/coordinator/TournamentManagement';
 import TournamentDetails from '../pages/coordinator/TournamentDetails';
 import TournamentComplaints from '../pages/coordinator/TournamentComplaints';
@@ -137,6 +138,7 @@ export default function AppRoutes() {
       <Route path="/coordinator/player_stats" element={<AnimatedPageLayout><CoordinatorPlayerStats /></AnimatedPageLayout>} />
       <Route path="/coordinator/rankings" element={<AnimatedPageLayout><CoordinatorRankings /></AnimatedPageLayout>} />
       <Route path="/coordinator/store_management" element={<AnimatedPageLayout><StoreManagement /></AnimatedPageLayout>} />
+      <Route path="/coordinator/store_management/product/:id" element={<AnimatedPageLayout><ProductDetail /></AnimatedPageLayout>} />
       <Route path="/coordinator/tournament_management" element={<AnimatedPageLayout><TournamentManagement /></AnimatedPageLayout>} />
       <Route path="/coordinator/tournaments/:id" element={<AnimatedPageLayout><TournamentDetails /></AnimatedPageLayout>} />
       <Route path="/coordinator/tournament_complaints" element={<AnimatedPageLayout><TournamentComplaints /></AnimatedPageLayout>} />
