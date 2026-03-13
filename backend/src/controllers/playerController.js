@@ -1535,6 +1535,29 @@ const buyProduct = async (req, res) => {
       { upsert: true }
     );
 
+    // Create an order record for single-item purchase (buy now)
+    try {
+      const prod = await db.collection('products').findOne({ _id: new ObjectId(productId) });
+      const orderItem = {
+        productId: new ObjectId(productId),
+        name: prod ? prod.name : '',
+        price: Number(numericPrice),
+        quantity: 1,
+        coordinator: prod ? (prod.coordinator || '') : '',
+        college: prod ? (prod.college || '') : ''
+      };
+      await db.collection('orders').insertOne({
+        user_email: req.session.userEmail,
+        items: [orderItem],
+        total: Number(numericPrice),
+        status: 'pending',
+        delivery_verified: false,
+        createdAt: new Date()
+      });
+    } catch (e) {
+      console.warn('Failed to create order record for buy action:', e.message || e);
+    }
+
     // Return actual updated balance from DB
     const newBalanceDoc = await db.collection('user_balances').findOne({ user_id: user._id });
     const updatedBalance = newBalanceDoc?.wallet_balance ?? (walletBalance - numericPrice);
@@ -2383,12 +2406,32 @@ const createOrder = async (req, res) => {
       );
     }
 
-    // Create order
+    // Enrich cart items with product metadata (denormalize coordinator/college)
+    const enrichedItems = [];
+    for (const item of cart.items) {
+      let prod = null;
+      try {
+        prod = await db.collection('products').findOne({ _id: item.productId });
+      } catch (e) {
+        prod = null;
+      }
+      enrichedItems.push({
+        productId: item.productId,
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+        coordinator: prod ? (prod.coordinator || '') : '',
+        college: prod ? (prod.college || '') : ''
+      });
+    }
+
+    // Create order (denormalized items)
     await db.collection('orders').insertOne({
       user_email: req.session.userEmail,
-      items: cart.items,
+      items: enrichedItems,
       total,
       status: 'pending',
+      delivery_verified: false,
       createdAt: new Date()
     });
 
@@ -2489,6 +2532,35 @@ const getOrderTracking = async (req, res) => {
   } catch (err) {
     console.error('Error fetching order tracking:', err);
     res.status(500).json({ error: 'Failed to fetch tracking' });
+  }
+};
+
+// POST /player/api/verify-delivery-otp
+const verifyDeliveryOtp = async (req, res) => {
+  try {
+    if (!req.session.userEmail) return res.status(401).json({ success: false, message: 'Please log in' });
+    const { orderId, otp } = req.body || {};
+    if (!orderId || !otp) return res.status(400).json({ success: false, message: 'orderId and otp required' });
+    if (!ObjectId.isValid(orderId)) return res.status(400).json({ success: false, message: 'Invalid orderId' });
+
+    const db = await connectDB();
+    const order = await db.collection('orders').findOne({ _id: new ObjectId(orderId), user_email: req.session.userEmail });
+    if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+
+    const otpRecord = await db.collection('otps').findOne({ email: req.session.userEmail, otp: String(otp), type: 'delivery', used: false });
+    if (!otpRecord) return res.status(400).json({ success: false, message: 'Invalid OTP' });
+    if (new Date() > new Date(otpRecord.expires_at)) return res.status(400).json({ success: false, message: 'OTP expired' });
+
+    // Mark OTP used
+    await db.collection('otps').updateOne({ _id: otpRecord._id }, { $set: { used: true, used_at: new Date() } });
+
+    // Mark order as delivery verified
+    await db.collection('orders').updateOne({ _id: new ObjectId(orderId) }, { $set: { delivery_verified: true, delivery_verified_at: new Date() } });
+
+    return res.json({ success: true, message: 'OTP verified' });
+  } catch (err) {
+    console.error('Error verifying delivery OTP:', err);
+    return res.status(500).json({ success: false, message: 'Failed to verify OTP' });
   }
 };
 
@@ -3091,6 +3163,7 @@ module.exports = {
   getOrders,
   cancelOrder,
   getOrderTracking,
+  verifyDeliveryOtp,
   getStoreSuggestions,
   getSettings,
   updateSettings,
