@@ -624,7 +624,8 @@ const getProfile = async (req, res) => {
   const subscription = await db.collection('subscriptionstable').findOne({ username: req.session.userEmail });
   const balance = await db.collection('user_balances').findOne({ user_id: playerId });
   console.log('Balance query result:', balance);
-  const walletBalance = balance?.wallet_balance || 0;
+  let walletBalance = balance?.wallet_balance || 0;
+  if(walletBalance > 100000) walletBalance = 100000;
 
   const sales = await db.collection('sales').aggregate([
     { $match: { $or: [{ buyer_id: playerId }, { buyer: row.name }] } },
@@ -974,7 +975,7 @@ const addFunds = async (req, res) => {
   if (!req.session.userEmail) {
     return res.status(401).json({ error: 'Please log in' });
   }
-  const MAX_TOPUP_PER_REQUEST = 5000;
+  const MAX_TOPUP_PER_REQUEST = 50000;
   const MAX_WALLET_BALANCE = 100000;
   const { amount } = req.body;
   const numericAmount = Number(amount);

@@ -91,7 +91,7 @@ async function enhancedFetch(path, options, config = {}) {
           message: 'Bad Request'
         }));
 
-        const error = new Error(errorData.message || 'Bad Request');
+        const error = new Error(errorData.error || errorData.message || 'Bad Request');
         error.status = 400;
         error.data = errorData;
         throw error;
@@ -100,13 +100,11 @@ async function enhancedFetch(path, options, config = {}) {
       // ---- Other 4xx ----
       if (response.status >= 400 && response.status < 500) {
         const errorData = await response.clone().json().catch(() => ({}));
-
-        const error = new Error(
-          errorData.message || `Request failed with status ${response.status}`
-        );
-        error.status = response.status;
-        error.data = errorData;
-        throw error;
+        
+        // Instead of throwing an error which causes React Error Boundary overlay
+        // Let's resolve with the error response, or attach an error property
+        // The calling code can check for !response.ok
+        return response;
       }
 
       // ---- 5xx Retry ----
