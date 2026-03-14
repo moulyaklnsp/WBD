@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import usePlayerTheme from '../../hooks/usePlayerTheme';
 import { useNavigate } from 'react-router-dom';
+import PaymentGatewayModal from '../../components/PaymentGatewayModal';
 
 function PlayerProfile() {
   const navigate = useNavigate();
@@ -8,6 +9,8 @@ function PlayerProfile() {
 
   const [message, setMessage] = useState(null); // { type: 'success' | 'error', text: string }
   const [player, setPlayer] = useState({});
+  const [showPayment, setShowPayment] = useState(false);
+  const MAX_WALLET_BALANCE = 100000;
 
   // Profile editing (photo + fields)
   const [editing, setEditing] = useState(false);
@@ -293,6 +296,41 @@ function PlayerProfile() {
                   <div className={`mini-msg ${photoStatus.type === 'success' ? 'ok' : 'err'}`}>{photoStatus.text}</div>
                 )}
               </div>
+            )}
+
+            {/* Wallet Section (Hidden when editing to prevent accidental changes) */}
+            {!editing && (
+              <section className="profile-info" style={{ marginBottom: '2rem' }}>
+                <div className="info-section" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontFamily: 'Cinzel, serif', color: 'var(--sea-green)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <i className="fas fa-wallet" /> My Wallet
+                    </h3>
+                    <div style={{ fontSize: '1.8rem', fontWeight: 'bold', marginTop: '0.5rem', marginLeft: '2rem' }}>
+                      ₹{player.walletBalance ? player.walletBalance.toLocaleString('en-IN') : 0}
+                    </div>
+                  </div>
+                  <button 
+                    className="btn" 
+                    onClick={() => setShowPayment(true)}
+                    disabled={(player.walletBalance || 0) >= MAX_WALLET_BALANCE}
+                  >
+                    <i className="fas fa-credit-card" style={{ marginRight: '0.5rem' }} />
+                    {(player.walletBalance || 0) >= MAX_WALLET_BALANCE ? 'Limit Reached' : 'Add Card / QR Funds'}
+                  </button>
+                </div>
+              </section>
+            )}
+
+            {showPayment && (
+              <PaymentGatewayModal
+                walletBalance={player.walletBalance || 0}
+                onClose={() => setShowPayment(false)}
+                onSuccess={(newBal) => {
+                  setPlayer(prev => ({ ...prev, walletBalance: newBal }));
+                  setMessage({ type: 'success', text: `Wallet funded successfully! Your new balance is ₹${newBal.toLocaleString('en-IN')}.` });
+                }}
+              />
             )}
 
             <section className="profile-info">

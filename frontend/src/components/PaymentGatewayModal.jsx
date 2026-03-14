@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-const MAX_TOPUP = 5000;
+const MAX_TOPUP = 50000;
 const MAX_BALANCE = 100000;
 
 function formatCardNumber(v) {
