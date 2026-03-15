@@ -5,6 +5,8 @@ const { uploadImageBuffer, destroyImage, cloudinary } = require('../utils/cloudi
 const { ObjectId } = require('mongodb');
 const { sendOtpEmail } = require('../services/emailService');
 const path = require('path');
+const fs = require('fs');
+const PDFDocument = require('pdfkit');
 const Player = require('../models/Player');
 const Team = require('../models/Team');
 const { swissPairing, swissTeamPairing } = require('../utils/swissPairing');
@@ -3238,7 +3240,74 @@ const updateOrderStatus = async (req, res) => {
       updateData.shipped_date = now;
       if (trackingNumber) updateData.tracking_number = trackingNumber;
       if (deliveryPartner) updateData.delivery_partner = deliveryPartner;
-    } else if (normalizedStatus === 'delivered') updateData.delivered_date = now;
+    } else if (normalizedStatus === 'delivered') {
+      updateData.delivered_date = now;
+      // generate a delivery slip and attach it to the order so player can access it
+      try {
+        const slipId = (new ObjectId()).toString();
+        const slip = {
+          slip_id: slipId,
+          generatedAt: now,
+          delivered_by: deliveryPartner || (req.session && req.session.userEmail) || '',
+          items: order.items || [],
+          total: order.total || 0,
+          orderId: order._id ? order._id.toString() : String(orderId),
+          note: `Delivery confirmed on ${now.toISOString()}`
+        };
+
+        // Ensure slips directory exists under public
+        const slipsDir = path.join(__dirname, '..', '..', 'public', 'slips');
+        try { if (!fs.existsSync(slipsDir)) fs.mkdirSync(slipsDir, { recursive: true }); } catch (e) { /* ignore */ }
+
+        // Generate PDF using PDFKit
+        try {
+          const pdfPath = path.join(slipsDir, `${slipId}.pdf`);
+          const doc = new PDFDocument({ margin: 40 });
+          const stream = fs.createWriteStream(pdfPath);
+          doc.pipe(stream);
+
+          doc.fontSize(18).text('Delivery Slip', { align: 'center' });
+          doc.moveDown(0.5);
+          doc.fontSize(10).text(`Slip ID: ${slip.slip_id}`);
+          doc.text(`Order ID: ${slip.orderId}`);
+          doc.text(`Generated: ${slip.generatedAt.toISOString()}`);
+          doc.text(`Delivered By: ${slip.delivered_by}`);
+          doc.moveDown(0.5);
+
+          doc.fontSize(12).text('Items:', { underline: true });
+          doc.moveDown(0.25);
+          const tableTop = doc.y;
+          doc.fontSize(10);
+          doc.text('Item', 40, tableTop);
+          doc.text('Qty', 350, tableTop, { width: 50, align: 'right' });
+          doc.text('Amount', 430, tableTop, { width: 80, align: 'right' });
+          doc.moveDown(0.5);
+
+          (slip.items || []).forEach((it) => {
+            const y = doc.y;
+            const amount = ((it.price || 0) * (it.quantity || 1)).toFixed(2);
+            doc.text(String(it.name || ''), 40, y);
+            doc.text(String(it.quantity || 1), 350, y, { width: 50, align: 'right' });
+            doc.text(`₹${amount}`, 430, y, { width: 80, align: 'right' });
+            doc.moveDown(0.3);
+          });
+
+          doc.moveDown(0.5);
+          doc.fontSize(12).text(`Total: ₹${(slip.total || 0).toFixed(2)}`, { align: 'right' });
+
+          doc.end();
+          // Wait for finish to ensure file exists
+          await new Promise((resolve) => stream.on('finish', resolve));
+          slip.pdf_url = `/slips/${slipId}.pdf`;
+        } catch (pdfErr) {
+          console.error('Failed to write slip PDF:', pdfErr);
+        }
+
+        updateData.delivery_slip = slip;
+      } catch (e) {
+        console.error('Failed to generate delivery slip:', e);
+      }
+    }
     else if (normalizedStatus === 'cancelled') updateData.cancelledAt = now;
 
     await db.collection('orders').updateOne(

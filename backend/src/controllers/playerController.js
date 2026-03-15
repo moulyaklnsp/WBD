@@ -2461,7 +2461,8 @@ const getOrders = async (req, res) => {
         createdAt: o.createdAt,
         status: o.status,
         items: (o.items || []).map(i => ({ name: i.name, price: i.price, quantity: i.quantity })),
-        total: o.total
+        total: o.total,
+        delivery_slip: o.delivery_slip || null
       }))
     });
   } catch (err) {

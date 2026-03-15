@@ -300,6 +300,53 @@ function PlayerStore() {
     } catch { /* ignore */ }
   };
 
+  // Slip modal state and helpers
+  const [slipModal, setSlipModal] = useState(null);
+  const openSlip = (slip) => setSlipModal(slip || null);
+  const closeSlip = () => setSlipModal(null);
+  const printSlip = (slip) => {
+    try {
+      const itemsHtml = (slip.items || []).map(i => `<tr><td>${String(i.name || '')}</td><td style="text-align:right">${i.quantity || 1}</td><td style="text-align:right">₹${((i.price||0) * (i.quantity||1)).toFixed(2)}</td></tr>`).join('');
+      const html = `
+        <html><head><title>Slip ${slip.slip_id || ''}</title>
+        <style>body{font-family:Arial,Helvetica,sans-serif;padding:20px}table{width:100%;border-collapse:collapse}td,th{padding:8px;border-bottom:1px solid #ddd}</style>
+        </head><body>
+        <h2>Delivery Slip</h2>
+        <div>Slip ID: ${slip.slip_id || ''}</div>
+        <div>Order ID: ${slip.orderId || ''}</div>
+        <div>Generated: ${slip.generatedAt ? new Date(slip.generatedAt).toLocaleString() : ''}</div>
+        <div>Delivered By: ${slip.delivered_by || ''}</div>
+        <hr/>
+        <table>
+          <thead><tr><th>Item</th><th style="text-align:right">Qty</th><th style="text-align:right">Amount</th></tr></thead>
+          <tbody>${itemsHtml}</tbody>
+        </table>
+        <h3 style="text-align:right">Total: ₹${(slip.total||0).toFixed(2)}</h3>
+        </body></html>`;
+      const w = window.open('', '_blank');
+      if (!w) return; w.document.write(html); w.document.close(); w.focus();
+    } catch (e) { console.error('Print failed', e); }
+  };
+
+  const apiBase = process.env.REACT_APP_API_BASE_URL || `${window.location.protocol}//${window.location.hostname}:3001`;
+  const downloadSlip = async (slip) => {
+    if (!slip || !slip.pdf_url) return openSlip(slip);
+    try {
+      // Use a direct link to the server route which sets Content-Disposition: attachment
+      const url = `${apiBase}${slip.pdf_url}`;
+      const a = document.createElement('a');
+      a.href = url;
+      a.setAttribute('download', `delivery-slip-${slip.orderId || slip.slip_id || ''}.pdf`);
+      // Ensure link is same-origin; clicking it will send cookies automatically
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (e) {
+      console.error('Download failed', e);
+      openSlip(slip);
+    }
+  };
+
   /* ─── Product Helpers ─── */
   const getProductImages = (product) => {
     return Array.from(new Set([
@@ -612,6 +659,55 @@ function PlayerStore() {
           />
         )}
 
+        {/* ─── Delivery Slip Modal ─── */}
+        {slipModal && (
+          <div className="review-modal" onClick={closeSlip}>
+            <div className="review-content" onClick={(e) => e.stopPropagation()}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                <h3 style={{ fontFamily: "'Cinzel', serif", color: 'var(--sea-green)', margin: 0 }}>
+                  <i className="fas fa-file-invoice" /> Delivery Slip
+                </h3>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button className="btn ghost" onClick={closeSlip}>Close</button>
+                  <button className="btn" onClick={() => printSlip(slipModal)}>Print</button>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '0.85rem', fontSize: '0.95rem' }}>
+                <div><strong>Slip ID:</strong> {slipModal.slip_id || slipModal.slipId}</div>
+                <div><strong>Order ID:</strong> {slipModal.orderId}</div>
+                <div><strong>Generated:</strong> {slipModal.generatedAt ? new Date(slipModal.generatedAt).toLocaleString('en-IN') : ''}</div>
+                <div><strong>Delivered By:</strong> {slipModal.delivered_by || ''}</div>
+              </div>
+
+              <div style={{ marginBottom: '1rem' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid var(--card-border)' }}>Item</th>
+                      <th style={{ textAlign: 'right', padding: '8px', borderBottom: '1px solid var(--card-border)' }}>Qty</th>
+                      <th style={{ textAlign: 'right', padding: '8px', borderBottom: '1px solid var(--card-border)' }}>Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(slipModal.items || []).map((it, i) => (
+                      <tr key={i}>
+                        <td style={{ padding: '8px', borderBottom: '1px solid var(--card-border)' }}>{it.name}</td>
+                        <td style={{ padding: '8px', textAlign: 'right', borderBottom: '1px solid var(--card-border)' }}>{it.quantity || 1}</td>
+                        <td style={{ padding: '8px', textAlign: 'right', borderBottom: '1px solid var(--card-border)' }}>₹{(((it.price||0) * (it.quantity||1))).toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', fontWeight: 'bold', fontSize: '1.05rem' }}>
+                Total: ₹{(slipModal.total || 0).toFixed(2)}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ═══════════════ STORE VIEW ═══════════════ */}
         {view === 'Store' && (
           <div className="fade-in">
@@ -885,6 +981,11 @@ function PlayerStore() {
                     <button className="btn ghost" style={{ fontSize: '0.8rem' }} onClick={() => viewTracking(order._id)}>
                       <i className="fas fa-truck" /> Track
                     </button>
+                    {order.delivery_slip && (
+                      <button className="btn" style={{ fontSize: '0.8rem' }} onClick={() => downloadSlip(order.delivery_slip)}>
+                        <i className="fas fa-file-invoice" /> Download Slip
+                      </button>
+                    )}
                     {!order.delivery_verified && order.status !== 'delivered' && order.status !== 'cancelled' && (
                       <button className="btn primary" style={{ fontSize: '0.8rem' }} onClick={() => openDeliveryOtpModal(order._id)}>
                         <i className="fas fa-key" /> Verify OTP
