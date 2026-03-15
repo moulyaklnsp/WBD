@@ -5,7 +5,7 @@ import { fetchProducts } from '../../features/products/productsSlice';
 import { fetchAsPlayer, safePost } from '../../utils/fetchWithRole';
 import usePlayerTheme from '../../hooks/usePlayerTheme';
 import SearchFilter from '../../components/SearchFilter';
-import PaymentGatewayModal from '../../components/PaymentGatewayModal';
+
 
 const NAV_ITEMS = [
   { key: 'Store',    icon: 'fas fa-store',         label: 'Store' },
@@ -73,7 +73,7 @@ function PlayerStore() {
 
   // Purchase flow
   const [purchaseModal, setPurchaseModal] = useState(null); // null | { mode: 'buyNow'|'cart', product?: obj }
-  const [purchaseStep, setPurchaseStep] = useState('confirm'); // confirm | gateway | processing | success | error
+  const [purchaseStep, setPurchaseStep] = useState('confirm'); // confirm | processing | success | error
   const [purchaseError, setPurchaseError] = useState('');
 
   const flash = (msg, isError = false) => {
@@ -565,26 +565,11 @@ function PlayerStore() {
           <div>
             <div className="wallet-balance">💰 ₹{walletBalance.toLocaleString('en-IN')}</div>
             {subscription && <div style={{ fontSize: '0.8rem', opacity: 0.8 }}>Plan: {subscription.plan} ({discountPercentage}% off)</div>}
-            <div style={{ fontSize: '0.72rem', opacity: 0.7 }}>Max balance: ₹{MAX_WALLET_BALANCE.toLocaleString('en-IN')}</div>
           </div>
-          <button
-            className="wallet-add-btn"
-            onClick={() => setShowPayment(true)}
-            disabled={walletBalance >= MAX_WALLET_BALANCE}
-            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
-          >
-            <i className="fas fa-credit-card" />
-            {walletBalance >= MAX_WALLET_BALANCE ? 'Limit Reached' : 'Add Funds'}
-          </button>
+          <div style={{ fontSize: '0.85rem', opacity: 0.7, alignSelf: 'center' }}>
+            Manage funds in your Profile
+          </div>
         </div>
-
-        {showPayment && (
-          <PaymentGatewayModal
-            walletBalance={walletBalance}
-            onClose={() => setShowPayment(false)}
-            onSuccess={(newBal) => { setWalletBalance(Math.min(newBal, MAX_WALLET_BALANCE)); flash('Funds added successfully!'); }}
-          />
-        )}
 
         {/* ═══════════════ STORE VIEW ═══════════════ */}
         {view === 'Store' && (
@@ -1027,7 +1012,7 @@ function PlayerStore() {
 )}
 
         {/* ─── Purchase Confirmation Modal ─── */}
-        {purchaseModal && purchaseStep !== 'gateway' && (
+        {purchaseModal && (
           <div className="purchase-overlay" onClick={e => { if (e.target === e.currentTarget && purchaseStep !== 'processing') closePurchaseModal(); }}>
             <div className="purchase-modal fade-in">
               <div className="purchase-header">
@@ -1103,12 +1088,23 @@ function PlayerStore() {
                       </span>
                     </div>
 
-                    <button
-                      className="purchase-btn confirm"
-                      onClick={() => setPurchaseStep('gateway')}
-                    >
-                      <i className="fas fa-credit-card" /> Proceed to Payment Gateway
-                    </button>
+                    {walletBalance >= getPurchaseTotal() ? (
+                      <button
+                        className="purchase-btn confirm"
+                        onClick={executePurchase}
+                      >
+                        <i className="fas fa-check-circle" /> Confirm Purchase
+                      </button>
+                    ) : (
+                      <div style={{ textAlign: 'center', marginTop: '1rem' }}>
+                        <p style={{ color: '#e74c3c', fontSize: '0.9rem', marginBottom: '0.5rem' }}>
+                          <i className="fas fa-exclamation-triangle" /> Insufficient funds in wallet.
+                        </p>
+                        <p style={{ fontSize: '0.8rem', opacity: 0.7 }}>
+                          Please add funds in your Profile page to continue.
+                        </p>
+                      </div>
+                    )}
                   </>
                 )}
 
@@ -1153,18 +1149,8 @@ function PlayerStore() {
           </div>
         )}
 
-        {/* ─── Payment Gateway Step (inside purchase flow) ─── */}
-        {purchaseModal && purchaseStep === 'gateway' && (
-          <PaymentGatewayModal
-            walletBalance={walletBalance}
-            onClose={() => setPurchaseStep('confirm')}
-            onSuccess={(newBal) => {
-              setWalletBalance(Math.min(newBal, MAX_WALLET_BALANCE));
-              // Funds added → now place the order (deducts from wallet)
-              executePurchase();
-            }}
-          />
-        )}
+      // Removed gateway step view
+      setPurchaseStep('processing');
 
         {/* ─── Product Reviews Modal ─── */}
         {selectedProductForReviews && (

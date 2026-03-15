@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import usePlayerTheme from '../../hooks/usePlayerTheme';
 import { useNavigate } from 'react-router-dom';
 import { fetchAsPlayer } from '../../utils/fetchWithRole';
-import PaymentGatewayModal from '../../components/PaymentGatewayModal';
+
 
 const ROWS_PER_PAGE = 5;
 const TAB_OPTIONS = ['Individual', 'Team', 'Calendar', 'History', 'Complaints'];
@@ -19,7 +19,6 @@ function PlayerTournament() {
   // Wallet/subscription
   const [walletBalance, setWalletBalance] = useState(0);
   const [subscriptionActive, setSubscriptionActive] = useState(false);
-  const [showPayment, setShowPayment] = useState(false);
 
   // Tournaments raw data
   const [raw, setRaw] = useState({ tournaments: [], enrolledIndividualTournaments: [], enrolledTeamTournaments: [], currentSubscription: null, username: '' });
@@ -29,6 +28,8 @@ function PlayerTournament() {
   const [searchIndividualType, setSearchIndividualType] = useState('name');
   const [searchTeam, setSearchTeam] = useState('');
   const [searchTeamType, setSearchTeamType] = useState('name');
+  const [searchHistory, setSearchHistory] = useState('');
+  const [searchHistoryType, setSearchHistoryType] = useState('name');
 
   // Pagination visible counts
   const [individualVisibleCount, setIndividualVisibleCount] = useState(ROWS_PER_PAGE);
@@ -186,15 +187,33 @@ function PlayerTournament() {
     const ft = (search || '').toLowerCase().trim();
     if (!ft) return list;
     return list.filter(row => {
-      if (type === 'name') return (row.name || '').toLowerCase().includes(ft);
-      if (type === 'location') return (row.location || '').toLowerCase().includes(ft);
-      if (type === 'status') return (row.status || '').toLowerCase().includes(ft);
+      // Handle History tab format where data is nested under 'tournament'
+      const data = row.tournament ? row.tournament : row;
+      if (type === 'name') return (data.name || '').toLowerCase().includes(ft);
+      if (type === 'location') return (data.location || '').toLowerCase().includes(ft);
+      if (type === 'status') {
+        const rawStatus = (data.status || '').toLowerCase();
+        const displayStatus = rawStatus === 'approved' ? 'joined' : rawStatus;
+        return displayStatus.includes(ft);
+      }
       return true;
     });
   };
 
   const filteredIndividuals = applyFilter(individualTournaments, searchIndividual, searchIndividualType);
   const filteredTeams = applyFilter(teamTournaments, searchTeam, searchTeamType);
+
+  const filteredHistoryIndividuals = applyFilter(
+    raw.enrolledIndividualTournaments.filter(e => e && e.tournament),
+    searchHistory,
+    searchHistoryType
+  );
+
+  const filteredHistoryTeams = applyFilter(
+    raw.enrolledTeamTournaments.filter(e => e && e.tournament),
+    searchHistory,
+    searchHistoryType
+  );
 
   // Join handlers
   const joinIndividual = async (tournamentId) => {
@@ -236,6 +255,7 @@ function PlayerTournament() {
       if (res.ok) {
         setMessage({ text: data.message || 'Team submitted successfully', isError: false });
         if (typeof data.walletBalance !== 'undefined') setWalletBalance(Math.min(data.walletBalance, MAX_WALLET_BALANCE));
+        setOpenJoinFormId(null);
         await loadTournaments();
       } else {
         setMessage({ text: data.error || 'Failed to join team tournament', isError: true });
@@ -697,21 +717,9 @@ function PlayerTournament() {
           <span className="wallet-icon" role="img" aria-label="wallet">💰</span>
           <div className="wallet-balance-label">Wallet Balance</div>
           <div className="wallet-balance-value">₹{walletBalance.toLocaleString('en-IN')}</div>
-          <button
-            type="button"
-            onClick={() => setShowPayment(true)}
-            disabled={walletBalance >= MAX_WALLET_BALANCE}
-            style={{ background: '#B8860B', color: '#fff', border: 'none', padding: '0.5rem 1.1rem', borderRadius: 8, cursor: 'pointer', fontFamily: "'Cinzel', serif", fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.5rem', opacity: walletBalance >= MAX_WALLET_BALANCE ? 0.5 : 1 }}
-          >
-            <i className="fas fa-credit-card" /> {walletBalance >= MAX_WALLET_BALANCE ? 'Limit Reached' : 'Add Funds'}
-          </button>
-          {showPayment && (
-            <PaymentGatewayModal
-              walletBalance={walletBalance}
-              onClose={() => setShowPayment(false)}
-              onSuccess={(newBal) => { setWalletBalance(Math.min(newBal, MAX_WALLET_BALANCE)); setMessage({ text: 'Funds added successfully!', isError: false }); }}
-            />
-          )}
+          <div style={{ fontSize: '0.85rem', opacity: 0.7, marginTop: '0.5rem', fontFamily: "'M PLUS 1', sans-serif" }}>
+            Manage funds in your Profile
+          </div>
         </div>
 
         {/* Tab Bar */}
@@ -1013,12 +1021,29 @@ function PlayerTournament() {
           <>
             <h2 className="black-h2"><i className="fas fa-history" /> My Tournament History</h2>
 
+            <div className="search-box">
+              <input
+                type="text"
+                placeholder="Search history..."
+                value={searchHistory}
+                onChange={(e) => setSearchHistory(e.target.value)}
+              />
+              <select
+                value={searchHistoryType}
+                onChange={(e) => setSearchHistoryType(e.target.value)}
+              >
+                <option value="name">Name</option>
+                <option value="location">Location</option>
+                <option value="status">Status</option>
+              </select>
+            </div>
+
             <div className="form-container">
               <h3 style={{ fontFamily: 'Cinzel, serif', color: 'var(--sea-green)', marginBottom: '1rem' }}>
                 <i className="fas fa-user" /> Individual Tournaments
               </h3>
-              {raw.enrolledIndividualTournaments.length === 0 ? (
-                <div className="empty-message">No individual tournaments joined yet.</div>
+              {filteredHistoryIndividuals.length === 0 ? (
+                <div className="empty-message">No individual tournaments found.</div>
               ) : (
                 <div className="table-responsive">
                   <table>
@@ -1032,15 +1057,14 @@ function PlayerTournament() {
                       </tr>
                     </thead>
                     <tbody>
-                      {raw.enrolledIndividualTournaments
-                        .filter(e => e && e.tournament)
+                      {filteredHistoryIndividuals
                         .map((e, idx) => (
                           <tr key={e.tournament?._id || idx}>
                             <td>{e.tournament?.name || 'N/A'}</td>
                             <td>{e.tournament?.date ? new Date(e.tournament.date).toLocaleDateString() : 'N/A'}</td>
                             <td>{e.tournament?.location || 'N/A'}</td>
                             <td>{e.tournament?.entry_fee != null ? `₹${e.tournament.entry_fee}` : 'N/A'}</td>
-                            <td>{e.tournament?.status || 'N/A'}</td>
+                            <td>{e.tournament?.status?.toLowerCase() === 'approved' ? 'Joined' : (e.tournament?.status || 'N/A')}</td>
                           </tr>
                         ))}
                     </tbody>
@@ -1053,8 +1077,8 @@ function PlayerTournament() {
               <h3 style={{ fontFamily: 'Cinzel, serif', color: 'var(--sea-green)', marginBottom: '1rem' }}>
                 <i className="fas fa-users" /> Team Tournaments
               </h3>
-              {raw.enrolledTeamTournaments.length === 0 ? (
-                <div className="empty-message">No team tournaments joined yet.</div>
+              {filteredHistoryTeams.length === 0 ? (
+                <div className="empty-message">No team tournaments found.</div>
               ) : (
                 <div className="table-responsive">
                   <table>
@@ -1069,15 +1093,14 @@ function PlayerTournament() {
                       </tr>
                     </thead>
                     <tbody>
-                      {raw.enrolledTeamTournaments
-                        .filter(e => e && e.tournament)
+                      {filteredHistoryTeams
                         .map((e, idx) => (
                           <tr key={e._id || e.tournament?._id || idx}>
                             <td>{e.tournament?.name || 'N/A'}</td>
                             <td>{e.tournament?.date ? new Date(e.tournament.date).toLocaleDateString() : 'N/A'}</td>
                             <td>{e.tournament?.location || 'N/A'}</td>
                             <td>{e.tournament?.entry_fee != null ? `₹${e.tournament.entry_fee}` : 'N/A'}</td>
-                            <td>{e.tournament?.status || 'N/A'}</td>
+                            <td>{e.tournament?.status?.toLowerCase() === 'approved' ? 'Joined' : (e.tournament?.status || 'N/A')}</td>
                             <td>{e.captainName || 'N/A'}</td>
                           </tr>
                         ))}

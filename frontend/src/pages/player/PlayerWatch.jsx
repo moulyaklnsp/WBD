@@ -152,7 +152,7 @@ export default function PlayerWatch() {
                         </div>
                       </div>
                       <button className="btn" type="button" onClick={() => window.open(stream.url, '_blank', 'noopener,noreferrer')}>
-                        <i className="fas fa-external-link-alt" /> Pop out
+                        <i className="fas fa-play" /> Watch
                       </button>
                     </div>
                     {embed && <iframe className="embed-frame" src={embed.src} height="320" title={stream.title} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen />}

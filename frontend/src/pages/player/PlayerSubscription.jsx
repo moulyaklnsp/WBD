@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import usePlayerTheme from '../../hooks/usePlayerTheme';
 import { fetchAsPlayer, safePost } from '../../utils/fetchWithRole';
-import PaymentGatewayModal from '../../components/PaymentGatewayModal';
+
 
 const PLAN_PRICES = {
   Basic: 99,
@@ -24,8 +24,6 @@ function PlayerSubscription() {
   const [currentSubscription, setCurrentSubscription] = useState(null);
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
-
-  const [showPayment, setShowPayment] = useState(false);
 
   // Subscription History
   const [history, setHistory] = useState([]);
@@ -121,9 +119,15 @@ function PlayerSubscription() {
     try {
       const res = await fetch('/player/api/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ plan: plan.name, price: plan.price }) });
       const data = await res.json();
+      if (!res.ok) {
+        flash(data.error || data.message || 'Subscription failed', true);
+        return;
+      }
       if (data.message) flash(data.message);
       loadSubscription();
-    } catch { flash('Subscription failed', true); }
+    } catch (e) {
+      flash(e?.message || 'Subscription failed', true); 
+    }
   };
 
   const changePlan = async (newPlan) => {
@@ -209,26 +213,11 @@ function PlayerSubscription() {
             <div className="wallet-bar">
               <div>
                 <div className="wallet-balance">💰 ₹{walletBalance.toLocaleString('en-IN')}</div>
-                <div style={{ fontSize: '0.75rem', opacity: 0.75 }}>Max balance: ₹{MAX_WALLET_BALANCE.toLocaleString('en-IN')}</div>
               </div>
-              <button
-                className="wallet-add-btn"
-                onClick={() => setShowPayment(true)}
-                disabled={walletBalance >= MAX_WALLET_BALANCE}
-                style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
-              >
-                <i className="fas fa-credit-card" />
-                {walletBalance >= MAX_WALLET_BALANCE ? 'Limit Reached' : 'Add Funds'}
-              </button>
+              <div style={{ fontSize: '0.85rem', opacity: 0.7, alignSelf: 'center' }}>
+                Manage funds in your Profile
+              </div>
             </div>
-
-            {showPayment && (
-              <PaymentGatewayModal
-                walletBalance={walletBalance}
-                onClose={() => setShowPayment(false)}
-                onSuccess={(newBal) => { setWalletBalance(Math.min(newBal, MAX_WALLET_BALANCE)); flash('Funds added successfully!'); }}
-              />
-            )}
 
             {/* Current Subscription */}
             {currentSubscription && (
