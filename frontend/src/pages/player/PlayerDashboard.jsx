@@ -352,11 +352,14 @@ function PlayerDashboard() {
 
   const pendingTeamRequests = useMemo(() => {
     if (!teamRequests?.length) return [];
-    return teamRequests.filter(req => !(
-      (req.player1_name === playerName && req.player1_approved) ||
-      (req.player2_name === playerName && req.player2_approved) ||
-      (req.player3_name === playerName && req.player3_approved)
-    ));
+    return teamRequests.map(req => {
+      const needsMyApproval = !(
+        (req.player1_name === playerName && req.player1_approved) ||
+        (req.player2_name === playerName && req.player2_approved) ||
+        (req.player3_name === playerName && req.player3_approved)
+      );
+      return { ...req, needsMyApproval };
+    });
   }, [teamRequests, playerName]);
 
   // ─── Render ─────────────────────────────────────────────
@@ -947,7 +950,13 @@ function PlayerDashboard() {
                         <strong>{req.tournamentName}</strong><br />
                         Captain: {req.captainName} | Team: {req.player1_name}, {req.player2_name}, {req.player3_name}
                       </div>
-                      <button className="approve-btn" onClick={() => approveTeamRequest(req.id)}>Approve</button>
+                      {req.needsMyApproval ? (
+                        <button className="approve-btn" onClick={() => approveTeamRequest(req.id)}>Approve</button>
+                      ) : (
+                        <span style={{ fontSize: '0.85rem', opacity: 0.7, fontStyle: 'italic', paddingRight: '0.5rem' }}>
+                          Waiting for teammates...
+                        </span>
+                      )}
                     </motion.li>
                   ))
                 )}

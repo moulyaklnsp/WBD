@@ -624,7 +624,8 @@ const getProfile = async (req, res) => {
   const subscription = await db.collection('subscriptionstable').findOne({ username: req.session.userEmail });
   const balance = await db.collection('user_balances').findOne({ user_id: playerId });
   console.log('Balance query result:', balance);
-  const walletBalance = balance?.wallet_balance || 0;
+  let walletBalance = balance?.wallet_balance || 0;
+  if(walletBalance > 100000) walletBalance = 100000;
 
   const sales = await db.collection('sales').aggregate([
     { $match: { $or: [{ buyer_id: playerId }, { buyer: row.name }] } },
@@ -974,7 +975,7 @@ const addFunds = async (req, res) => {
   if (!req.session.userEmail) {
     return res.status(401).json({ error: 'Please log in' });
   }
-  const MAX_TOPUP_PER_REQUEST = 5000;
+  const MAX_TOPUP_PER_REQUEST = 50000;
   const MAX_WALLET_BALANCE = 100000;
   const { amount } = req.body;
   const numericAmount = Number(amount);
@@ -1534,29 +1535,6 @@ const buyProduct = async (req, res) => {
       },
       { upsert: true }
     );
-
-    // Create an order record for single-item purchase (buy now)
-    try {
-      const prod = await db.collection('products').findOne({ _id: new ObjectId(productId) });
-      const orderItem = {
-        productId: new ObjectId(productId),
-        name: prod ? prod.name : '',
-        price: Number(numericPrice),
-        quantity: 1,
-        coordinator: prod ? (prod.coordinator || '') : '',
-        college: prod ? (prod.college || '') : ''
-      };
-      await db.collection('orders').insertOne({
-        user_email: req.session.userEmail,
-        items: [orderItem],
-        total: Number(numericPrice),
-        status: 'pending',
-        delivery_verified: false,
-        createdAt: new Date()
-      });
-    } catch (e) {
-      console.warn('Failed to create order record for buy action:', e.message || e);
-    }
 
     // Return actual updated balance from DB
     const newBalanceDoc = await db.collection('user_balances').findOne({ user_id: user._id });
@@ -2406,32 +2384,12 @@ const createOrder = async (req, res) => {
       );
     }
 
-    // Enrich cart items with product metadata (denormalize coordinator/college)
-    const enrichedItems = [];
-    for (const item of cart.items) {
-      let prod = null;
-      try {
-        prod = await db.collection('products').findOne({ _id: item.productId });
-      } catch (e) {
-        prod = null;
-      }
-      enrichedItems.push({
-        productId: item.productId,
-        name: item.name,
-        price: item.price,
-        quantity: item.quantity,
-        coordinator: prod ? (prod.coordinator || '') : '',
-        college: prod ? (prod.college || '') : ''
-      });
-    }
-
-    // Create order (denormalized items)
+    // Create order
     await db.collection('orders').insertOne({
       user_email: req.session.userEmail,
-      items: enrichedItems,
+      items: cart.items,
       total,
       status: 'pending',
-      delivery_verified: false,
       createdAt: new Date()
     });
 
@@ -2532,35 +2490,6 @@ const getOrderTracking = async (req, res) => {
   } catch (err) {
     console.error('Error fetching order tracking:', err);
     res.status(500).json({ error: 'Failed to fetch tracking' });
-  }
-};
-
-// POST /player/api/verify-delivery-otp
-const verifyDeliveryOtp = async (req, res) => {
-  try {
-    if (!req.session.userEmail) return res.status(401).json({ success: false, message: 'Please log in' });
-    const { orderId, otp } = req.body || {};
-    if (!orderId || !otp) return res.status(400).json({ success: false, message: 'orderId and otp required' });
-    if (!ObjectId.isValid(orderId)) return res.status(400).json({ success: false, message: 'Invalid orderId' });
-
-    const db = await connectDB();
-    const order = await db.collection('orders').findOne({ _id: new ObjectId(orderId), user_email: req.session.userEmail });
-    if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
-
-    const otpRecord = await db.collection('otps').findOne({ email: req.session.userEmail, otp: String(otp), type: 'delivery', used: false });
-    if (!otpRecord) return res.status(400).json({ success: false, message: 'Invalid OTP' });
-    if (new Date() > new Date(otpRecord.expires_at)) return res.status(400).json({ success: false, message: 'OTP expired' });
-
-    // Mark OTP used
-    await db.collection('otps').updateOne({ _id: otpRecord._id }, { $set: { used: true, used_at: new Date() } });
-
-    // Mark order as delivery verified
-    await db.collection('orders').updateOne({ _id: new ObjectId(orderId) }, { $set: { delivery_verified: true, delivery_verified_at: new Date() } });
-
-    return res.json({ success: true, message: 'OTP verified' });
-  } catch (err) {
-    console.error('Error verifying delivery OTP:', err);
-    return res.status(500).json({ success: false, message: 'Failed to verify OTP' });
   }
 };
 
@@ -3163,7 +3092,6 @@ module.exports = {
   getOrders,
   cancelOrder,
   getOrderTracking,
-  verifyDeliveryOtp,
   getStoreSuggestions,
   getSettings,
   updateSettings,

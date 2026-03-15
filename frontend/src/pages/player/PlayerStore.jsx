@@ -5,7 +5,7 @@ import { fetchProducts } from '../../features/products/productsSlice';
 import { fetchAsPlayer, safePost } from '../../utils/fetchWithRole';
 import usePlayerTheme from '../../hooks/usePlayerTheme';
 import SearchFilter from '../../components/SearchFilter';
-import PaymentGatewayModal from '../../components/PaymentGatewayModal';
+
 
 const NAV_ITEMS = [
   { key: 'Store',    icon: 'fas fa-store',         label: 'Store' },
@@ -73,11 +73,8 @@ function PlayerStore() {
 
   // Purchase flow
   const [purchaseModal, setPurchaseModal] = useState(null); // null | { mode: 'buyNow'|'cart', product?: obj }
-  const [purchaseStep, setPurchaseStep] = useState('confirm'); // confirm | gateway | processing | success | error
+  const [purchaseStep, setPurchaseStep] = useState('confirm'); // confirm | processing | success | error
   const [purchaseError, setPurchaseError] = useState('');
-
-  // Delivery OTP modal
-  const [deliveryOtpModal, setDeliveryOtpModal] = useState({ open: false, orderId: null, otp: '', loading: false, error: '' });
 
   const flash = (msg, isError = false) => {
     if (isError) { setErrorMsg(msg); setSuccessMsg(''); }
@@ -265,29 +262,6 @@ function PlayerStore() {
         flash(d.message || 'Cancel failed', true);
       }
     } catch (e) { flash(e.message || 'Cancel failed', true); }
-  };
-
-  const openDeliveryOtpModal = (orderId) => {
-    setDeliveryOtpModal({ open: true, orderId, otp: '', loading: false, error: '' });
-  };
-
-  const closeDeliveryOtpModal = () => setDeliveryOtpModal({ open: false, orderId: null, otp: '', loading: false, error: '' });
-
-  const verifyDeliveryOtp = async () => {
-    if (!deliveryOtpModal.orderId) return;
-    setDeliveryOtpModal((s) => ({ ...s, loading: true, error: '' }));
-    try {
-      const res = await fetchAsPlayer('/player/api/verify-delivery-otp', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: deliveryOtpModal.orderId, otp: deliveryOtpModal.otp })
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || data.message || 'Verification failed');
-      flash(data.message || 'Delivery verified');
-      closeDeliveryOtpModal();
-      await loadOrders();
-    } catch (err) {
-      setDeliveryOtpModal((s) => ({ ...s, loading: false, error: err.message || 'Verification failed' }));
-    }
   };
 
   const viewTracking = async (orderId) => {
@@ -591,26 +565,11 @@ function PlayerStore() {
           <div>
             <div className="wallet-balance">💰 ₹{walletBalance.toLocaleString('en-IN')}</div>
             {subscription && <div style={{ fontSize: '0.8rem', opacity: 0.8 }}>Plan: {subscription.plan} ({discountPercentage}% off)</div>}
-            <div style={{ fontSize: '0.72rem', opacity: 0.7 }}>Max balance: ₹{MAX_WALLET_BALANCE.toLocaleString('en-IN')}</div>
           </div>
-          <button
-            className="wallet-add-btn"
-            onClick={() => setShowPayment(true)}
-            disabled={walletBalance >= MAX_WALLET_BALANCE}
-            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
-          >
-            <i className="fas fa-credit-card" />
-            {walletBalance >= MAX_WALLET_BALANCE ? 'Limit Reached' : 'Add Funds'}
-          </button>
+          <div style={{ fontSize: '0.85rem', opacity: 0.7, alignSelf: 'center' }}>
+            Manage funds in your Profile
+          </div>
         </div>
-
-        {showPayment && (
-          <PaymentGatewayModal
-            walletBalance={walletBalance}
-            onClose={() => setShowPayment(false)}
-            onSuccess={(newBal) => { setWalletBalance(Math.min(newBal, MAX_WALLET_BALANCE)); flash('Funds added successfully!'); }}
-          />
-        )}
 
         {/* ═══════════════ STORE VIEW ═══════════════ */}
         {view === 'Store' && (
@@ -880,11 +839,6 @@ function PlayerStore() {
                     <button className="btn ghost" style={{ fontSize: '0.8rem' }} onClick={() => viewTracking(order._id)}>
                       <i className="fas fa-truck" /> Track
                     </button>
-                    {!order.delivery_verified && order.status !== 'delivered' && order.status !== 'cancelled' && (
-                      <button className="btn primary" style={{ fontSize: '0.8rem' }} onClick={() => openDeliveryOtpModal(order._id)}>
-                        <i className="fas fa-key" /> Verify OTP
-                      </button>
-                    )}
                   </div>
                 </div>
               </div>
@@ -967,11 +921,6 @@ function PlayerStore() {
                     {order.status !== 'cancelled' && order.status !== 'delivered' && (
                       <button className="btn danger" style={{ fontSize: '0.8rem' }} onClick={() => cancelOrder(order._id)}>
                         <i className="fas fa-times-circle" /> Cancel Order
-                      </button>
-                    )}
-                    {!order.delivery_verified && order.status !== 'delivered' && order.status !== 'cancelled' && (
-                      <button className="btn primary" style={{ fontSize: '0.8rem' }} onClick={() => openDeliveryOtpModal(order._id)}>
-                        <i className="fas fa-key" /> Verify OTP
                       </button>
                     )}
                   </div>
@@ -1061,35 +1010,9 @@ function PlayerStore() {
     </div>
   </div>
 )}
-      {deliveryOtpModal.open && (
-        <div className="lightbox-overlay" onClick={closeDeliveryOtpModal}>
-          <div className="review-inner" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520, padding: '1.25rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-              <h3 style={{ margin: 0 }}>Verify Delivery OTP</h3>
-              <button className="btn" onClick={closeDeliveryOtpModal}><i className="fas fa-times" /></button>
-            </div>
-            <div style={{ marginTop: '0.5rem' }}>
-              <input
-                className="form-input"
-                placeholder="Enter OTP received via email"
-                value={deliveryOtpModal.otp}
-                onChange={(e) => setDeliveryOtpModal((s) => ({ ...s, otp: e.target.value }))}
-                style={{ marginBottom: 8 }}
-              />
-              {deliveryOtpModal.error && <div style={{ color: '#c62828', marginBottom: 8 }}>{deliveryOtpModal.error}</div>}
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button className="btn-primary" onClick={verifyDeliveryOtp} disabled={deliveryOtpModal.loading}>
-                  {deliveryOtpModal.loading ? 'Verifying...' : 'Verify OTP'}
-                </button>
-                <button className="btn" onClick={closeDeliveryOtpModal}>Cancel</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
         {/* ─── Purchase Confirmation Modal ─── */}
-        {purchaseModal && purchaseStep !== 'gateway' && (
+        {purchaseModal && (
           <div className="purchase-overlay" onClick={e => { if (e.target === e.currentTarget && purchaseStep !== 'processing') closePurchaseModal(); }}>
             <div className="purchase-modal fade-in">
               <div className="purchase-header">
@@ -1165,12 +1088,23 @@ function PlayerStore() {
                       </span>
                     </div>
 
-                    <button
-                      className="purchase-btn confirm"
-                      onClick={() => setPurchaseStep('gateway')}
-                    >
-                      <i className="fas fa-credit-card" /> Proceed to Payment Gateway
-                    </button>
+                    {walletBalance >= getPurchaseTotal() ? (
+                      <button
+                        className="purchase-btn confirm"
+                        onClick={executePurchase}
+                      >
+                        <i className="fas fa-check-circle" /> Confirm Purchase
+                      </button>
+                    ) : (
+                      <div style={{ textAlign: 'center', marginTop: '1rem' }}>
+                        <p style={{ color: '#e74c3c', fontSize: '0.9rem', marginBottom: '0.5rem' }}>
+                          <i className="fas fa-exclamation-triangle" /> Insufficient funds in wallet.
+                        </p>
+                        <p style={{ fontSize: '0.8rem', opacity: 0.7 }}>
+                          Please add funds in your Profile page to continue.
+                        </p>
+                      </div>
+                    )}
                   </>
                 )}
 
@@ -1215,18 +1149,8 @@ function PlayerStore() {
           </div>
         )}
 
-        {/* ─── Payment Gateway Step (inside purchase flow) ─── */}
-        {purchaseModal && purchaseStep === 'gateway' && (
-          <PaymentGatewayModal
-            walletBalance={walletBalance}
-            onClose={() => setPurchaseStep('confirm')}
-            onSuccess={(newBal) => {
-              setWalletBalance(Math.min(newBal, MAX_WALLET_BALANCE));
-              // Funds added → now place the order (deducts from wallet)
-              executePurchase();
-            }}
-          />
-        )}
+      // Removed gateway step view
+      setPurchaseStep('processing');
 
         {/* ─── Product Reviews Modal ─── */}
         {selectedProductForReviews && (

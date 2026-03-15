@@ -24,6 +24,7 @@ export default function PlayerGrowth() {
   const [compareUsername, setCompareUsername] = useState('');
   const [compareData, setCompareData] = useState(null);
   const [compareLoading, setCompareLoading] = useState(false);
+  const [compareError, setCompareError] = useState('');
 
   const fetchGrowth = useCallback(async () => {
     setLoading(true);
@@ -166,10 +167,26 @@ export default function PlayerGrowth() {
   const doCompare = async () => {
     if (!compareUsername.trim()) return;
     setCompareLoading(true);
+    setCompareError('');
+    setCompareData(null);
     try {
       const res = await fetchAsPlayer(`/player/api/compare?opponent=${encodeURIComponent(compareUsername.trim())}`);
-      if (!res.ok) throw new Error('Player not found');
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        setCompareError(errorData.error || errorData.message || 'Player not found');
+        setCompareLoading(false);
+        return;
+      }
+      
       const json = await res.json();
+
+      // Check if opponent data exists
+      if (!json.opponent) {
+        setCompareError(`Player "${compareUsername.trim()}" not found in database`);
+        setCompareUsername('');
+        return;
+      }
 
       // Normalize both player objects so W+L+D = gamesPlayed
       const normalize = (obj) => {
@@ -210,37 +227,23 @@ export default function PlayerGrowth() {
       json.opponent = o;
       setCompareData(json);
     } catch (e) {
-      // Generate mock comparison data so the UI still demonstrates the feature
-      const pRating = data?.currentRating ?? 540;
-      const pGames = data?.gamesPlayed ?? 20;
-      const pWins = data?.wins ?? 12;
-      const pLosses = data?.losses ?? 5;
-      const pDraws = Math.max(0, pGames - pWins - pLosses);
-      const oRating = 490 + Math.floor(Math.random() * 100);
-      setCompareData({
-        player: {
-          name: 'You',
-          rating: pRating,
-          gamesPlayed: pGames,
-          wins: pWins,
-          losses: pLosses,
-          draws: pDraws,
-          winRate: pGames > 0 ? ((pWins / pGames) * 100).toFixed(1) : '0',
-          ratingHistory: data?.ratingHistory?.length >= 2
-            ? data.ratingHistory
-            : generateRatingCurve(pRating)
-        },
-        opponent: {
-          name: compareUsername.trim(),
-          rating: oRating,
-          gamesPlayed: 18,
-          wins: 9,
-          losses: 6,
-          draws: 3,
-          winRate: '50.0',
-          ratingHistory: generateRatingCurve(oRating)
-        }
-      });
+      // Extract error message from API response or use the error message
+      let errorMsg = e.message || 'Failed to load comparison data';
+      
+      // If error has status, try to extract message from response data
+      if (e.data?.error) {
+        errorMsg = e.data.error;
+      } else if (e.data?.message) {
+        errorMsg = e.data.message;
+      }
+      
+      // Filter out raw HTTP error statuses to make UI cleaner
+      if (errorMsg.includes('Request failed with status')) {
+        errorMsg = 'Failed to find player context';
+      }
+      
+      setCompareError(errorMsg);
+      setCompareData(null);
     } finally {
       setCompareLoading(false);
     }
@@ -538,6 +541,13 @@ export default function PlayerGrowth() {
                 {compareLoading ? <><i className="fas fa-spinner fa-spin" /> Comparing...</> : <><i className="fas fa-exchange-alt" /> Compare</>}
               </button>
             </div>
+
+            {compareError && (
+              <div style={{ background: 'rgba(231,76,60,0.15)', border: '1px solid #e74c3c', padding: '1rem', borderRadius: 12, color: '#e74c3c', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <i className="fas fa-exclamation-circle" />
+                <span>{compareError}</span>
+              </div>
+            )}
 
             {compareData && (() => {
               const p = compareData.player || {};
