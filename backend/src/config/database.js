@@ -227,6 +227,26 @@ async function initializeCollections(db) {
     }
   });
 
+  // Calendar Events collection
+  await initializeCollection('calendar_events', {
+    $jsonSchema: {
+      bsonType: 'object',
+      required: ['title', 'date', 'time', 'type', 'created_by', 'created_date'],
+      properties: {
+        title: { bsonType: 'string' },
+        description: { bsonType: 'string' },
+        date: { bsonType: 'date' },
+        time: { bsonType: 'string' },
+        type: { bsonType: 'string' },
+        link: { bsonType: 'string' },
+        role: { bsonType: 'string' },
+        name: { bsonType: 'string' },
+        created_by: { bsonType: 'string' },
+        created_date: { bsonType: 'date' }
+      }
+    }
+  });
+
   // Player Stats collection
   await initializeCollection('player_stats', {
     $jsonSchema: {
@@ -478,6 +498,22 @@ async function initializeCollections(db) {
           bsonType: 'array',
           items: { bsonType: 'string' }
         }
+      }
+    }
+  });
+
+  // Blog Reviews collection
+  await initializeCollection('blog_reviews', {
+    $jsonSchema: {
+      bsonType: 'object',
+      required: ['blog_id', 'comment', 'created_at'],
+      properties: {
+        blog_id: { bsonType: 'objectId' },
+        user_name: { bsonType: 'string' },
+        user_email: { bsonType: 'string' },
+        user_role: { bsonType: 'string' },
+        comment: { bsonType: 'string' },
+        created_at: { bsonType: 'date' }
       }
     }
   });

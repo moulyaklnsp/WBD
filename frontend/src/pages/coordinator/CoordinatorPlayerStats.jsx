@@ -41,11 +41,15 @@ function CoordinatorPlayerStats() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const rowsPerPage = 10;
 
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState('');
   const [playerDetail, setPlayerDetail] = useState(null);
+  const [historyPage, setHistoryPage] = useState(1);
+  const historyRowsPerPage = 10;
 
   const closePlayerDetail = () => {
     setSelectedPlayer(null);
@@ -120,6 +124,16 @@ function CoordinatorPlayerStats() {
     return players.filter((p) => (p.name || '').toLowerCase().includes(q));
   }, [players, query]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [query, players.length]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / rowsPerPage));
+  const paginatedPlayers = useMemo(() => {
+    const start = (page - 1) * rowsPerPage;
+    return filtered.slice(start, start + rowsPerPage);
+  }, [filtered, page, rowsPerPage]);
+
   const totals = useMemo(() => {
     const totalPlayers = players.length;
     const totalGames = players.reduce((sum, p) => sum + (Number(p.gamesPlayed) || 0), 0);
@@ -143,6 +157,17 @@ function CoordinatorPlayerStats() {
       winRate
     };
   }, [playerDetail]);
+
+  useEffect(() => {
+    setHistoryPage(1);
+  }, [playerDetail]);
+
+  const historyTotalPages = Math.max(1, Math.ceil((playerDetail?.matchHistory || []).length / historyRowsPerPage));
+  const paginatedHistory = useMemo(() => {
+    const history = Array.isArray(playerDetail?.matchHistory) ? playerDetail.matchHistory : [];
+    const start = (historyPage - 1) * historyRowsPerPage;
+    return history.slice(start, start + historyRowsPerPage);
+  }, [playerDetail, historyPage, historyRowsPerPage]);
 
   const ratingChartData = useMemo(() => {
     const points = Array.isArray(playerDetail?.ratingProgression) ? playerDetail.ratingProgression : [];
@@ -219,6 +244,10 @@ function CoordinatorPlayerStats() {
         .result-loss { color:#c62828; font-weight:700; text-transform:capitalize; }
         .result-draw { color:#1d7ea8; font-weight:700; text-transform:capitalize; }
         .result-pending { opacity:0.7; font-weight:700; text-transform:capitalize; }
+        .pagination { display:flex; justify-content:center; align-items:center; gap:0.5rem; margin:1rem 0; flex-wrap:wrap; }
+        .page-btn { background:var(--card-bg); color:var(--text-color); border:1px solid var(--card-border); padding:0.45rem 0.85rem; border-radius:8px; cursor:pointer; font-family:'Cinzel', serif; font-weight:bold; }
+        .page-btn.active { background:var(--sea-green); color:var(--on-accent); border-color:var(--sea-green); }
+        .page-btn:disabled { opacity:0.6; cursor:not-allowed; }
         .player-detail-modal {
           position: fixed;
           inset: 0;
@@ -366,7 +395,7 @@ function CoordinatorPlayerStats() {
                       <td style={{ textAlign: 'center' }} colSpan={6}><i className="fas fa-info-circle" /> No player statistics available.</td>
                     </tr>
                   )}
-                  {!loading && !error && filtered.map((player, idx) => (
+                  {!loading && !error && paginatedPlayers.map((player, idx) => (
                     <tr key={`${player.playerId || player.name || 'player'}-${idx}`}>
                       <td>
                         <button
@@ -389,6 +418,22 @@ function CoordinatorPlayerStats() {
                 </tbody>
               </table>
             </div>
+
+            {totalPages > 1 && (
+              <div className="pagination">
+                <button type="button" className="page-btn" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>
+                  <i className="fas fa-chevron-left" />
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                  <button key={p} type="button" className={`page-btn ${p === page ? 'active' : ''}`} onClick={() => setPage(p)}>
+                    {p}
+                  </button>
+                ))}
+                <button type="button" className="page-btn" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
+                  <i className="fas fa-chevron-right" />
+                </button>
+              </div>
+            )}
 
             <div style={{ textAlign: 'right', marginTop: '2rem' }}>
               <Link to="/coordinator/coordinator_dashboard" className="back-to-dashboard">
@@ -492,7 +537,7 @@ function CoordinatorPlayerStats() {
                       {(playerDetail?.matchHistory || []).length === 0 ? (
                         <tr><td colSpan={6}>No match history available.</td></tr>
                       ) : (
-                        (playerDetail.matchHistory || []).map((match, idx) => (
+                        paginatedHistory.map((match, idx) => (
                           <tr key={`${match.tournamentId || 't'}-${match.round || 0}-${idx}`}>
                             <td>{match.date || '-'}</td>
                             <td>{match.tournamentName || 'Tournament'}</td>
@@ -509,6 +554,21 @@ function CoordinatorPlayerStats() {
                       )}
                     </tbody>
                   </table>
+                  {historyTotalPages > 1 && (
+                    <div className="pagination" style={{ marginTop: '0.75rem' }}>
+                      <button type="button" className="page-btn" onClick={() => setHistoryPage((p) => Math.max(1, p - 1))} disabled={historyPage === 1}>
+                        <i className="fas fa-chevron-left" />
+                      </button>
+                      {Array.from({ length: historyTotalPages }, (_, i) => i + 1).map((p) => (
+                        <button key={p} type="button" className={`page-btn ${p === historyPage ? 'active' : ''}`} onClick={() => setHistoryPage(p)}>
+                          {p}
+                        </button>
+                      ))}
+                      <button type="button" className="page-btn" onClick={() => setHistoryPage((p) => Math.min(historyTotalPages, p + 1))} disabled={historyPage === historyTotalPages}>
+                        <i className="fas fa-chevron-right" />
+                      </button>
+                    </div>
+                  )}
                 </div>
               </>
             )}

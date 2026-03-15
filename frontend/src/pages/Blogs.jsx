@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import ChessBackground from '../components/ChessBackground';
 import AnimatedSidebar from '../components/AnimatedSidebar';
@@ -6,7 +7,13 @@ import { GlassCard } from '../components/AnimatedCard';
 
 
 function resolveBlogImage(blog) {
+  const arrayCandidate = Array.isArray(blog?.image_urls)
+    ? blog.image_urls.find((value) => typeof value === 'string' && value.trim())
+    : (Array.isArray(blog?.imageUrls)
+        ? blog.imageUrls.find((value) => typeof value === 'string' && value.trim())
+        : '');
   const raw = [
+    arrayCandidate,
     blog?.image_url,
     blog?.imageUrl,
     blog?.image,
@@ -120,15 +127,20 @@ export default function Blogs() {
                 const preview = text.length > 240 ? `${text.slice(0, 240)}...` : text;
 
                 return (
-                  <article
+                  <Link
                     key={blogId}
-                    style={{
-                      background: 'rgba(6, 18, 32, 0.72)',
-                      border: '1px solid rgba(46, 139, 87, 0.3)',
-                      borderRadius: '14px',
-                      overflow: 'hidden'
-                    }}
+                    to={`/blogs/${blogId}`}
+                    style={{ textDecoration: 'none', color: 'inherit' }}
                   >
+                    <article
+                      style={{
+                        background: 'rgba(6, 18, 32, 0.72)',
+                        border: '1px solid rgba(46, 139, 87, 0.3)',
+                        borderRadius: '14px',
+                        overflow: 'hidden',
+                        cursor: 'pointer'
+                      }}
+                    >
                     {blogImage ? (
                       <img
                         src={blogImage}
@@ -163,7 +175,8 @@ export default function Blogs() {
                         {preview}
                       </p>
                     </div>
-                  </article>
+                    </article>
+                  </Link>
                 );
               })}
             </div>

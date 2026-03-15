@@ -6,8 +6,9 @@ import usePlayerTheme from '../../hooks/usePlayerTheme';
 import AnimatedSidebar from '../../components/AnimatedSidebar';
 import { coordinatorLinks } from '../../constants/coordinatorLinks';
 import { fetchAsCoordinator } from '../../utils/fetchWithRole';
+import SearchFilterRow from '../../components/SearchFilterRow';
 
-const ROWS_PER_PAGE = 5;
+const ROWS_PER_PAGE = 10;
 
 const sectionVariants = {
   hidden: { opacity: 0, y: 28, scale: 0.97 },
@@ -29,11 +30,13 @@ function TournamentManagement() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [message, setMessage] = useState(null);
-  const [visibleRows, setVisibleRows] = useState(ROWS_PER_PAGE);
+  const [page, setPage] = useState(1);
   const [uploadedFiles, setUploadedFiles] = useState({});
   const [uploadLoading, setUploadLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [fileDescription, setFileDescription] = useState('');
+  const [search, setSearch] = useState({ attr: 'name', q: '' });
+  const [selectedTournament, setSelectedTournament] = useState(null);
 
   // Form state
   const [form, setForm] = useState({
@@ -54,6 +57,13 @@ function TournamentManagement() {
     setTimeout(() => setMessage(null), 4000);
   };
 
+  const getMinTournamentDate = () => {
+    const min = new Date();
+    min.setHours(0, 0, 0, 0);
+    min.setDate(min.getDate() + 3);
+    return min;
+  };
+
   const fetchTournaments = async () => {
     try {
       setLoading(true);
@@ -63,7 +73,7 @@ function TournamentManagement() {
       const data = await res.json();
       const list = Array.isArray(data?.tournaments) ? data.tournaments : [];
       setTournaments(list);
-      setVisibleRows(ROWS_PER_PAGE);
+      setPage(1);
     } catch (e) {
       console.error('Fetch tournaments error:', e);
       setError('Error fetching tournaments.');
@@ -76,14 +86,8 @@ function TournamentManagement() {
     fetchTournaments();
   }, []);
 
-  // Filter out removed tournaments
-  const activeTournaments = useMemo(
-    () => tournaments.filter((t) => t.status !== 'Removed'),
-    [tournaments]
-  );
-
   // Compute status based on 1-hour duration window using date + time
-  const computeStatus = (t) => {
+  function computeStatus(t) {
     let status = t.status || 'Pending';
     let statusClass = 'pending';
     const dateOnly = new Date(t.date);
@@ -97,30 +101,82 @@ function TournamentManagement() {
     const end = new Date(start.getTime() + 60 * 60 * 1000); // 1 hour duration
     const now = new Date();
 
-    if (t.status === 'Approved' || t.status === 'Ongoing') {
-      if (now >= end) {
-        status = 'Completed';
-        statusClass = 'completed';
-      } else if (now >= start && now < end) {
-        status = 'Ongoing';
-        statusClass = 'ongoing';
-      } else if (now < start) {
-        status = 'Yet to Start';
-        statusClass = 'yet-to-start';
-      }
-    } else if (t.status === 'Completed') {
+    let phase = 'Upcoming';
+    if (now >= end) phase = 'Completed';
+    else if (now >= start && now < end) phase = 'Ongoing';
+
+    const rawStatus = (t.status || '').toString().toLowerCase();
+    if (rawStatus === 'completed') {
       status = 'Completed';
       statusClass = 'completed';
-    } else if (t.status === 'Removed') {
+      phase = 'Completed';
+    } else if (rawStatus === 'ongoing') {
+      status = 'Ongoing';
+      statusClass = 'ongoing';
+      phase = 'Ongoing';
+    } else if (rawStatus === 'approved') {
+      status = phase;
+      statusClass = phase === 'Completed' ? 'completed' : phase === 'Ongoing' ? 'ongoing' : 'yet-to-start';
+    } else if (rawStatus === 'pending') {
+      status = 'Pending';
+      statusClass = 'pending';
+    } else if (rawStatus === 'rejected') {
+      status = 'Rejected';
+      statusClass = 'rejected';
+    } else if (rawStatus === 'removed') {
       status = 'Removed';
       statusClass = 'removed';
     } else {
-      status = 'Pending';
-      statusClass = 'pending';
+      status = phase;
+      statusClass = phase === 'Completed' ? 'completed' : phase === 'Ongoing' ? 'ongoing' : 'yet-to-start';
     }
 
-    return { status, statusClass, dateObj: dateOnly };
-  };
+    return { status, statusClass, dateObj: dateOnly, phase };
+  }
+
+  // Filter out removed tournaments
+  const activeTournaments = useMemo(
+    () => tournaments.filter((t) => t.status !== 'Removed'),
+    [tournaments]
+  );
+
+  const filteredTournaments = useMemo(() => {
+    if (!search.q) return activeTournaments;
+    const query = search.q.toLowerCase();
+    return activeTournaments.filter((t) => {
+      const { phase, dateObj } = computeStatus(t);
+      const name = (t.name || t.tournamentName || '').toString();
+      const type = (t.type || '').toString();
+      const dateString = dateObj && !Number.isNaN(dateObj.getTime()) ? dateObj.toLocaleDateString() : '';
+      const statusValue = phase;
+      let value = '';
+      switch (search.attr) {
+        case 'date':
+          value = dateString;
+          break;
+        case 'type':
+          value = type;
+          break;
+        case 'status':
+          value = statusValue;
+          break;
+        default:
+          value = name;
+          break;
+      }
+      return value.toLowerCase().includes(query);
+    });
+  }, [activeTournaments, search]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredTournaments.length / ROWS_PER_PAGE));
+  const paginatedTournaments = useMemo(() => {
+    const start = (page - 1) * ROWS_PER_PAGE;
+    return filteredTournaments.slice(start, start + ROWS_PER_PAGE);
+  }, [filteredTournaments, page]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, activeTournaments.length]);
 
   const validate = () => {
     const errors = {};
@@ -134,8 +190,18 @@ function TournamentManagement() {
       const inputDate = new Date(form.tournamentDate);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
+      const editingTournament = editingId ? tournaments.find((t) => t._id === editingId) : null;
+      const existingDateStr = editingTournament?.date ? new Date(editingTournament.date).toISOString().split('T')[0] : '';
       if (isNaN(inputDate.getTime())) errors.tournamentDate = 'Invalid date format.';
       else if (inputDate < today) errors.tournamentDate = 'Date cannot be in the past.';
+      else {
+        const minDate = getMinTournamentDate();
+        if (!editingId || existingDateStr !== form.tournamentDate) {
+          if (inputDate < minDate) {
+            errors.tournamentDate = 'Tournament must be created at least 3 days before the event date.';
+          }
+        }
+      }
     }
 
     const time = form.tournamentTime.trim();
@@ -173,6 +239,8 @@ function TournamentManagement() {
     });
     setFieldErrors({});
     setEditingId(null);
+    setSelectedFile(null);
+    setFileDescription('');
   };
 
   const onSubmit = async (e) => {
@@ -180,6 +248,16 @@ function TournamentManagement() {
     if (!validate()) {
       showMessage('Please correct the errors in the form.', 'error');
       return;
+    }
+    if (editingId) {
+      const editingTournament = tournaments.find((t) => t._id === editingId);
+      if (editingTournament) {
+        const { phase } = computeStatus(editingTournament);
+        if (phase === 'Completed' || String(editingTournament.status || '').toLowerCase() === 'completed') {
+          showMessage('Completed tournaments are read-only.', 'error');
+          return;
+        }
+      }
     }
     const payload = {
       // camelCase fields used by React API
@@ -209,6 +287,10 @@ function TournamentManagement() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || data.error || 'Failed to submit tournament');
       showMessage(data.message || (editingId ? 'Tournament updated successfully!' : 'Tournament added successfully!'), 'success');
+      const targetId = editingId || data.tournamentId;
+      if (selectedFile && targetId) {
+        await handleFileUpload(targetId);
+      }
       resetForm();
       await fetchTournaments();
     } catch (err) {
@@ -220,6 +302,11 @@ function TournamentManagement() {
   const onEdit = (id) => {
     const t = tournaments.find((x) => x._id === id);
     if (!t) return;
+    const { phase } = computeStatus(t);
+    if (phase === 'Completed' || String(t.status || '').toLowerCase() === 'completed') {
+      showMessage('Completed tournaments are read-only.', 'error');
+      return;
+    }
     setEditingId(id);
     setForm({
       tournamentName: t.name || t.tournamentName || '',
@@ -281,6 +368,10 @@ function TournamentManagement() {
       showMessage('Please select a file to upload', 'error');
       return;
     }
+    if (!tournamentId) {
+      showMessage('Please select a tournament to upload', 'error');
+      return;
+    }
 
     setUploadLoading(true);
     try {
@@ -324,6 +415,13 @@ function TournamentManagement() {
     }
   };
 
+  const closeDetails = () => setSelectedTournament(null);
+
+  const minDateInput = (() => {
+    if (editingId) return '';
+    const d = getMinTournamentDate();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  })();
 
 
   return (
@@ -377,6 +475,25 @@ function TournamentManagement() {
         .file-link { color: var(--sea-green); text-decoration: none; }
         .file-link:hover { text-decoration: underline; }
         .delete-file-btn { background: none; border: none; color: #c62828; cursor: pointer; font-size: 0.8rem; }
+        .search-row { margin-bottom:1rem; display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap; }
+        .search-input { padding:0.6rem 1rem; max-width:300px; width:100%; border:2px solid var(--sea-green); border-radius:8px; font-family:'Playfair Display', serif; background:var(--card-bg); color:var(--text-color); }
+        .search-select { padding:0.6rem 1rem; max-width:300px; width:100%; border:2px solid var(--sea-green); border-radius:8px; font-family:'Cinzel', serif; background:var(--card-bg); color:var(--text-color); }
+        .pagination { display: flex; justify-content: center; align-items: center; gap: 0.5rem; margin-top: 1.2rem; flex-wrap: wrap; }
+        .page-btn { background: var(--card-bg); color: var(--text-color); border: 1px solid var(--card-border); padding: 0.5rem 0.9rem; border-radius: 8px; cursor: pointer; font-family:'Cinzel', serif; font-weight: bold; }
+        .page-btn.active { background: var(--sea-green); color: var(--on-accent); border-color: var(--sea-green); }
+        .page-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .link-btn { background: none; border: none; color: var(--sea-green); text-decoration: underline; cursor: pointer; font-weight: bold; padding: 0; font-family: inherit; }
+        .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 3000; display: flex; align-items: center; justify-content: center; padding: 1.5rem; }
+        .modal-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px; padding: 1.5rem; width: min(900px, 96vw); max-height: 90vh; overflow-y: auto; color: var(--text-color); }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1rem; }
+        .modal-title { font-family: 'Cinzel', serif; color: var(--sea-green); font-size: 1.5rem; display: flex; align-items: center; gap: 0.6rem; }
+        .modal-close { background: none; border: 1px solid var(--card-border); color: var(--text-color); width: 36px; height: 36px; border-radius: 8px; cursor: pointer; }
+        .details-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.9rem; }
+        .detail-item { background: rgba(var(--sea-green-rgb, 27, 94, 63), 0.08); border: 1px solid var(--card-border); border-radius: 10px; padding: 0.75rem; }
+        .detail-label { font-size: 0.8rem; opacity: 0.7; margin-bottom: 0.3rem; }
+        .detail-value { font-weight: 600; }
+        .image-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.6rem; margin-top: 0.6rem; }
+        .image-grid img { width: 100%; height: 120px; object-fit: cover; border-radius: 8px; border: 1px solid var(--card-border); }
         @media (max-width: 900px) {
           .top-panels-grid { grid-template-columns: 1fr; }
           .tournament-form-grid { grid-template-columns: 1fr; }
@@ -463,6 +580,7 @@ function TournamentManagement() {
                 <input
                   className={`form-input ${fieldErrors.tournamentDate ? 'error' : ''}`}
                   type="date"
+                  min={minDateInput}
                   value={form.tournamentDate}
                   onChange={(e) => setForm({ ...form, tournamentDate: e.target.value })}
                   required
@@ -533,43 +651,22 @@ function TournamentManagement() {
                   </div>
                 </div>
               </div>
-              <button type="submit" className="btn-primary tournament-form-actions">{editingId ? 'Update Tournament' : 'Add Tournament'}</button>
-            </form>
-          </motion.div>
-
-          <motion.div
-            className="updates-section"
-            custom={1}
-            variants={sectionVariants}
-            initial="hidden"
-            animate="visible"
-          >
-            <h3 style={{ fontFamily: 'Cinzel, serif', color: 'var(--sea-green)', marginBottom: '1rem' }}>Upload Tournament Files</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div className="form-group">
-                <label className="form-label">Select Tournament:</label>
-                <select
-                  className="form-input"
-                  value={form.selectedTournamentForUpload || ''}
-                  onChange={(e) => setForm({ ...form, selectedTournamentForUpload: e.target.value })}
-                >
-                  <option value="" disabled>Select a tournament</option>
-                  {activeTournaments.map(t => (
-                    <option key={t._id} value={t._id}>{t.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label">File:</label>
+                <label className="form-label">Attach File (optional):</label>
                 <input
                   type="file"
                   className="form-input"
-                  onChange={(e) => setSelectedFile(e.target.files[0])}
-                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.txt"
+                  onChange={(e) => setSelectedFile(e.target.files[0] || null)}
+                  accept=".pdf,.jpg,.jpeg,.png,.gif"
                 />
+                {selectedFile && (
+                  <div style={{ fontSize: '0.8rem', opacity: 0.75, marginTop: '0.35rem' }}>
+                    Selected: {selectedFile.name}
+                  </div>
+                )}
               </div>
               <div className="form-group">
-                <label className="form-label">Description (optional):</label>
+                <label className="form-label">File Description (optional):</label>
                 <input
                   type="text"
                   className="form-input"
@@ -578,18 +675,10 @@ function TournamentManagement() {
                   placeholder="Brief description of the file"
                 />
               </div>
-              <button
-                type="button"
-                className="btn-primary"
-                onClick={() => handleFileUpload(form.selectedTournamentForUpload)}
-                disabled={!form.selectedTournamentForUpload || !selectedFile || uploadLoading}
-                style={{ opacity: (!form.selectedTournamentForUpload || !selectedFile || uploadLoading) ? 0.6 : 1 }}
-              >
-                {uploadLoading ? <i className="fas fa-spinner fa-spin" /> : <i className="fas fa-upload" />}
-                {uploadLoading ? 'Uploading...' : 'Upload File'}
-              </button>
-            </div>
+              <button type="submit" className="btn-primary tournament-form-actions">{editingId ? 'Update Tournament' : 'Add Tournament'}</button>
+            </form>
           </motion.div>
+
           </div>
 
           <motion.div
@@ -601,6 +690,18 @@ function TournamentManagement() {
           >
             <h3 style={{ fontFamily: 'Cinzel, serif', color: 'var(--sea-green)', marginBottom: '0.5rem' }}>Your Tournaments</h3>
             <h4 style={{ color: 'var(--text-color)', opacity: 0.7, marginBottom: '1rem' }}>Tournaments you've submitted will appear here with their approval status</h4>
+
+            <SearchFilterRow
+              value={search}
+              options={[
+                { value: 'name', label: 'Name' },
+                { value: 'date', label: 'Date' },
+                { value: 'type', label: 'Type' },
+                { value: 'status', label: 'Status' }
+              ]}
+              onAttrChange={(val) => setSearch((s) => ({ ...s, attr: val }))}
+              onQueryChange={(val) => setSearch((s) => ({ ...s, q: val }))}
+            />
 
             {loading && <div>Loading tournaments…</div>}
             {!loading && !!error && (
@@ -614,7 +715,13 @@ function TournamentManagement() {
               </div>
             )}
 
-            {!loading && !error && activeTournaments.length > 0 && (
+            {!loading && !error && activeTournaments.length > 0 && filteredTournaments.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--sea-green)', fontStyle: 'italic' }}>
+                <i className="fas fa-info-circle" /> No tournaments match the selected filters.
+              </div>
+            )}
+
+            {!loading && !error && filteredTournaments.length > 0 && (
               <>
                 <div className="table-responsive">
                   <table className="tournament-table">
@@ -633,21 +740,24 @@ function TournamentManagement() {
                       </tr>
                     </thead>
                     <tbody>
-                      {activeTournaments.map((t, idx) => {
-                        const { status, statusClass, dateObj } = computeStatus(t);
-                        const hidden = idx >= visibleRows;
+                      {paginatedTournaments.map((t, idx) => {
+                        const { status, statusClass, dateObj, phase } = computeStatus(t);
+                        const isCompleted = phase === 'Completed' || String(t.status || '').toLowerCase() === 'completed';
                         return (
-                          <tr key={t._id || idx} style={hidden ? { display: 'none' } : undefined}>
+                          <tr key={t._id || idx}>
                             <td>
-                              <Link
-                                to={`/coordinator/tournaments/${t._id}`}
-                                state={{ tournament: t }}
-                                style={{ color: 'var(--sea-green)', textDecoration: 'underline', fontWeight: 'bold' }}
-                                title="Open tournament details"
+                              <button
+                                type="button"
+                                className="link-btn"
+                                onClick={() => {
+                                  setSelectedTournament(t);
+                                  fetchUploadedFiles(t._id);
+                                }}
+                                title="View tournament details"
                               >
-                                <i className="fas fa-external-link-alt" style={{ marginRight: 6 }} />
+                                <i className="fas fa-info-circle" style={{ marginRight: 6 }} />
                                 {t.name || t.tournamentName || 'Untitled Tournament'}
-                              </Link>
+                              </button>
                             </td>
                             <td>{isNaN(dateObj) ? '' : dateObj.toLocaleDateString()}</td>
                             <td>{t.time}</td>
@@ -689,10 +799,24 @@ function TournamentManagement() {
                             </td>
                             <td>
                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'flex-start' }}>
+                                <button
+                                  type="button"
+                                  className="action-btn edit-btn"
+                                  onClick={() => onEdit(t._id)}
+                                  disabled={isCompleted}
+                                  style={{ opacity: isCompleted ? 0.5 : 1 }}
+                                >
+                                  <i className="fas fa-edit" /> Edit
+                                </button>
                                 <Link to={`/coordinator/tournaments/${t._id}`} state={{ tournament: t }} className="action-btn">
                                   <i className="fas fa-th-large" /> Open Sections
                                 </Link>
-                                <button className="action-btn remove-btn" onClick={() => onRemove(t._id)}>
+                                <button
+                                  className="action-btn remove-btn"
+                                  onClick={() => onRemove(t._id)}
+                                  disabled={isCompleted}
+                                  style={{ opacity: isCompleted ? 0.5 : 1 }}
+                                >
                                   <i className="fas fa-trash" /> Remove
                                 </button>
                               </div>
@@ -704,18 +828,36 @@ function TournamentManagement() {
                   </table>
                 </div>
 
-                <div style={{ textAlign: 'center', margin: '1rem 0', display: 'flex', justifyContent: 'center', gap: '1rem' }}>
-                  {visibleRows < activeTournaments.length && (
-                    <button className="action-btn" onClick={() => setVisibleRows((v) => Math.min(v + ROWS_PER_PAGE, activeTournaments.length))}>
-                      <i className="fas fa-trophy" /> More
+                {totalPages > 1 && (
+                  <div className="pagination">
+                    <button
+                      type="button"
+                      className="page-btn"
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={page === 1}
+                    >
+                      <i className="fas fa-chevron-left" />
                     </button>
-                  )}
-                  {visibleRows > ROWS_PER_PAGE && (
-                    <button className="action-btn" onClick={() => setVisibleRows(ROWS_PER_PAGE)}>
-                      <i className="fas fa-chevron-up" /> Hide
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        className={`page-btn ${p === page ? 'active' : ''}`}
+                        onClick={() => setPage(p)}
+                      >
+                        {p}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      className="page-btn"
+                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={page === totalPages}
+                    >
+                      <i className="fas fa-chevron-right" />
                     </button>
-                  )}
-                </div>
+                  </div>
+                )}
               </>
             )}
 
@@ -725,6 +867,109 @@ function TournamentManagement() {
               </Link>
             </div>
           </motion.div>
+
+          {selectedTournament && (() => {
+            const { status, phase } = computeStatus(selectedTournament);
+            const detailsFiles = uploadedFiles[selectedTournament._id] || [];
+            const imageFiles = detailsFiles.filter((file) => /\.(jpg|jpeg|png|gif)$/i.test(file.filename || ''));
+            const otherFiles = detailsFiles.filter((file) => !/\.(jpg|jpeg|png|gif)$/i.test(file.filename || ''));
+            const organizerName =
+              selectedTournament.organizerName ||
+              selectedTournament.organizer_name ||
+              selectedTournament.organizer ||
+              'N/A';
+            const approvedBy =
+              selectedTournament.approved_by ||
+              selectedTournament.approvedBy ||
+              'Pending';
+            return (
+              <div className="modal-backdrop" onClick={closeDetails}>
+                <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+                  <div className="modal-header">
+                    <div className="modal-title">
+                      <i className="fas fa-trophy" /> {selectedTournament.name || selectedTournament.tournamentName || 'Tournament'}
+                    </div>
+                    <button className="modal-close" onClick={closeDetails} aria-label="Close">
+                      <i className="fas fa-times" />
+                    </button>
+                  </div>
+
+                  <div className="details-grid">
+                    <div className="detail-item">
+                      <div className="detail-label">Status</div>
+                      <div className="detail-value">{status || phase}</div>
+                    </div>
+                    <div className="detail-item">
+                      <div className="detail-label">Date & Time</div>
+                      <div className="detail-value">
+                        {selectedTournament.date ? new Date(selectedTournament.date).toLocaleDateString() : 'N/A'} {selectedTournament.time || ''}
+                      </div>
+                    </div>
+                    <div className="detail-item">
+                      <div className="detail-label">Venue / Location</div>
+                      <div className="detail-value">{selectedTournament.location || selectedTournament.tournamentLocation || 'N/A'}</div>
+                    </div>
+                    <div className="detail-item">
+                      <div className="detail-label">Organizer Name</div>
+                      <div className="detail-value">{organizerName}</div>
+                    </div>
+                    <div className="detail-item">
+                      <div className="detail-label">Approved By (Coordinator)</div>
+                      <div className="detail-value">{approvedBy}</div>
+                    </div>
+                    <div className="detail-item">
+                      <div className="detail-label">Coordinator</div>
+                      <div className="detail-value">{selectedTournament.coordinator || selectedTournament.added_by || 'N/A'}</div>
+                    </div>
+                    <div className="detail-item">
+                      <div className="detail-label">Type</div>
+                      <div className="detail-value">{selectedTournament.type || 'N/A'}</div>
+                    </div>
+                    <div className="detail-item">
+                      <div className="detail-label">Rounds</div>
+                      <div className="detail-value">{selectedTournament.noOfRounds || selectedTournament.no_of_rounds || 'N/A'}</div>
+                    </div>
+                    <div className="detail-item">
+                      <div className="detail-label">Entry Fee</div>
+                      <div className="detail-value">INR {selectedTournament.entry_fee ?? selectedTournament.entryFee ?? '0'}</div>
+                    </div>
+                    <div className="detail-item" style={{ gridColumn: '1 / -1' }}>
+                      <div className="detail-label">Description</div>
+                      <div className="detail-value">
+                        {selectedTournament.description || selectedTournament.tournamentDescription || 'No description provided.'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: '1rem' }}>
+                    <div className="detail-label">Images</div>
+                    {imageFiles.length === 0 ? (
+                      <div style={{ opacity: 0.7 }}>No images uploaded.</div>
+                    ) : (
+                      <div className="image-grid">
+                        {imageFiles.map((file) => (
+                          <img key={file._id} src={file.url} alt={file.filename} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {otherFiles.length > 0 && (
+                    <div style={{ marginTop: '1rem' }}>
+                      <div className="detail-label">Attachments</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                        {otherFiles.map((file) => (
+                          <a key={file._id} href={file.url} target="_blank" rel="noopener noreferrer" className="file-link">
+                            {file.filename}
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
     </div>

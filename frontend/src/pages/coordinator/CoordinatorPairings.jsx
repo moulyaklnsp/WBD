@@ -40,6 +40,8 @@ function CoordinatorPairings() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [allRounds, setAllRounds] = useState([]);
+  const [roundPages, setRoundPages] = useState({});
+  const rowsPerPage = 10;
 
   const svgRef = useRef(null);
 
@@ -81,6 +83,10 @@ function CoordinatorPairings() {
     };
     run();
   }, [tournamentId, roundsParam, isTeamTournament]);
+
+  useEffect(() => {
+    setRoundPages({});
+  }, [allRounds]);
 
   // Build unique player/team list from all rounds
   const players = useMemo(() => {
@@ -223,6 +229,10 @@ function CoordinatorPairings() {
         .score-text { color:var(--sea-green); font-weight:bold; }
         .bye-text { color:var(--text-color); opacity:0.7; font-style:italic; }
         .action-btn { display:inline-flex; align-items:center; gap:0.5rem; background:var(--sea-green); color:var(--on-accent); text-decoration:none; padding:0.8rem 1.5rem; border-radius:8px; font-family:'Cinzel', serif; font-weight:bold; }
+        .pagination { display:flex; justify-content:center; align-items:center; gap:0.5rem; margin:1rem 0; flex-wrap:wrap; }
+        .page-btn { background:var(--card-bg); color:var(--text-color); border:1px solid var(--card-border); padding:0.45rem 0.85rem; border-radius:8px; cursor:pointer; font-family:'Cinzel', serif; font-weight:bold; }
+        .page-btn.active { background:var(--sea-green); color:var(--on-accent); border-color:var(--sea-green); }
+        .page-btn:disabled { opacity:0.6; cursor:not-allowed; }
       `}</style>
 
       <div className="page player-neo">
@@ -288,6 +298,13 @@ function CoordinatorPairings() {
               initial="hidden"
               animate="visible"
             >
+              {(() => {
+                const page = roundPages[round.round] || 1;
+                const totalPages = Math.max(1, Math.ceil((round.pairings || []).length / rowsPerPage));
+                const start = (page - 1) * rowsPerPage;
+                const paginatedPairings = (round.pairings || []).slice(start, start + rowsPerPage);
+                return (
+                  <>
               <h2 style={{ fontFamily: 'Cinzel, serif', fontSize: '2rem', color: 'var(--sea-green)', marginBottom: '2rem', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem' }}><i className="fas fa-swords" /> Round {round.round}</h2>
               <table className="pairings-table">
                 <thead>
@@ -298,7 +315,7 @@ function CoordinatorPairings() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(round.pairings || []).map((pair, idx) => (
+                  {paginatedPairings.map((pair, idx) => (
                     <tr key={idx}>
                       {isTeamTournament ? (
                         <>
@@ -334,6 +351,36 @@ function CoordinatorPairings() {
                   ))}
                 </tbody>
               </table>
+              {totalPages > 1 && (
+                <div className="pagination">
+                  <button
+                    type="button"
+                    className="page-btn"
+                    onClick={() => setRoundPages((prev) => ({ ...prev, [round.round]: Math.max(1, page - 1) }))}
+                    disabled={page === 1}
+                  >
+                    <i className="fas fa-chevron-left" />
+                  </button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      className={`page-btn ${p === page ? 'active' : ''}`}
+                      onClick={() => setRoundPages((prev) => ({ ...prev, [round.round]: p }))}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className="page-btn"
+                    onClick={() => setRoundPages((prev) => ({ ...prev, [round.round]: Math.min(totalPages, page + 1) }))}
+                    disabled={page === totalPages}
+                  >
+                    <i className="fas fa-chevron-right" />
+                  </button>
+                </div>
+              )}
               {isTeamTournament && round.byeTeam && (
                 <p className="bye-text">
                   <strong>BYE:</strong> {round.byeTeam?.teamName}{' '}
@@ -346,6 +393,9 @@ function CoordinatorPairings() {
                   <span className="score-text">(Score: {round.byePlayer?.score})</span>
                 </p>
               )}
+                  </>
+                );
+              })()}
             </motion.div>
           ))}
 

@@ -320,6 +320,8 @@ router.patch('/api/store/complaints/:complaintId/resolve', coordinatorController
 router.get('/api/blogs/public', coordinatorController.getPublishedBlogsPublic);
 router.get('/api/blogs', coordinatorController.getBlogs);
 router.post('/api/blogs', coordinatorController.createBlog);
+router.post('/api/blogs/upload-images', coordinatorController.uploadBlogImagesMiddleware, coordinatorController.uploadBlogImages);
+router.get('/api/blogs/:id', coordinatorController.getBlogById);
 router.put('/api/blogs/:id', coordinatorController.updateBlog);
 router.delete('/api/blogs/:id', coordinatorController.deleteBlog);
 

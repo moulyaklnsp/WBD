@@ -36,6 +36,8 @@ function CoordinatorRankings() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [rankings, setRankings] = useState([]);
+  const [page, setPage] = useState(1);
+  const rowsPerPage = 10;
 
   useEffect(() => {
     const load = async () => {
@@ -54,6 +56,7 @@ function CoordinatorRankings() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed to load rankings');
         setRankings(Array.isArray(data.rankings) ? data.rankings : []);
+        setPage(1);
       } catch (e) {
         console.error('Rankings load error:', e);
         setError('Failed to load rankings.');
@@ -63,6 +66,12 @@ function CoordinatorRankings() {
     };
     load();
   }, [tournamentId, isTeamTournament]);
+
+  const totalPages = Math.max(1, Math.ceil(rankings.length / rowsPerPage));
+  const paginatedRankings = useMemo(() => {
+    const start = (page - 1) * rowsPerPage;
+    return rankings.slice(start, start + rowsPerPage);
+  }, [rankings, page, rowsPerPage]);
 
   return (
     <div style={{ minHeight: '100vh' }}>
@@ -84,6 +93,10 @@ function CoordinatorRankings() {
         .top2 { background:rgba(192, 192, 192, 0.1); }
         .top3 { background:rgba(205, 127, 50, 0.1); }
         .error-text { color:red; text-align:center; margin-bottom:1rem; }
+        .pagination { display:flex; justify-content:center; align-items:center; gap:0.5rem; margin:1rem 0; flex-wrap:wrap; }
+        .page-btn { background:var(--card-bg); color:var(--text-color); border:1px solid var(--card-border); padding:0.45rem 0.85rem; border-radius:8px; cursor:pointer; font-family:'Cinzel', serif; font-weight:bold; }
+        .page-btn.active { background:var(--sea-green); color:var(--on-accent); border-color:var(--sea-green); }
+        .page-btn:disabled { opacity:0.6; cursor:not-allowed; }
       `}</style>
 
       <div className="page player-neo">
@@ -162,8 +175,8 @@ function CoordinatorRankings() {
                     <td colSpan={isTeamTournament ? 4 : 3}>{isTeamTournament ? 'No approved teams available for rankings.' : 'No rankings available.'}</td>
                   </tr>
                 )}
-                {!loading && !error && rankings.map((item, index) => {
-                  const rankNum = index + 1;
+                {!loading && !error && paginatedRankings.map((item, index) => {
+                  const rankNum = (page - 1) * rowsPerPage + index + 1;
                   const rowClass = rankNum === 1 ? 'top1' : rankNum === 2 ? 'top2' : rankNum === 3 ? 'top3' : '';
                   return (
                     <tr key={(isTeamTournament ? item.teamName : item.playerName) + index} className={rowClass}>
@@ -178,6 +191,37 @@ function CoordinatorRankings() {
                 })}
               </tbody>
             </table>
+
+            {totalPages > 1 && (
+              <div className="pagination">
+                <button
+                  type="button"
+                  className="page-btn"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                >
+                  <i className="fas fa-chevron-left" />
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    className={`page-btn ${p === page ? 'active' : ''}`}
+                    onClick={() => setPage(p)}
+                  >
+                    {p}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className="page-btn"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                >
+                  <i className="fas fa-chevron-right" />
+                </button>
+              </div>
+            )}
 
             <div style={{ textAlign: 'right' }}>
               <Link to={sectionsPath} className="action-btn">

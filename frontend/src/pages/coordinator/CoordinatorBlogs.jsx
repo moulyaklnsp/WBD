@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import '../../styles/playerNeoNoir.css';
 import { motion, AnimatePresence } from 'framer-motion';
 import { fetchAsCoordinator } from '../../utils/fetchWithRole';
@@ -9,7 +9,13 @@ import { coordinatorLinks } from '../../constants/coordinatorLinks';
 
 
 function resolveBlogImage(blog) {
+  const arrayCandidate = Array.isArray(blog?.image_urls)
+    ? blog.image_urls.find((value) => typeof value === 'string' && value.trim())
+    : (Array.isArray(blog?.imageUrls)
+        ? blog.imageUrls.find((value) => typeof value === 'string' && value.trim())
+        : '');
   const raw = [
+    arrayCandidate,
     blog?.image_url,
     blog?.imageUrl,
     blog?.image,
@@ -35,7 +41,7 @@ function resolveBlogImage(blog) {
   return trimmed;
 }
 
-const PAGE_SIZE = 6;
+const PAGE_SIZE = 10;
 
 const sectionVariants = {
   hidden: { opacity: 0, y: 28, scale: 0.97 },
@@ -70,13 +76,15 @@ const itemVariants = {
 
 function CoordinatorBlogs() {
   const [isDark, toggleTheme] = usePlayerTheme();
+  const navigate = useNavigate();
   const [blogs, setBlogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [message, setMessage] = useState(null);
 
   // Form state
-  const [form, setForm] = useState({ title: '', content: '', imageUrl: '', status: 'published' });
+  const [form, setForm] = useState({ title: '', status: 'published' });
+  const [blocks, setBlocks] = useState([{ id: `${Date.now()}-block`, type: 'text', value: '' }]);
   const [editingId, setEditingId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -87,6 +95,65 @@ function CoordinatorBlogs() {
     setMessage({ type, text });
     setTimeout(() => setMessage(null), 4000);
   };
+
+  const createBlockId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  const addBlock = (type) => {
+    setBlocks((prev) => [...prev, { id: createBlockId(), type, value: '', file: null, preview: '' }]);
+  };
+
+  const updateBlockValue = (id, value) => {
+    setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, value } : b)));
+  };
+
+  const updateBlockFile = (id, file) => {
+    setBlocks((prev) => prev.map((b) => {
+      if (b.id !== id) return b;
+      if (b.preview) {
+        try { URL.revokeObjectURL(b.preview); } catch {}
+      }
+      const preview = file ? URL.createObjectURL(file) : '';
+      return { ...b, file, preview, value: file ? b.value : b.value };
+    }));
+  };
+
+  const removeBlock = (id) => {
+    setBlocks((prev) => {
+      const target = prev.find((b) => b.id === id);
+      if (target?.preview) {
+        try { URL.revokeObjectURL(target.preview); } catch {}
+      }
+      return prev.filter((b) => b.id !== id);
+    });
+  };
+
+  const buildBlocksFromBlog = (blog) => {
+    const existingBlocks = Array.isArray(blog?.blocks)
+      ? blog.blocks
+      : (Array.isArray(blog?.content_blocks) ? blog.content_blocks : []);
+    if (existingBlocks.length > 0) {
+      return existingBlocks.map((b) => ({
+        id: createBlockId(),
+        type: b.type || 'text',
+        value: b.value || '',
+        file: null,
+        preview: b.type === 'image' ? b.value : ''
+      }));
+    }
+
+    const content = (blog?.content || '').trim();
+    const paragraphs = content ? content.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean) : [];
+    const images = Array.isArray(blog?.image_urls)
+      ? blog.image_urls
+      : (Array.isArray(blog?.imageUrls)
+          ? blog.imageUrls
+          : (blog?.image_url ? [blog.image_url] : []));
+    const nextBlocks = [];
+    paragraphs.forEach((p) => nextBlocks.push({ id: createBlockId(), type: 'text', value: p, file: null, preview: '' }));
+    images.forEach((url) => nextBlocks.push({ id: createBlockId(), type: 'image', value: url, file: null, preview: url }));
+    return nextBlocks.length > 0 ? nextBlocks : [{ id: createBlockId(), type: 'text', value: '', file: null, preview: '' }];
+  };
+
 
   const loadBlogs = useCallback(async () => {
     try {
@@ -108,6 +175,10 @@ function CoordinatorBlogs() {
     loadBlogs();
   }, [loadBlogs]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [blogs.length]);
+
   const totalPages = Math.max(1, Math.ceil(blogs.length / PAGE_SIZE));
   const paginatedBlogs = useMemo(() => {
     const start = (page - 1) * PAGE_SIZE;
@@ -115,17 +186,17 @@ function CoordinatorBlogs() {
   }, [blogs, page]);
 
   const resetForm = () => {
-    setForm({ title: '', content: '', imageUrl: '', status: 'published' });
+    setForm({ title: '', status: 'published' });
+    setBlocks([{ id: createBlockId(), type: 'text', value: '', file: null, preview: '' }]);
     setEditingId(null);
   };
 
   const handleEdit = (blog) => {
     setForm({
       title: blog.title || '',
-      content: blog.content || '',
-      imageUrl: blog.imageUrl || blog.image_url || '',
       status: blog.status || (blog.published ? 'published' : 'draft')
     });
+    setBlocks(buildBlocksFromBlog(blog));
     setEditingId(blog._id || blog.id);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -149,26 +220,71 @@ function CoordinatorBlogs() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     const title = form.title.trim();
-    const content = form.content.trim();
-    if (!title || !content) {
-      showMessage('Title and content are required.', 'error');
+    if (!title) {
+      showMessage('Title is required.', 'error');
       return;
     }
 
-    const enteredImageUrl = form.imageUrl.trim();
-    const isValidImageUrl = !enteredImageUrl || /^(https?:\/\/|data:|\/uploads\/|\/public\/uploads\/)/i.test(enteredImageUrl) || /^www\./i.test(enteredImageUrl);
-    if (!isValidImageUrl) {
+    const urlBlocks = blocks.filter((b) => b.type === 'image' && !b.file && b.value.trim());
+    const invalidUrlBlock = urlBlocks.find((b) => !/^(https?:\/\/|data:|\/uploads\/|\/public\/uploads\/)/i.test(b.value.trim()) && !/^www\./i.test(b.value.trim()));
+    if (invalidUrlBlock) {
       showMessage('Please enter a valid image URL starting with http:// or https://', 'error');
+      return;
+    }
+
+    const textBlocks = blocks
+      .filter((b) => b.type === 'text')
+      .map((b) => b.value.trim())
+      .filter(Boolean);
+    if (textBlocks.length === 0) {
+      showMessage('Please add at least one text paragraph.', 'error');
       return;
     }
 
     setSubmitting(true);
     try {
+      let uploadedUrls = [];
+      const fileBlocks = blocks.filter((b) => b.type === 'image' && b.file);
+      if (fileBlocks.length > 0) {
+        const formData = new FormData();
+        fileBlocks.forEach((b) => formData.append('images', b.file));
+        const uploadRes = await fetchAsCoordinator('/coordinator/api/blogs/upload-images', {
+          method: 'POST',
+          body: formData
+        });
+        const uploadData = await uploadRes.json();
+        if (!uploadRes.ok) throw new Error(uploadData.error || 'Failed to upload images');
+        uploadedUrls = Array.isArray(uploadData.images) ? uploadData.images.map((img) => img.url).filter(Boolean) : [];
+      }
+
+      let uploadIndex = 0;
+      const normalizedBlocks = blocks.map((b) => {
+        if (b.type === 'text') {
+          const value = b.value.trim();
+          return value ? { type: 'text', value } : null;
+        }
+        if (b.type === 'image') {
+          let value = b.value.trim();
+          if (b.file) {
+            value = uploadedUrls[uploadIndex] || '';
+            uploadIndex += 1;
+          }
+          if (value && /^www\./i.test(value)) value = `https://${value}`;
+          return value ? { type: 'image', value } : null;
+        }
+        return null;
+      }).filter(Boolean);
+
+      const content = normalizedBlocks.filter((b) => b.type === 'text').map((b) => b.value).join('\n\n');
+      const imageUrls = normalizedBlocks.filter((b) => b.type === 'image').map((b) => b.value);
+
       const normalizedStatus = form.status === 'draft' ? 'draft' : 'published';
       const payload = {
         title,
         content,
-        imageUrl: enteredImageUrl,
+        imageUrls,
+        imageUrl: imageUrls[0] || '',
+        blocks: normalizedBlocks,
         status: normalizedStatus,
         published: normalizedStatus === 'published'
       };
@@ -328,25 +444,60 @@ function CoordinatorBlogs() {
                 />
               </div>
               <div className="form-group">
-                <label htmlFor="blog-content"><i className="fas fa-align-left" /> Content</label>
-                <textarea
-                  id="blog-content"
-                  placeholder="Write your blog content here..."
-                  value={form.content}
-                  onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
-                  rows={8}
-                  style={{ minHeight: '180px' }}
-                />
-              </div>
-              <div className="form-group">
-                <label htmlFor="blog-image"><i className="fas fa-image" /> Image URL (optional)</label>
-                <input
-                  id="blog-image"
-                  type="text"
-                  placeholder="https://example.com/image.jpg"
-                  value={form.imageUrl}
-                  onChange={(e) => setForm((f) => ({ ...f, imageUrl: e.target.value }))}
-                />
+                <label><i className="fas fa-align-left" /> Content Blocks</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
+                  {blocks.map((block, index) => (
+                    <div key={block.id} style={{ border: '1px solid var(--card-border)', borderRadius: 10, padding: '0.9rem', background: 'rgba(var(--sea-green-rgb, 27, 94, 63), 0.06)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
+                        <strong>{block.type === 'text' ? `Paragraph ${index + 1}` : `Image ${index + 1}`}</strong>
+                        {blocks.length > 1 && (
+                          <button type="button" className="btn-secondary" onClick={() => removeBlock(block.id)}>
+                            <i className="fas fa-trash" /> Remove
+                          </button>
+                        )}
+                      </div>
+                      {block.type === 'text' ? (
+                        <textarea
+                          placeholder="Write a paragraph..."
+                          value={block.value}
+                          onChange={(e) => updateBlockValue(block.id, e.target.value)}
+                          rows={4}
+                          style={{ width: '100%', minHeight: '110px' }}
+                        />
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => updateBlockFile(block.id, e.target.files?.[0] || null)}
+                          />
+                          <input
+                            type="text"
+                            placeholder="Or paste an image URL..."
+                            value={block.value}
+                            onChange={(e) => updateBlockValue(block.id, e.target.value)}
+                          />
+                          {(block.preview || block.value) && (
+                            <img
+                              src={block.preview || block.value}
+                              alt="Preview"
+                              style={{ width: '100%', maxHeight: 220, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--card-border)' }}
+                              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                            />
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+                    <button type="button" className="btn-secondary" onClick={() => addBlock('text')}>
+                      <i className="fas fa-plus" /> Add Paragraph
+                    </button>
+                    <button type="button" className="btn-secondary" onClick={() => addBlock('image')}>
+                      <i className="fas fa-image" /> Add Image
+                    </button>
+                  </div>
+                </div>
               </div>
               <div className="form-group">
                 <label htmlFor="blog-status"><i className="fas fa-toggle-on" /> Status</label>
@@ -409,7 +560,13 @@ function CoordinatorBlogs() {
                     const blogImage = resolveBlogImage(blog);
                     const blogDate = blog.createdAt || blog.created_at || blog.date;
                     return (
-                      <motion.div key={blogId} className="blog-card" variants={itemVariants}>
+                      <motion.div
+                        key={blogId}
+                        className="blog-card"
+                        variants={itemVariants}
+                        onClick={() => navigate(`/coordinator/blogs/${blogId}`)}
+                        style={{ cursor: 'pointer' }}
+                      >
                         {blogImage ? (
                           <img
                             src={blogImage}
@@ -440,7 +597,7 @@ function CoordinatorBlogs() {
                             <motion.button
                               type="button"
                               className="btn-secondary"
-                              onClick={() => handleEdit(blog)}
+                              onClick={(e) => { e.stopPropagation(); handleEdit(blog); }}
                               whileHover={{ scale: 1.05 }}
                               whileTap={{ scale: 0.95 }}
                             >
@@ -449,7 +606,7 @@ function CoordinatorBlogs() {
                             <motion.button
                               type="button"
                               className="btn-danger"
-                              onClick={() => handleDelete(blogId)}
+                              onClick={(e) => { e.stopPropagation(); handleDelete(blogId); }}
                               whileHover={{ scale: 1.05 }}
                               whileTap={{ scale: 0.95 }}
                             >
