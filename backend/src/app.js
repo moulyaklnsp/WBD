@@ -220,4 +220,3 @@ connectDB().catch(err => console.error('Database connection failed:', err));
 server.listen(PORT, () =>
   console.log(`ChessHive server running on port ${PORT} | Swagger UI: http://localhost:${PORT}/api-docs`)
 );
-
