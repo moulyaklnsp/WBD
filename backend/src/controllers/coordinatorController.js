@@ -3,7 +3,10 @@ const moment = require('moment');
 const helpers = require('../utils/helpers');
 const { uploadImageBuffer, destroyImage, cloudinary } = require('../utils/cloudinary');
 const { ObjectId } = require('mongodb');
+const { sendOtpEmail } = require('../services/emailService');
 const path = require('path');
+const fs = require('fs');
+const PDFDocument = require('pdfkit');
 const Player = require('../models/Player');
 const Team = require('../models/Team');
 const { swissPairing, swissTeamPairing } = require('../utils/swissPairing');
@@ -3069,34 +3072,126 @@ const checkDateConflict = async (req, res) => {
 const updateProduct = async (req, res) => {
   try {
     const productId = req.params.productId || req.params.id;
-    const updates = req.body;
-
     if (!ObjectId.isValid(productId)) return res.status(400).json({ error: 'Invalid product ID' });
 
     const db = await connectDB();
-    const coordinatorEmail = req.session.userEmail;
 
-    // Verify coordinator owns the product
-    const product = await db.collection('products').findOne({
-      _id: new ObjectId(productId),
-      coordinator: coordinatorEmail
-    });
-    if (!product) return res.status(404).json({ error: 'Product not found or access denied' });
+    // Fetch product first and verify ownership using coordinator identifiers (username or email)
+    const product = await db.collection('products').findOne({ _id: new ObjectId(productId) });
+    if (!product) return res.status(404).json({ error: 'Product not found' });
 
-    // Remove fields that shouldn't be updated directly
-    delete updates._id;
-    delete updates.coordinator;
-    delete updates.college;
+    const ownerIdentifiers = await getCoordinatorOwnerIdentifiers(db, req.session);
+    const productOwner = String(product.coordinator || '').trim();
+    const ownerSet = new Set((ownerIdentifiers || []).map((v) => String(v).trim()));
+    if (!ownerSet.has(productOwner) && !ownerSet.has(productOwner.toLowerCase())) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
 
-    await db.collection('products').updateOne(
-      { _id: new ObjectId(productId) },
-      { $set: updates }
-    );
+    // Support multipart uploads for adding images
+    const files = [];
+    if (multer && (req.headers['content-type'] || '').includes('multipart/form-data')) {
+      const uploader = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 * 1024 * 1024, files: 8 } }).any();
+      await new Promise((resolve, reject) => {
+        uploader(req, res, (err) => (err ? reject(err) : resolve()));
+      });
+    }
 
-    res.json({ success: true });
+    if (Array.isArray(req.files) && req.files.length > 0) {
+      files.push(...req.files);
+    }
+
+    const body = req.body || {};
+    const updates = {};
+
+    // Allowed scalar fields to update
+    if (body.name != null) updates.name = safeTrim(body.name);
+    if (body.category != null) updates.category = safeTrim(body.category);
+    if (body.price != null && body.price !== '') {
+      const p = parseFloat(body.price);
+      if (!Number.isNaN(p) && p >= 0) updates.price = p;
+    }
+    if (body.availability != null && body.availability !== '') {
+      const a = parseInt(body.availability);
+      if (!Number.isNaN(a) && a >= 0) updates.availability = a;
+    }
+    if (body.description != null) updates.description = safeTrim(body.description);
+    if (body.comments_enabled != null) updates.comments_enabled = !!(body.comments_enabled === true || body.comments_enabled === 'true' || body.comments_enabled === '1' || body.comments_enabled === 1);
+
+    const uploadedImageUrls = [];
+    const uploadedPublicIds = [];
+    if (files.length > 0) {
+      for (const file of files) {
+        try {
+          const result = await uploadImageBuffer(file.buffer, {
+            folder: 'chesshive/product-images',
+            public_id: `product_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+            overwrite: false
+          });
+          if (result?.secure_url) uploadedImageUrls.push(result.secure_url);
+          if (result?.public_id) uploadedPublicIds.push(result.public_id);
+        } catch (e) {
+          console.warn('Failed to upload product image:', e.message);
+        }
+      }
+    }
+
+    // Handle image URLs/public IDs provided in body (CSV or array)
+    const bodyImageUrls = Array.isArray(body.imageUrls) ? body.imageUrls : (typeof body.imageUrls === 'string' ? body.imageUrls.split(',').map(s => s.trim()).filter(Boolean) : []);
+    const bodyPublicIds = Array.isArray(body.imagePublicIds) ? body.imagePublicIds : (typeof body.imagePublicIds === 'string' ? body.imagePublicIds.split(',').map(s => s.trim()).filter(Boolean) : []);
+
+    // Handle removals requested by client
+    const removeImagePublicIds = Array.isArray(body.removeImagePublicIds) ? body.removeImagePublicIds : (typeof body.removeImagePublicIds === 'string' ? body.removeImagePublicIds.split(',').map(s => s.trim()).filter(Boolean) : []);
+    const removeImageUrls = Array.isArray(body.removeImageUrls) ? body.removeImageUrls : (typeof body.removeImageUrls === 'string' ? body.removeImageUrls.split(',').map(s => s.trim()).filter(Boolean) : []);
+
+    // Build DB update document
+    const dbUpdate = {};
+    if (Object.keys(updates).length > 0) dbUpdate.$set = { ...updates, updated_date: new Date() };
+
+    // Add new images to arrays
+    const addToSet = {};
+    if (uploadedImageUrls.length > 0 || bodyImageUrls.length > 0) {
+      addToSet.image_urls = { $each: [...new Set([...(bodyImageUrls || []), ...uploadedImageUrls]) ] };
+      // if no primary image_url present, set to first available
+      if (!product.image_url && (uploadedImageUrls.length > 0 || bodyImageUrls.length > 0)) {
+        dbUpdate.$set = dbUpdate.$set || {};
+        dbUpdate.$set.image_url = (bodyImageUrls[0] || uploadedImageUrls[0] || '').toString();
+      }
+    }
+    if (uploadedPublicIds.length > 0 || bodyPublicIds.length > 0) {
+      addToSet.image_public_ids = { $each: [...new Set([...(bodyPublicIds || []), ...uploadedPublicIds]) ] };
+    }
+    if (Object.keys(addToSet).length > 0) dbUpdate.$addToSet = addToSet;
+
+    // Remove requested images (and attempt Cloudinary cleanup)
+    if (removeImagePublicIds.length > 0) {
+      dbUpdate.$pull = dbUpdate.$pull || {};
+      dbUpdate.$pull.image_public_ids = { $in: removeImagePublicIds };
+      // attempt to destroy each
+      for (const pid of removeImagePublicIds) {
+        try { await destroyImage(pid); } catch (e) { console.warn('Failed to destroy image:', pid, e.message); }
+      }
+    }
+    if (removeImageUrls.length > 0) {
+      dbUpdate.$pull = dbUpdate.$pull || {};
+      dbUpdate.$pull.image_urls = { $in: removeImageUrls };
+    }
+
+    // If client explicitly set a primary image_url
+    if (body.imageUrl || body.image_url) {
+      dbUpdate.$set = dbUpdate.$set || {};
+      dbUpdate.$set.image_url = (body.imageUrl || body.image_url).toString();
+    }
+
+    // Execute update if there is something to change
+    if (Object.keys(dbUpdate).length > 0) {
+      await db.collection('products').updateOne({ _id: new ObjectId(productId) }, dbUpdate);
+    }
+
+    const updated = await db.collection('products').findOne({ _id: new ObjectId(productId) });
+    return res.json({ success: true, product: updated });
   } catch (error) {
     console.error('Error updating product:', error);
-    res.status(500).json({ error: 'Failed to update product' });
+    return res.status(500).json({ error: 'Failed to update product' });
   }
 };
 
@@ -3106,14 +3201,16 @@ const deleteProduct = async (req, res) => {
     if (!ObjectId.isValid(productId)) return res.status(400).json({ error: 'Invalid product ID' });
 
     const db = await connectDB();
-    const coordinatorEmail = req.session.userEmail;
 
-    // Verify coordinator owns the product
-    const product = await db.collection('products').findOne({
-      _id: new ObjectId(productId),
-      coordinator: coordinatorEmail
-    });
-    if (!product) return res.status(404).json({ error: 'Product not found or access denied' });
+    const product = await db.collection('products').findOne({ _id: new ObjectId(productId) });
+    if (!product) return res.status(404).json({ error: 'Product not found' });
+
+    const ownerIdentifiers = await getCoordinatorOwnerIdentifiers(db, req.session);
+    const productOwner = String(product.coordinator || '').trim();
+    const ownerSet = new Set((ownerIdentifiers || []).map((v) => String(v).trim()));
+    if (!ownerSet.has(productOwner) && !ownerSet.has(productOwner.toLowerCase())) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
 
     // Delete associated image(s) from Cloudinary
     const publicIds = Array.isArray(product.image_public_ids)
@@ -3309,7 +3406,74 @@ const updateOrderStatus = async (req, res) => {
       updateData.shipped_date = now;
       if (trackingNumber) updateData.tracking_number = trackingNumber;
       if (deliveryPartner) updateData.delivery_partner = deliveryPartner;
-    } else if (normalizedStatus === 'delivered') updateData.delivered_date = now;
+    } else if (normalizedStatus === 'delivered') {
+      updateData.delivered_date = now;
+      // generate a delivery slip and attach it to the order so player can access it
+      try {
+        const slipId = (new ObjectId()).toString();
+        const slip = {
+          slip_id: slipId,
+          generatedAt: now,
+          delivered_by: deliveryPartner || (req.session && req.session.userEmail) || '',
+          items: order.items || [],
+          total: order.total || 0,
+          orderId: order._id ? order._id.toString() : String(orderId),
+          note: `Delivery confirmed on ${now.toISOString()}`
+        };
+
+        // Ensure slips directory exists under public
+        const slipsDir = path.join(__dirname, '..', '..', 'public', 'slips');
+        try { if (!fs.existsSync(slipsDir)) fs.mkdirSync(slipsDir, { recursive: true }); } catch (e) { /* ignore */ }
+
+        // Generate PDF using PDFKit
+        try {
+          const pdfPath = path.join(slipsDir, `${slipId}.pdf`);
+          const doc = new PDFDocument({ margin: 40 });
+          const stream = fs.createWriteStream(pdfPath);
+          doc.pipe(stream);
+
+          doc.fontSize(18).text('Delivery Slip', { align: 'center' });
+          doc.moveDown(0.5);
+          doc.fontSize(10).text(`Slip ID: ${slip.slip_id}`);
+          doc.text(`Order ID: ${slip.orderId}`);
+          doc.text(`Generated: ${slip.generatedAt.toISOString()}`);
+          doc.text(`Delivered By: ${slip.delivered_by}`);
+          doc.moveDown(0.5);
+
+          doc.fontSize(12).text('Items:', { underline: true });
+          doc.moveDown(0.25);
+          const tableTop = doc.y;
+          doc.fontSize(10);
+          doc.text('Item', 40, tableTop);
+          doc.text('Qty', 350, tableTop, { width: 50, align: 'right' });
+          doc.text('Amount', 430, tableTop, { width: 80, align: 'right' });
+          doc.moveDown(0.5);
+
+          (slip.items || []).forEach((it) => {
+            const y = doc.y;
+            const amount = ((it.price || 0) * (it.quantity || 1)).toFixed(2);
+            doc.text(String(it.name || ''), 40, y);
+            doc.text(String(it.quantity || 1), 350, y, { width: 50, align: 'right' });
+            doc.text(`₹${amount}`, 430, y, { width: 80, align: 'right' });
+            doc.moveDown(0.3);
+          });
+
+          doc.moveDown(0.5);
+          doc.fontSize(12).text(`Total: ₹${(slip.total || 0).toFixed(2)}`, { align: 'right' });
+
+          doc.end();
+          // Wait for finish to ensure file exists
+          await new Promise((resolve) => stream.on('finish', resolve));
+          slip.pdf_url = `/slips/${slipId}.pdf`;
+        } catch (pdfErr) {
+          console.error('Failed to write slip PDF:', pdfErr);
+        }
+
+        updateData.delivery_slip = slip;
+      } catch (e) {
+        console.error('Failed to generate delivery slip:', e);
+      }
+    }
     else if (normalizedStatus === 'cancelled') updateData.cancelledAt = now;
 
     await db.collection('orders').updateOne(
@@ -3531,6 +3695,44 @@ const getOrderAnalytics = async (req, res) => {
   } catch (error) {
     console.error('Error fetching order analytics:', error);
     res.status(500).json({ error: 'Failed to fetch analytics' });
+  }
+};
+
+// POST /coordinator/api/store/orders/:id/send-delivery-otp
+const sendDeliveryOtp = async (req, res) => {
+  try {
+    const orderId = req.params.id || req.params.orderId;
+    if (!orderId || !ObjectId.isValid(orderId)) return res.status(400).json({ error: 'Invalid order ID' });
+
+    const db = await connectDB();
+    const order = await db.collection('orders').findOne({ _id: new ObjectId(orderId) });
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+
+    // Verify coordinator owns at least one product in this order
+    const ownerIdentifiers = await getCoordinatorOwnerIdentifiers(db, req.session);
+    const ownerRegexes = ownerIdentifiers.map((v) => new RegExp(`^${escapeRegExp(v)}$`, 'i'));
+    const productIds = (order.items || []).map(i => i.productId).filter(Boolean).map(String);
+    const productObjectIds = productIds.filter(pid => ObjectId.isValid(pid)).map(pid => new ObjectId(pid));
+    const coordinatorProducts = await db.collection('products').find({ _id: { $in: productObjectIds }, coordinator: { $in: ownerRegexes } }).toArray();
+    if ((coordinatorProducts || []).length === 0) return res.status(403).json({ error: 'Access denied' });
+
+    const playerEmail = String(order.user_email || '').trim();
+    if (!playerEmail) return res.status(400).json({ error: 'Player email not available for order' });
+
+    // Generate OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+
+    // Store OTP
+    await db.collection('otps').insertOne({ email: playerEmail, otp, type: 'delivery', expires_at: expiresAt, used: false, orderId: order._id });
+
+    // Send email
+    await sendOtpEmail(playerEmail, otp, `Delivery OTP for Order ${String(order._id).slice(-8)}`);
+
+    return res.json({ success: true, message: 'OTP sent to player email' });
+  } catch (err) {
+    console.error('Error sending delivery OTP:', err);
+    return res.status(500).json({ error: 'Failed to send delivery OTP' });
   }
 };
 
@@ -4535,6 +4737,7 @@ module.exports = {
   deleteProduct,
   toggleComments,
   getOrders,
+  sendDeliveryOtp,
   updateOrderStatus,
   getOrderAnalytics,
   getProductAnalyticsDetails,

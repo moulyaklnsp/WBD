@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const playerController = require('../controllers/playerController');
+const paymentController = require('../controllers/paymentController');
 
 router.use(express.json());
 
@@ -224,6 +225,9 @@ router.get('/api/compare', playerController.comparePlayer);
  *         description: Funds added
  */
 router.post('/api/add-funds', playerController.addFunds);
+// Razorpay endpoints (create order, verify payment)
+router.post('/api/razorpay/create-order', paymentController.createRazorpayOrder);
+router.post('/api/razorpay/verify', paymentController.verifyRazorpayPayment);
 
 // ─── Pairings & Rankings ──────────────────────────────────────────────────────
 
@@ -468,6 +472,7 @@ router.get('/api/orders', playerController.getOrders);
 router.post('/api/orders', playerController.createOrder);
 router.post('/api/orders/:orderId/cancel', playerController.cancelOrder);
 router.get('/api/orders/:orderId/tracking', playerController.getOrderTracking);
+router.post('/api/verify-delivery-otp', playerController.verifyDeliveryOtp);
 
 // ─── Store suggestions ────────────────────────────────────────────────────────
 

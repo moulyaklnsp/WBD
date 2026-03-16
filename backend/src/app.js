@@ -138,6 +138,18 @@ app.use(session({
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(methodOverride('_method'));
+// Serve delivery slips with attachment header to force download
+app.get('/slips/:filename', (req, res) => {
+  try {
+    const filename = String(req.params.filename || '').replace(/[^a-zA-Z0-9._-]/g, '');
+    const filePath = path.join(__dirname, '..', 'public', 'slips', filename);
+    if (!fs.existsSync(filePath)) return res.status(404).send('Not found');
+    return res.download(filePath, filename);
+  } catch (e) {
+    console.error('Failed to send slip:', e);
+    return res.status(500).send('Server error');
+  }
+});
 app.use(express.static(path.join(__dirname, '..', 'public')));
 app.use(helmet());
 

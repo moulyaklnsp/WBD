@@ -16,6 +16,7 @@ function normalizeProduct(product = {}) {
 
   return {
     ...product,
+    description: product.description || product.desc || product.productDescription || '',
     _id: id,
     image_urls: imageUrls,
     image_url: product.image_url || imageUrls[0] || '',

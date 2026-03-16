@@ -46,6 +46,8 @@ import CoordinatorPairings from '../pages/coordinator/CoordinatorPairings';
 import CoordinatorPlayerStats from '../pages/coordinator/CoordinatorPlayerStats';
 import CoordinatorRankings from '../pages/coordinator/CoordinatorRankings';
 import StoreManagement from '../pages/coordinator/StoreManagement';
+import ProductDetails from '../pages/coordinator/ProductDetails';
+
 import TournamentManagement from '../pages/coordinator/TournamentManagement';
 import TournamentDetails from '../pages/coordinator/TournamentDetails';
 import TournamentComplaints from '../pages/coordinator/TournamentComplaints';
@@ -54,6 +56,7 @@ import CoordinatorBlogs from '../pages/coordinator/CoordinatorBlogs';
 import CoordinatorBlogDetail from '../pages/coordinator/CoordinatorBlogDetail';
 import CoordinatorStreamingControl from '../pages/coordinator/CoordinatorStreamingControl';
 import CoordinatorChessEvents from '../pages/coordinator/CoordinatorChessEvents';
+
 
 // ─── Organizer Pages ─────────────────────────────────────────────
 import CoordinatorManagement from '../pages/organizer/CoordinatorManagement';
@@ -140,6 +143,7 @@ export default function AppRoutes() {
       <Route path="/coordinator/player_stats" element={<AnimatedPageLayout><CoordinatorPlayerStats /></AnimatedPageLayout>} />
       <Route path="/coordinator/rankings" element={<AnimatedPageLayout><CoordinatorRankings /></AnimatedPageLayout>} />
       <Route path="/coordinator/store_management" element={<AnimatedPageLayout><StoreManagement /></AnimatedPageLayout>} />
+      <Route path="/coordinator/store_management/product/:id" element={<AnimatedPageLayout><ProductDetails /></AnimatedPageLayout>} />
       <Route path="/coordinator/tournament_management" element={<AnimatedPageLayout><TournamentManagement /></AnimatedPageLayout>} />
       <Route path="/coordinator/tournaments/:id" element={<AnimatedPageLayout><TournamentDetails /></AnimatedPageLayout>} />
       <Route path="/coordinator/tournament_complaints" element={<AnimatedPageLayout><TournamentComplaints /></AnimatedPageLayout>} />
@@ -149,7 +153,7 @@ export default function AppRoutes() {
       <Route path="/coordinator/blogs/:id" element={<AnimatedPageLayout><CoordinatorBlogDetail /></AnimatedPageLayout>} />
       <Route path="/coordinator/streaming_control" element={<AnimatedPageLayout><CoordinatorStreamingControl /></AnimatedPageLayout>} />
       <Route path="/coordinator/chess_events" element={<AnimatedPageLayout><CoordinatorChessEvents /></AnimatedPageLayout>} />
-
+      
       {/* ═══ Organizer Routes ═══ */}
       <Route path="/organizer/coordinator_management" element={<AnimatedPageLayout><CoordinatorManagement /></AnimatedPageLayout>} />
       <Route path="/organizer/coordinator_performance" element={<AnimatedPageLayout><CoordinatorPerformance /></AnimatedPageLayout>} />

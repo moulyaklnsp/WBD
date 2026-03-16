@@ -3,56 +3,18 @@ import React, { useState, useEffect } from 'react';
 const MAX_TOPUP = 50000;
 const MAX_BALANCE = 100000;
 
-function formatCardNumber(v) {
-  return v.replace(/\D/g, '').slice(0, 16).replace(/(\d{4})(?=\d)/g, '$1 ');
-}
-
-function formatExpiry(v) {
-  const d = v.replace(/\D/g, '').slice(0, 4);
-  if (d.length <= 2) return d;
-  return d.slice(0, 2) + '/' + d.slice(2);
-}
-
-function detectCardType(num) {
-  const n = num.replace(/\s/g, '');
-  if (n.startsWith('4')) return 'visa';
-  if (/^5[1-5]/.test(n)) return 'mastercard';
-  if (/^3[47]/.test(n)) return 'amex';
-  if (n.startsWith('6')) return 'rupay';
-  return null;
-}
-
-function CardTypeBadge({ type }) {
-  const labels = { visa: 'VISA', mastercard: 'MC', amex: 'AMEX', rupay: 'RuPay' };
-  const colors = { visa: '#1a1f71', mastercard: '#eb001b', amex: '#007bc1', rupay: '#097a3e' };
-  if (!type) return null;
-  return (
-    <span style={{
-      background: colors[type], color: '#fff', fontSize: '0.65rem', fontWeight: 900,
-      padding: '0.15rem 0.4rem', borderRadius: 4, letterSpacing: '0.05em', fontFamily: 'sans-serif'
-    }}>{labels[type]}</span>
-  );
-}
-
 const PROCESSING_STEPS = [
-  { label: 'Verifying card details…', dur: 900 },
-  { label: 'Contacting bank…', dur: 900 },
-  { label: 'Processing payment…', dur: 700 },
+  { label: 'Creating payment order…', dur: 700 },
+  { label: 'Opening checkout…', dur: 500 },
+  { label: 'Verifying payment…', dur: 800 },
 ];
 
 export default function PaymentGatewayModal({ walletBalance = 0, onClose, onSuccess }) {
   const [step, setStep] = useState('form'); // form | processing | success | error
   const [amount, setAmount] = useState('');
-  const [cardNumber, setCardNumber] = useState('');
-  const [cardName, setCardName] = useState('');
-  const [expiry, setExpiry] = useState('');
-  const [cvv, setCvv] = useState('');
-  const [showCvv, setShowCvv] = useState(false);
   const [errMsg, setErrMsg] = useState('');
   const [procStep, setProcStep] = useState(0);
   const [resultBalance, setResultBalance] = useState(null);
-
-  const cardType = detectCardType(cardNumber);
   const maxAllowed = Math.min(MAX_TOPUP, Math.max(0, MAX_BALANCE - walletBalance));
 
   // Processing step animation
@@ -77,15 +39,6 @@ export default function PaymentGatewayModal({ walletBalance = 0, onClose, onSucc
     if (walletBalance >= MAX_BALANCE) return `Wallet limit of ₹${MAX_BALANCE.toLocaleString('en-IN')} reached`;
     if (walletBalance + amt > MAX_BALANCE)
       return `You can add only ₹${maxAllowed.toLocaleString('en-IN')} more (wallet limit ₹${MAX_BALANCE.toLocaleString('en-IN')})`;
-    if (cardName.trim().length < 2) return 'Enter cardholder name';
-    const raw = cardNumber.replace(/\s/g, '');
-    if (raw.length !== 16) return 'Card number must be 16 digits';
-    if (!/^(0[1-9]|1[0-2])\/\d{2}$/.test(expiry)) return 'Enter valid expiry (MM/YY)';
-    const [mm, yy] = expiry.split('/').map(Number);
-    const now = new Date();
-    const expDate = new Date(2000 + yy, mm - 1, 1);
-    if (expDate < new Date(now.getFullYear(), now.getMonth(), 1)) return 'Card has expired';
-    if (cvv.length < 3) return 'Enter valid CVV';
     return null;
   };
 
@@ -95,27 +48,83 @@ export default function PaymentGatewayModal({ walletBalance = 0, onClose, onSucc
     setErrMsg('');
     setStep('processing');
 
-    const totalDelay = PROCESSING_STEPS.reduce((s, x) => s + x.dur, 0);
-    await new Promise(r => setTimeout(r, totalDelay + 400));
-
     try {
-      const res = await fetch('/player/api/add-funds', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ amount: parseFloat(amount) }),
+      const res = await fetch('/player/api/razorpay/create-order', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+        body: JSON.stringify({ amount: parseFloat(amount) })
       });
       const data = await res.json();
-      if (data.success) {
-        setResultBalance(data.walletBalance);
-        setStep('success');
-        setTimeout(() => { onSuccess(data.walletBalance); onClose(); }, 2000);
-      } else {
-        setErrMsg(data.error || data.message || 'Payment failed');
+      if (!data || !data.success) {
+        setErrMsg(data?.error || 'Failed to create payment order');
         setStep('error');
+        return;
       }
-    } catch {
-      setErrMsg('Connection error. Please try again.');
+
+      const { orderId, amount: orderAmount, currency, keyId } = data;
+
+      // Fetch profile to prefill checkout fields (name, email, contact)
+      let profile = null;
+      try {
+        const pRes = await fetch('/player/api/profile', { credentials: 'include' });
+        if (pRes.ok) profile = await pRes.json();
+      } catch (e) {
+        console.warn('Failed to fetch profile for prefill', e);
+      }
+
+      // Load Razorpay checkout script if not present
+      if (!window.Razorpay) {
+        await new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = 'https://checkout.razorpay.com/v1/checkout.js';
+          s.async = true;
+          s.onload = resolve; s.onerror = reject;
+          document.body.appendChild(s);
+        });
+      }
+
+      const options = {
+        key: keyId || process.env.REACT_APP_RAZORPAY_KEY_ID || '',
+        amount: orderAmount, // in paise
+        currency: currency || 'INR',
+        name: 'ChessHive Wallet Top-up',
+        description: 'Add funds to wallet',
+        order_id: orderId,
+        prefill: {
+          name: profile?.player?.name || '',
+          email: profile?.player?.email || '',
+          contact: profile?.player?.phone || ''
+        },
+        notes: { purpose: 'wallet_topup' },
+        handler: async function (resp) {
+          try {
+            const verifyRes = await fetch('/player/api/razorpay/verify', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+              body: JSON.stringify({ razorpay_order_id: resp.razorpay_order_id, razorpay_payment_id: resp.razorpay_payment_id, razorpay_signature: resp.razorpay_signature, amount: orderAmount, purpose: 'topup' })
+            });
+            const vdata = await verifyRes.json();
+            if (vdata && vdata.success) {
+              setResultBalance(vdata.walletBalance ?? null);
+              setStep('success');
+              setTimeout(() => { onSuccess(vdata.walletBalance); onClose(); }, 1500);
+            } else {
+              setErrMsg(vdata?.error || 'Verification failed');
+              setStep('error');
+            }
+          } catch (e) {
+            console.error('Verification request failed', e);
+            setErrMsg('Verification request failed');
+            setStep('error');
+          }
+        },
+        modal: { ondismiss: () => { if (step !== 'processing') setStep('form'); } }
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.open();
+
+    } catch (e) {
+      console.error('Razorpay flow failed', e);
+      setErrMsg('Payment initialization failed. Try again.');
       setStep('error');
     }
   };
@@ -178,76 +187,7 @@ export default function PaymentGatewayModal({ walletBalance = 0, onClose, onSucc
                 </div>
               </div>
 
-              {/* Card visual preview */}
-              <div style={{ background: 'linear-gradient(135deg, #1b4332 0%, #2d6a4f 60%, #40916c 100%)', borderRadius: 14, padding: '1.1rem 1.3rem', marginBottom: '1.25rem', position: 'relative', minHeight: 90 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
-                  <div style={{ width: 36, height: 26, background: 'rgba(255,220,100,0.85)', borderRadius: 4 }} />
-                  <CardTypeBadge type={cardType} />
-                </div>
-                <div style={{ color: 'rgba(255,255,255,0.9)', fontSize: '1.05rem', letterSpacing: '0.18em', fontFamily: 'monospace', marginBottom: '0.4rem' }}>
-                  {cardNumber || '•••• •••• •••• ••••'}
-                </div>
-                <div style={{ display: 'flex', gap: '1.5rem', color: 'rgba(255,255,255,0.7)', fontSize: '0.75rem' }}>
-                  <span style={{ textTransform: 'uppercase' }}>{cardName || 'CARDHOLDER NAME'}</span>
-                  <span>{expiry || 'MM/YY'}</span>
-                </div>
-              </div>
-
-              {/* Card Number */}
-              <div style={{ marginBottom: '1rem' }}>
-                <label style={{ display: 'block', color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Card Number</label>
-                <div style={{ position: 'relative' }}>
-                  <input
-                    type="text" inputMode="numeric" maxLength={19}
-                    value={cardNumber}
-                    onChange={e => { setCardNumber(formatCardNumber(e.target.value)); setErrMsg(''); }}
-                    placeholder="1234 5678 9012 3456"
-                    style={{ width: '100%', padding: '0.7rem 2.5rem 0.7rem 0.85rem', background: 'rgba(255,255,255,0.07)', border: '1.5px solid rgba(255,255,255,0.15)', borderRadius: 10, color: '#fff', fontSize: '1rem', letterSpacing: '0.12em', boxSizing: 'border-box' }}
-                  />
-                  <i className="fas fa-credit-card" style={{ position: 'absolute', right: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.3)' }} />
-                </div>
-              </div>
-
-              {/* Name */}
-              <div style={{ marginBottom: '1rem' }}>
-                <label style={{ display: 'block', color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Cardholder Name</label>
-                <input
-                  type="text"
-                  value={cardName}
-                  onChange={e => { setCardName(e.target.value.toUpperCase()); setErrMsg(''); }}
-                  placeholder="AS ON CARD"
-                  style={{ width: '100%', padding: '0.7rem 0.85rem', background: 'rgba(255,255,255,0.07)', border: '1.5px solid rgba(255,255,255,0.15)', borderRadius: 10, color: '#fff', fontSize: '0.95rem', letterSpacing: '0.04em', boxSizing: 'border-box' }}
-                />
-              </div>
-
-              {/* Expiry + CVV */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1.25rem' }}>
-                <div>
-                  <label style={{ display: 'block', color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Expiry</label>
-                  <input
-                    type="text" inputMode="numeric" maxLength={5}
-                    value={expiry}
-                    onChange={e => { setExpiry(formatExpiry(e.target.value)); setErrMsg(''); }}
-                    placeholder="MM/YY"
-                    style={{ width: '100%', padding: '0.7rem 0.85rem', background: 'rgba(255,255,255,0.07)', border: '1.5px solid rgba(255,255,255,0.15)', borderRadius: 10, color: '#fff', fontSize: '0.95rem', boxSizing: 'border-box' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>CVV</label>
-                  <div style={{ position: 'relative' }}>
-                    <input
-                      type={showCvv ? 'text' : 'password'} inputMode="numeric" maxLength={4}
-                      value={cvv}
-                      onChange={e => { setCvv(e.target.value.replace(/\D/g, '').slice(0, 4)); setErrMsg(''); }}
-                      placeholder="•••"
-                      style={{ width: '100%', padding: '0.7rem 2.4rem 0.7rem 0.85rem', background: 'rgba(255,255,255,0.07)', border: '1.5px solid rgba(255,255,255,0.15)', borderRadius: 10, color: '#fff', fontSize: '0.95rem', boxSizing: 'border-box' }}
-                    />
-                    <button onClick={() => setShowCvv(!showCvv)} type="button" style={{ position: 'absolute', right: '0.6rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', padding: 0 }}>
-                      <i className={`fas fa-eye${showCvv ? '-slash' : ''}`} style={{ fontSize: '0.8rem' }} />
-                    </button>
-                  </div>
-                </div>
-              </div>
+              {/* Card fields removed — using Razorpay checkout directly */}
 
               {errMsg && (
                 <div style={{ background: 'rgba(231,76,60,0.15)', border: '1px solid rgba(231,76,60,0.4)', borderRadius: 8, padding: '0.6rem 0.85rem', color: '#ff7675', fontSize: '0.85rem', marginBottom: '1rem' }}>
@@ -266,7 +206,7 @@ export default function PaymentGatewayModal({ walletBalance = 0, onClose, onSucc
               </button>
 
               <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.3)', fontSize: '0.72rem', marginTop: '0.75rem' }}>
-                <i className="fas fa-lock" style={{ marginRight: '0.3rem' }} />Your card info is never stored
+                <i className="fas fa-lock" style={{ marginRight: '0.3rem' }} />You will be redirected to Razorpay checkout to enter card or UPI details securely
               </div>
             </>
           )}
