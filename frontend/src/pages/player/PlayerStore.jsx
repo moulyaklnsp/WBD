@@ -76,6 +76,9 @@ function PlayerStore() {
   const [purchaseStep, setPurchaseStep] = useState('confirm'); // confirm | processing | success | error
   const [purchaseError, setPurchaseError] = useState('');
 
+  // Delivery OTP modal
+  const [deliveryOtpModal, setDeliveryOtpModal] = useState({ open: false, orderId: null, otp: '', loading: false, error: '' });
+
   const flash = (msg, isError = false) => {
     if (isError) { setErrorMsg(msg); setSuccessMsg(''); }
     else { setSuccessMsg(msg); setErrorMsg(''); }
@@ -264,6 +267,29 @@ function PlayerStore() {
     } catch (e) { flash(e.message || 'Cancel failed', true); }
   };
 
+  const openDeliveryOtpModal = (orderId) => {
+    setDeliveryOtpModal({ open: true, orderId, otp: '', loading: false, error: '' });
+  };
+
+  const closeDeliveryOtpModal = () => setDeliveryOtpModal({ open: false, orderId: null, otp: '', loading: false, error: '' });
+
+  const verifyDeliveryOtp = async () => {
+    if (!deliveryOtpModal.orderId) return;
+    setDeliveryOtpModal((s) => ({ ...s, loading: true, error: '' }));
+    try {
+      const res = await fetchAsPlayer('/player/api/verify-delivery-otp', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: deliveryOtpModal.orderId, otp: deliveryOtpModal.otp })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || data.message || 'Verification failed');
+      flash(data.message || 'Delivery verified');
+      closeDeliveryOtpModal();
+      await loadOrders();
+    } catch (err) {
+      setDeliveryOtpModal((s) => ({ ...s, loading: false, error: err.message || 'Verification failed' }));
+    }
+  };
+
   const viewTracking = async (orderId) => {
     try {
       const res = await fetchAsPlayer(`/player/api/orders/${orderId}/tracking`);
@@ -272,6 +298,53 @@ function PlayerStore() {
         setTrackingOrder(data);
       }
     } catch { /* ignore */ }
+  };
+
+  // Slip modal state and helpers
+  const [slipModal, setSlipModal] = useState(null);
+  const openSlip = (slip) => setSlipModal(slip || null);
+  const closeSlip = () => setSlipModal(null);
+  const printSlip = (slip) => {
+    try {
+      const itemsHtml = (slip.items || []).map(i => `<tr><td>${String(i.name || '')}</td><td style="text-align:right">${i.quantity || 1}</td><td style="text-align:right">₹${((i.price||0) * (i.quantity||1)).toFixed(2)}</td></tr>`).join('');
+      const html = `
+        <html><head><title>Slip ${slip.slip_id || ''}</title>
+        <style>body{font-family:Arial,Helvetica,sans-serif;padding:20px}table{width:100%;border-collapse:collapse}td,th{padding:8px;border-bottom:1px solid #ddd}</style>
+        </head><body>
+        <h2>Delivery Slip</h2>
+        <div>Slip ID: ${slip.slip_id || ''}</div>
+        <div>Order ID: ${slip.orderId || ''}</div>
+        <div>Generated: ${slip.generatedAt ? new Date(slip.generatedAt).toLocaleString() : ''}</div>
+        <div>Delivered By: ${slip.delivered_by || ''}</div>
+        <hr/>
+        <table>
+          <thead><tr><th>Item</th><th style="text-align:right">Qty</th><th style="text-align:right">Amount</th></tr></thead>
+          <tbody>${itemsHtml}</tbody>
+        </table>
+        <h3 style="text-align:right">Total: ₹${(slip.total||0).toFixed(2)}</h3>
+        </body></html>`;
+      const w = window.open('', '_blank');
+      if (!w) return; w.document.write(html); w.document.close(); w.focus();
+    } catch (e) { console.error('Print failed', e); }
+  };
+
+  const apiBase = process.env.REACT_APP_API_BASE_URL || `${window.location.protocol}//${window.location.hostname}:3001`;
+  const downloadSlip = async (slip) => {
+    if (!slip || !slip.pdf_url) return openSlip(slip);
+    try {
+      // Use a direct link to the server route which sets Content-Disposition: attachment
+      const url = `${apiBase}${slip.pdf_url}`;
+      const a = document.createElement('a');
+      a.href = url;
+      a.setAttribute('download', `delivery-slip-${slip.orderId || slip.slip_id || ''}.pdf`);
+      // Ensure link is same-origin; clicking it will send cookies automatically
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (e) {
+      console.error('Download failed', e);
+      openSlip(slip);
+    }
   };
 
   /* ─── Product Helpers ─── */
@@ -571,6 +644,14 @@ function PlayerStore() {
           </div>
         </div>
 
+        {showPayment && (
+          <PaymentGatewayModal
+            walletBalance={walletBalance}
+            onClose={() => setShowPayment(false)}
+            onSuccess={(newBal) => { setWalletBalance(Math.min(newBal, MAX_WALLET_BALANCE)); flash('Funds added successfully!'); }}
+          />
+        )}
+
         {/* ═══════════════ STORE VIEW ═══════════════ */}
         {view === 'Store' && (
           <div className="fade-in">
@@ -647,6 +728,11 @@ function PlayerStore() {
                       )}
                       <h4 className="product-name">{product.name}</h4>
                       <div style={{ fontSize: '0.85rem', opacity: 0.7, marginBottom: '0.3rem' }}>{product.category}</div>
+                      {product.description && (
+                        <div style={{ fontSize: '0.9rem', opacity: 0.8, marginBottom: '0.4rem' }}>
+                          {product.description.length > 100 ? product.description.slice(0, 100) + '...' : product.description}
+                        </div>
+                      )}
                       <div style={{ marginBottom: '0.3rem' }}>{renderPrice(product.price)}</div>
                       <div style={{ fontSize: '0.8rem', opacity: 0.7, marginBottom: '0.35rem' }}>Available: {product.availability}</div>
                       {images.length > 1 && (
@@ -839,6 +925,16 @@ function PlayerStore() {
                     <button className="btn ghost" style={{ fontSize: '0.8rem' }} onClick={() => viewTracking(order._id)}>
                       <i className="fas fa-truck" /> Track
                     </button>
+                    {order.delivery_slip && (
+                      <button className="btn" style={{ fontSize: '0.8rem' }} onClick={() => downloadSlip(order.delivery_slip)}>
+                        <i className="fas fa-file-invoice" /> Download Slip
+                      </button>
+                    )}
+                    {!order.delivery_verified && order.status !== 'delivered' && order.status !== 'cancelled' && (
+                      <button className="btn primary" style={{ fontSize: '0.8rem' }} onClick={() => openDeliveryOtpModal(order._id)}>
+                        <i className="fas fa-key" /> Verify OTP
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -923,6 +1019,11 @@ function PlayerStore() {
                         <i className="fas fa-times-circle" /> Cancel Order
                       </button>
                     )}
+                    {!order.delivery_verified && order.status !== 'delivered' && order.status !== 'cancelled' && (
+                      <button className="btn primary" style={{ fontSize: '0.8rem' }} onClick={() => openDeliveryOtpModal(order._id)}>
+                        <i className="fas fa-key" /> Verify OTP
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -958,7 +1059,7 @@ function PlayerStore() {
       >
         <img
           src={lightbox.images[lightbox.index]}
-          alt={`Image ${lightbox.index + 1}`}
+          alt=""
           className="lightbox-img"
           style={{ transform: `scale(${lightbox.zoom})` }}
           draggable={false}
@@ -1010,6 +1111,32 @@ function PlayerStore() {
     </div>
   </div>
 )}
+      {deliveryOtpModal.open && (
+        <div className="lightbox-overlay" onClick={closeDeliveryOtpModal}>
+          <div className="review-inner" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520, padding: '1.25rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <h3 style={{ margin: 0 }}>Verify Delivery OTP</h3>
+              <button className="btn" onClick={closeDeliveryOtpModal}><i className="fas fa-times" /></button>
+            </div>
+            <div style={{ marginTop: '0.5rem' }}>
+              <input
+                className="form-input"
+                placeholder="Enter OTP received via email"
+                value={deliveryOtpModal.otp}
+                onChange={(e) => setDeliveryOtpModal((s) => ({ ...s, otp: e.target.value }))}
+                style={{ marginBottom: 8 }}
+              />
+              {deliveryOtpModal.error && <div style={{ color: '#c62828', marginBottom: 8 }}>{deliveryOtpModal.error}</div>}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn-primary" onClick={verifyDeliveryOtp} disabled={deliveryOtpModal.loading}>
+                  {deliveryOtpModal.loading ? 'Verifying...' : 'Verify OTP'}
+                </button>
+                <button className="btn" onClick={closeDeliveryOtpModal}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
         {/* ─── Purchase Confirmation Modal ─── */}
         {purchaseModal && (
