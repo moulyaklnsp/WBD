@@ -15,6 +15,10 @@ function normalizeEmail(v) {
   return safeTrim(v).toLowerCase();
 }
 
+function isValidName(name) {
+  return !!name && /^[A-Za-z]+(?: [A-Za-z]+)*$/.test(name);
+}
+
 function isSelfDeletedUser(user) {
   const email = normalizeEmail(user?.email);
   const deletedBy = normalizeEmail(user?.deleted_by);
@@ -150,8 +154,8 @@ const updateProfile = async (req, res) => {
 
       if (field === 'name') {
         const name = safeTrim(body[field]);
-        if (!name) {
-          return res.status(400).json({ error: 'Name is required' });
+        if (!isValidName(name)) {
+          return res.status(400).json({ error: 'Valid full name is required' });
         }
         set.name = name;
         continue;

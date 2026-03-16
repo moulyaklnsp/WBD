@@ -28,6 +28,8 @@ function OrganizerProfile() {
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState('');
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [errors, setErrors] = useState({});
+  const [touched, setTouched] = useState({});
 
   const showMessage = (text, type = 'success') => {
     setMessage({ type, text });
@@ -48,10 +50,12 @@ function OrganizerProfile() {
         phone: data.phone || '',
         college: data.college || '',
         dob: data.dob ? new Date(data.dob).toISOString().split('T')[0] : '',
-        gender: data.gender || '',
+        gender: (data.gender || '').toLowerCase(),
         AICF_ID: data.AICF_ID || '',
         FIDE_ID: data.FIDE_ID || ''
       });
+      setErrors({});
+      setTouched({});
       if (data.profile_photo_url) setPhotoPreviewUrl(data.profile_photo_url);
     } catch (e) {
       console.error(e);
@@ -63,7 +67,76 @@ function OrganizerProfile() {
 
   useEffect(() => { loadProfile(); }, []);
 
+  const validateName = (name) => !!name && /^[A-Za-z]+(?: [A-Za-z]+)*$/.test(name);
+  const validateDob = (dob) => {
+    if (!dob) return false;
+    const d = new Date(dob);
+    if (Number.isNaN(d.getTime())) return false;
+    const age = Math.floor((Date.now() - d) / (365.25 * 24 * 60 * 60 * 1000));
+    return age >= 16;
+  };
+  const validateGender = (g) => ['male', 'female', 'other'].includes((g || '').toLowerCase());
+  const validateCollege = (c) => !!c && /^[A-Za-z\s']+$/.test(c);
+  const validatePhone = (p) => /^[0-9]{10}$/.test(p);
+
+  const validateField = (id, value) => {
+    switch (id) {
+      case 'name':
+        return validateName(value) ? '' : 'Valid full name is required';
+      case 'dob':
+        return validateDob(value) ? '' : 'You must be at least 16 years old';
+      case 'gender':
+        return validateGender(value) ? '' : 'Gender is required';
+      case 'college':
+        return validateCollege(value) ? '' : 'College name is required';
+      case 'phone':
+        return validatePhone(value) ? '' : 'Valid 10-digit phone number is required';
+      default:
+        return '';
+    }
+  };
+
+  const validateAll = () => {
+    const nextErrors = {};
+    if (!validateName(editForm.name)) nextErrors.name = 'Valid full name is required';
+    if (!validateDob(editForm.dob)) nextErrors.dob = 'You must be at least 16 years old';
+    if (!validateGender(editForm.gender)) nextErrors.gender = 'Gender is required';
+    if (!validateCollege(editForm.college)) nextErrors.college = 'College name is required';
+    if (!validatePhone(editForm.phone)) nextErrors.phone = 'Valid 10-digit phone number is required';
+    setErrors(nextErrors);
+    setTouched({
+      name: true,
+      dob: true,
+      gender: true,
+      college: true,
+      phone: true
+    });
+    return Object.keys(nextErrors).length === 0;
+  };
+
+  const handleFieldChange = (key, value) => {
+    let nextValue = value;
+    if (key === 'phone') {
+      nextValue = value.replace(/\D/g, '').slice(0, 10);
+    }
+    setEditForm((prev) => ({ ...prev, [key]: nextValue }));
+    if (!touched[key]) {
+      setTouched((prev) => ({ ...prev, [key]: true }));
+    }
+    setErrors((prev) => ({ ...prev, [key]: validateField(key, nextValue) }));
+  };
+
+  const markTouched = (key) => {
+    if (!touched[key]) {
+      setTouched((prev) => ({ ...prev, [key]: true }));
+    }
+  };
+
   const handleSave = async () => {
+    if (!validateAll()) {
+      showMessage('Please correct the highlighted fields before saving.', 'error');
+      return;
+    }
     setSaving(true);
     try {
       const res = await fetchAsOrganizer('/organizer/api/profile', {
@@ -163,6 +236,7 @@ function OrganizerProfile() {
         .message { padding:0.75rem 1rem; border-radius:8px; margin-bottom:1rem; }
         .message.success { color:#1b5e20; background:rgba(76,175,80,0.15); }
         .message.error { color:#c62828; background:rgba(198,40,40,0.15); }
+        .field-error { color:#c62828; font-size:0.85rem; margin-top:0.4rem; }
       `}</style>
 
       <div className="page player-neo">
@@ -284,17 +358,31 @@ function OrganizerProfile() {
                     <div className="info-value">
                       {editMode && f.editable ? (
                         f.type === 'select' ? (
-                          <select className="edit-input" value={editForm[f.key] || ''} onChange={(e) => setEditForm({ ...editForm, [f.key]: e.target.value })}>
+                          <select
+                            className="edit-input"
+                            value={editForm[f.key] || ''}
+                            onChange={(e) => handleFieldChange(f.key, e.target.value)}
+                            onBlur={() => markTouched(f.key)}
+                          >
                             <option value="">Select...</option>
                             {f.options.map((o) => <option key={o} value={o}>{o.charAt(0).toUpperCase() + o.slice(1)}</option>)}
                           </select>
                         ) : (
-                          <input className="edit-input" type={f.type || 'text'} value={editForm[f.key] || ''} onChange={(e) => setEditForm({ ...editForm, [f.key]: e.target.value })} />
+                          <input
+                            className="edit-input"
+                            type={f.type || 'text'}
+                            value={editForm[f.key] || ''}
+                            onChange={(e) => handleFieldChange(f.key, e.target.value)}
+                            onBlur={() => markTouched(f.key)}
+                          />
                         )
                       ) : (
                         f.key === 'dob' && profile[f.key]
                           ? new Date(profile[f.key]).toLocaleDateString()
                           : profile[f.key] || 'N/A'
+                      )}
+                      {editMode && f.editable && touched[f.key] && errors[f.key] && (
+                        <div className="field-error">{errors[f.key]}</div>
                       )}
                     </div>
                   </div>
