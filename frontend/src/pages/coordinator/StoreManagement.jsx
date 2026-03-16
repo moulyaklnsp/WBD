@@ -34,6 +34,7 @@ ChartJS.register(
 );
 
 const VISIBLE_COUNT = 8;
+const TABLE_ROWS_PER_PAGE = 10;
 
 const sectionVariants = {
   hidden: { opacity: 0, y: 28, scale: 0.97 },
@@ -77,6 +78,7 @@ function StoreManagement() {
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [orderFilter, setOrderFilter] = useState('all');
   const [orderSearch, setOrderSearch] = useState('');
+  const [ordersPage, setOrdersPage] = useState(1);
 
   // --- Analytics State ---
   const [analytics, setAnalytics] = useState(null);
@@ -85,6 +87,7 @@ function StoreManagement() {
   const [productAnalyticsDetails, setProductAnalyticsDetails] = useState(null);
   const [productAnalyticsLoading, setProductAnalyticsLoading] = useState(false);
   const [productAnalyticsError, setProductAnalyticsError] = useState('');
+  const [analyticsPage, setAnalyticsPage] = useState(1);
 
   // --- Reviews State ---
   const [selectedProductForReviews, setSelectedProductForReviews] = useState(null);
@@ -385,6 +388,16 @@ function StoreManagement() {
     });
   }, [orders, orderFilter, orderSearch, normalizeOrderStatus]);
 
+  useEffect(() => {
+    setOrdersPage(1);
+  }, [orderFilter, orderSearch, orders.length]);
+
+  const ordersTotalPages = Math.max(1, Math.ceil(filteredOrders.length / TABLE_ROWS_PER_PAGE));
+  const paginatedOrders = useMemo(() => {
+    const start = (ordersPage - 1) * TABLE_ROWS_PER_PAGE;
+    return filteredOrders.slice(start, start + TABLE_ROWS_PER_PAGE);
+  }, [filteredOrders, ordersPage]);
+
   const orderStats = useMemo(() => ({
     total: (orders || []).length,
     pending: (orders || []).filter((o) => normalizeOrderStatus(o.status) === 'pending').length,
@@ -394,6 +407,17 @@ function StoreManagement() {
     delivered: (orders || []).filter((o) => normalizeOrderStatus(o.status) === 'delivered').length,
     cancelled: (orders || []).filter((o) => normalizeOrderStatus(o.status) === 'cancelled').length
   }), [orders, normalizeOrderStatus]);
+
+  useEffect(() => {
+    setAnalyticsPage(1);
+  }, [productAnalyticsDetails]);
+
+  const analyticsTotalPages = Math.max(1, Math.ceil((productAnalyticsDetails?.dateWiseSales || []).length / TABLE_ROWS_PER_PAGE));
+  const paginatedDateWiseSales = useMemo(() => {
+    const rows = Array.isArray(productAnalyticsDetails?.dateWiseSales) ? productAnalyticsDetails.dateWiseSales : [];
+    const start = (analyticsPage - 1) * TABLE_ROWS_PER_PAGE;
+    return rows.slice(start, start + TABLE_ROWS_PER_PAGE);
+  }, [productAnalyticsDetails, analyticsPage]);
 
   return (
     <div style={{ minHeight: '100vh' }}>
@@ -429,6 +453,10 @@ function StoreManagement() {
         .status-shipped { background:rgba(0,123,255,0.2); color:#007bff; }
         .status-delivered { background:rgba(40,167,69,0.2); color:#28a745; }
         .status-cancelled { background:rgba(198,40,40,0.2); color:#c62828; }
+        .pagination { display:flex; justify-content:center; align-items:center; gap:0.5rem; margin:1rem 0; flex-wrap:wrap; }
+        .page-btn { background:var(--card-bg); color:var(--text-color); border:1px solid var(--card-border); padding:0.45rem 0.85rem; border-radius:8px; cursor:pointer; font-family:'Cinzel', serif; font-weight:bold; }
+        .page-btn.active { background:var(--sea-green); color:var(--on-accent); border-color:var(--sea-green); }
+        .page-btn:disabled { opacity:0.6; cursor:not-allowed; }
         .analytics-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:2rem; }
         .analytics-table { width:100%; border-collapse:collapse; margin-top:1rem; }
         .analytics-table th, .analytics-table td { padding:0.9rem; border-bottom:1px solid var(--card-border); text-align:left; }
@@ -686,7 +714,7 @@ function StoreManagement() {
                           </tr>
                         </thead>
                         <tbody>
-                          {filteredOrders.map(o => {
+                          {paginatedOrders.map(o => {
                             const status = normalizeOrderStatus(o.status);
                             const nextOptions = getNextOrderStatusOptions(status);
                             return (
@@ -718,6 +746,21 @@ function StoreManagement() {
                           })}
                         </tbody>
                       </table>
+                      {ordersTotalPages > 1 && (
+                        <div className="pagination">
+                          <button type="button" className="page-btn" onClick={() => setOrdersPage((p) => Math.max(1, p - 1))} disabled={ordersPage === 1}>
+                            <i className="fas fa-chevron-left" />
+                          </button>
+                          {Array.from({ length: ordersTotalPages }, (_, i) => i + 1).map((p) => (
+                            <button key={p} type="button" className={`page-btn ${p === ordersPage ? 'active' : ''}`} onClick={() => setOrdersPage(p)}>
+                              {p}
+                            </button>
+                          ))}
+                          <button type="button" className="page-btn" onClick={() => setOrdersPage((p) => Math.min(ordersTotalPages, p + 1))} disabled={ordersPage === ordersTotalPages}>
+                            <i className="fas fa-chevron-right" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                     )
                   )
@@ -896,7 +939,7 @@ function StoreManagement() {
                       {(productAnalyticsDetails.dateWiseSales || []).length === 0 ? (
                         <tr><td colSpan={3}>No date-wise sales available.</td></tr>
                       ) : (
-                        (productAnalyticsDetails.dateWiseSales || []).map((entry) => (
+                        paginatedDateWiseSales.map((entry) => (
                           <tr key={entry.date}>
                             <td>{entry.date}</td>
                             <td>{Number(entry.unitsSold || 0)}</td>
@@ -906,6 +949,21 @@ function StoreManagement() {
                       )}
                     </tbody>
                   </table>
+                  {analyticsTotalPages > 1 && (
+                    <div className="pagination">
+                      <button type="button" className="page-btn" onClick={() => setAnalyticsPage((p) => Math.max(1, p - 1))} disabled={analyticsPage === 1}>
+                        <i className="fas fa-chevron-left" />
+                      </button>
+                      {Array.from({ length: analyticsTotalPages }, (_, i) => i + 1).map((p) => (
+                        <button key={p} type="button" className={`page-btn ${p === analyticsPage ? 'active' : ''}`} onClick={() => setAnalyticsPage(p)}>
+                          {p}
+                        </button>
+                      ))}
+                      <button type="button" className="page-btn" onClick={() => setAnalyticsPage((p) => Math.min(analyticsTotalPages, p + 1))} disabled={analyticsPage === analyticsTotalPages}>
+                        <i className="fas fa-chevron-right" />
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

@@ -29,6 +29,23 @@ const upload = multer({
   }
 });
 
+const blogImageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 6 * 1024 * 1024, // 6MB per image
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = [
+      'image/jpeg', 'image/png', 'image/gif', 'image/webp'
+    ];
+    if (allowedTypes.includes((file.mimetype || '').toLowerCase())) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only JPEG, PNG, GIF, and WEBP images are allowed.'), false);
+    }
+  }
+});
+
 // ── Middleware ──────────────────────────────────────────────────
 
 // Middleware for tournament file uploads
@@ -39,6 +56,18 @@ const uploadTournamentFileMiddleware = (req, res, next) => {
   upload.single('file')(req, res, (err) => {
     if (err) {
       return res.status(400).json({ error: err.message || 'File upload failed' });
+    }
+    next();
+  });
+};
+
+const uploadBlogImagesMiddleware = (req, res, next) => {
+  if (!multer) {
+    return res.status(500).json({ error: 'Upload support is not available (multer not installed).' });
+  }
+  blogImageUpload.array('images', 10)(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ error: err.message || 'Image upload failed' });
     }
     next();
   });
@@ -115,6 +144,16 @@ function isPastDate(value) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return candidate < today;
+}
+
+function isAtLeastDaysFromToday(value, days) {
+  const candidate = toStartOfDay(value);
+  if (!candidate) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const minDate = new Date(today);
+  minDate.setDate(minDate.getDate() + Number(days || 0));
+  return candidate >= minDate;
 }
 
 function isAllowedMeetingLink(raw) {
@@ -613,26 +652,37 @@ const createTournament = async (req, res) => {
     const username = req.session.username || user.name || req.session.userEmail;
     const college = user.college;
 
+    const parsedDate = parseDateValue(tournamentDate);
+    if (!parsedDate) {
+      return res.status(400).json({ success: false, message: 'Invalid date format.' });
+    }
+    if (!isAtLeastDaysFromToday(parsedDate, 3)) {
+      return res.status(400).json({ success: false, message: 'Tournament must be created at least 3 days before the event date.' });
+    }
+
+    const roundsNum = Number.parseInt(noOfRounds, 10);
     const tournament = {
       name: tournamentName.toString().trim(),
-      date: new Date(tournamentDate),
+      date: parsedDate,
       time: time.toString().trim(),
       location: location.toString().trim(),
       entry_fee: parseFloat(entryFee),
       type: type.toString().trim(),
-      noOfRounds: parseInt(noOfRounds),
       coordinator: username.toString(),
       status: 'Pending',
       added_by: username.toString(),
       submitted_date: new Date()
     };
+    if (!Number.isNaN(roundsNum)) {
+      tournament.no_of_rounds = roundsNum;
+    }
 
     console.log('Tournament to insert:', tournament);
 
     const result = await db.collection('tournaments').insertOne(tournament);
     if (result.insertedId) {
       console.log('Tournament added successfully:', tournamentName);
-      return res.json({ success: true, message: 'Tournament added successfully' });
+      return res.json({ success: true, message: 'Tournament added successfully', tournamentId: result.insertedId.toString() });
     } else {
       console.log('Insert failed: No insertedId');
       return res.status(500).json({ success: false, message: 'Failed to add tournament' });
@@ -661,6 +711,14 @@ const updateTournament = async (req, res) => {
     }
     const username = req.session.username || user.name || req.session.userEmail;
 
+    const existing = await db.collection('tournaments').findOne({ _id: new ObjectId(id), coordinator: username });
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Tournament not found or not owned by you' });
+    }
+    if (String(existing.status || '').toLowerCase() === 'completed') {
+      return res.status(403).json({ success: false, message: 'Completed tournaments are read-only.' });
+    }
+
     // Accept both camelCase and snake_case from frontend
     const body = req.body || {};
     const name = (body.tournamentName ?? body.name);
@@ -674,14 +732,25 @@ const updateTournament = async (req, res) => {
     const $set = {};
     if (typeof name === 'string' && name.trim()) $set.name = name.trim();
     if (date) {
-      const d = new Date(date);
-      if (!isNaN(d.getTime())) $set.date = d;
+      const parsedDate = parseDateValue(date);
+      if (!parsedDate) {
+        return res.status(400).json({ success: false, message: 'Invalid date format.' });
+      }
+      const existingDate = toStartOfDay(existing.date);
+      const incomingDate = toStartOfDay(parsedDate);
+      const isSameDate = existingDate && incomingDate && existingDate.getTime() === incomingDate.getTime();
+      if (!isSameDate && !isAtLeastDaysFromToday(parsedDate, 3)) {
+        return res.status(400).json({ success: false, message: 'Tournament must be created at least 3 days before the event date.' });
+      }
+      $set.date = parsedDate;
     }
     if (typeof time === 'string' && time.trim()) $set.time = time.trim();
     if (typeof location === 'string' && location.trim()) $set.location = location.trim();
     if (entryFee !== undefined && entryFee !== null && !isNaN(parseFloat(entryFee))) $set.entry_fee = parseFloat(entryFee);
     if (typeof type === 'string' && type.trim()) $set.type = type.trim();
-    if (rounds !== undefined && rounds !== null && !isNaN(parseInt(rounds))) $set.noOfRounds = parseInt(rounds);
+    if (rounds !== undefined && rounds !== null && !isNaN(parseInt(rounds, 10))) {
+      $set.no_of_rounds = parseInt(rounds, 10);
+    }
 
     if (Object.keys($set).length === 0) {
       return res.status(400).json({ success: false, message: 'No valid fields provided to update' });
@@ -712,7 +781,19 @@ const deleteTournament = async (req, res) => {
   try {
     const id = req.params.id;
     const username = req.session.username || req.session.userEmail;
-    const result = await (await connectDB()).collection('tournaments').updateOne(
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: 'Invalid tournament ID' });
+    }
+    const db = await connectDB();
+    const existing = await db.collection('tournaments').findOne({ _id: new ObjectId(id), coordinator: username });
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Tournament not found' });
+    }
+    if (String(existing.status || '').toLowerCase() === 'completed') {
+      return res.status(403).json({ success: false, message: 'Completed tournaments are read-only.' });
+    }
+
+    const result = await db.collection('tournaments').updateOne(
       { _id: new ObjectId(id), coordinator: username },
       { $set: { status: 'Removed', removed_date: new Date(), removed_by: username } }
     );
@@ -922,8 +1003,11 @@ const scheduleMeeting = async (req, res) => {
       date: meetingDate,
       time: meetingTime,
       link: meetingLink,
+      type: 'meeting',
+      source: 'meeting',
       role: 'coordinator',
-      name: userName.toString()
+      name: userName.toString(),
+      created_by: req.session.userEmail || userName.toString()
     };
 
     console.log('Meeting to insert:', meeting);
@@ -946,10 +1030,25 @@ const getOrganizedMeetings = async (req, res) => {
   try {
     const db = await connectDB();
     const username = req.session.username || req.session.userEmail;
+    const meetingTypeFilter = {
+      $or: [
+        { type: { $exists: false } },
+        { type: null },
+        { type: '' },
+        { type: 'meeting' }
+      ]
+    };
+    const sourceFilter = {
+      $or: [
+        { source: { $exists: false } },
+        { source: { $ne: 'calendar' } }
+      ]
+    };
     const meetings = await db.collection('meetingsdb')
       .find({
         role: 'coordinator',
-        name: username
+        name: username,
+        $and: [meetingTypeFilter, sourceFilter]
       })
       .sort({ date: 1, time: 1 })
       .toArray();
@@ -967,11 +1066,26 @@ const getUpcomingMeetings = async (req, res) => {
     const today = new Date();
     const threeDaysLater = moment().add(3, 'days').toDate();
     const username = req.session.username || req.session.userEmail;
+    const meetingTypeFilter = {
+      $or: [
+        { type: { $exists: false } },
+        { type: null },
+        { type: '' },
+        { type: 'meeting' }
+      ]
+    };
+    const sourceFilter = {
+      $or: [
+        { source: { $exists: false } },
+        { source: { $ne: 'calendar' } }
+      ]
+    };
 
     const meetings = await db.collection('meetingsdb')
       .find({
         date: { $gte: today, $lte: threeDaysLater },
-        name: { $ne: username }
+        name: { $ne: username },
+        $and: [meetingTypeFilter, sourceFilter]
       })
       .sort({ date: 1, time: 1 })
       .toArray();
@@ -2228,6 +2342,7 @@ const uploadTournamentFile = async (req, res) => {
       file_public_id: result.public_id,
       file_type: fileType,
       uploaded_by: coordinatorEmail,
+      description: safeTrim(req.body?.description || ''),
       upload_date: new Date()
     };
 
@@ -2269,6 +2384,7 @@ const getTournamentFiles = async (req, res) => {
       _id: file._id.toString(),
       filename: file.file_name,
       url: file.file_url,
+      description: file.description || '',
       upload_date: file.upload_date
     }));
 
@@ -2618,7 +2734,15 @@ const getCalendarEvents = async (req, res) => {
       announcementQuery.posted_by = { $in: ownerIdentifiers };
     }
 
-    const [tournaments, meetings, announcements, chessEvents] = await Promise.all([
+    const calendarQuery = { role: 'coordinator' };
+    if (rangeStart && rangeEnd) {
+      calendarQuery.date = { $gte: rangeStart, $lt: rangeEnd };
+    }
+    if (!includeAll) {
+      calendarQuery.created_by = { $in: ownerIdentifiers };
+    }
+
+    const [tournaments, meetings, announcements, chessEvents, calendarEvents] = await Promise.all([
       db.collection('tournaments')
         .find(tournamentQuery)
         .project({
@@ -2669,6 +2793,20 @@ const getCalendarEvents = async (req, res) => {
           coordinatorId: 1,
           active: 1
         })
+        .toArray(),
+      db.collection('calendar_events')
+        .find(calendarQuery)
+        .project({
+          title: 1,
+          description: 1,
+          date: 1,
+          time: 1,
+          link: 1,
+          type: 1,
+          name: 1,
+          created_by: 1,
+          created_date: 1
+        })
         .toArray()
     ]);
 
@@ -2716,11 +2854,27 @@ const getCalendarEvents = async (req, res) => {
         };
       });
 
+    const mappedCalendarEvents = (calendarEvents || []).map((ev) => {
+      const ownerKey = String(ev.created_by || ev.name || '').trim().toLowerCase();
+      return {
+        ...ev,
+        _id: ev._id.toString(),
+        title: safeTrim(ev.title) || 'Event',
+        description: safeTrim(ev.description),
+        date: ev.date || new Date(),
+        time: ev.time || '',
+        type: safeTrim(ev.type || 'other').toLowerCase() || 'other',
+        source: 'calendar',
+        isMine: ownerIdentifiersLower.includes(ownerKey)
+      };
+    });
+
     const events = [
       ...mappedTournaments,
       ...mappedMeetings,
       ...mappedAnnouncements,
-      ...mappedChessEvents
+      ...mappedChessEvents,
+      ...mappedCalendarEvents
     ]
       .filter((event) => includeAll || event.isMine)
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -2730,7 +2884,8 @@ const getCalendarEvents = async (req, res) => {
       tournaments: mappedTournaments,
       meetings: mappedMeetings,
       announcements: mappedAnnouncements,
-      chessEvents: mappedChessEvents
+      chessEvents: mappedChessEvents,
+      calendarEvents: mappedCalendarEvents
     });
   } catch (error) {
     console.error('Error fetching calendar events:', error);
@@ -2782,6 +2937,7 @@ const createCalendarEvent = async (req, res) => {
       time: eventTime,
       link: eventLink || '',
       type: normalizedType,
+      source: 'calendar',
       role: 'coordinator',
       name: coordinatorName,
       created_by: coordinatorEmail,
@@ -2789,7 +2945,7 @@ const createCalendarEvent = async (req, res) => {
     };
 
     const db = await connectDB();
-    const result = await db.collection('meetingsdb').insertOne(eventDoc);
+    const result = await db.collection('calendar_events').insertOne(eventDoc);
 
     return res.status(201).json({
       success: true,
@@ -2815,7 +2971,17 @@ const deleteCalendarEvent = async (req, res) => {
     const db = await connectDB();
     const ownerIdentifiers = await getCoordinatorOwnerIdentifiers(db, req.session);
 
-    const deleteResult = await db.collection('meetingsdb').deleteOne({
+    const calendarDelete = await db.collection('calendar_events').deleteOne({
+      _id: new ObjectId(id),
+      role: 'coordinator',
+      created_by: { $in: ownerIdentifiers }
+    });
+
+    if (calendarDelete.deletedCount > 0) {
+      return res.json({ success: true, message: 'Event deleted successfully' });
+    }
+
+    const meetingDelete = await db.collection('meetingsdb').deleteOne({
       _id: new ObjectId(id),
       role: 'coordinator',
       $or: [
@@ -2824,7 +2990,7 @@ const deleteCalendarEvent = async (req, res) => {
       ]
     });
 
-    if (deleteResult.deletedCount > 0) {
+    if (meetingDelete.deletedCount > 0) {
       return res.json({ success: true, message: 'Event deleted successfully' });
     }
 
@@ -3574,6 +3740,42 @@ function normalizeImageUrlValue(rawValue) {
   return value;
 }
 
+function normalizeImageArray(input) {
+  if (!input) return [];
+  const rawList = Array.isArray(input)
+    ? input
+    : (typeof input === 'string'
+        ? input.split(',').map((v) => v.trim()).filter(Boolean)
+        : []);
+  return rawList
+    .map((value) => normalizeImageUrlValue(String(value || '').trim()))
+    .filter(Boolean);
+}
+
+function normalizeBlogBlocks(rawBlocks) {
+  if (!rawBlocks) return [];
+  let blocks = rawBlocks;
+  if (typeof rawBlocks === 'string') {
+    try {
+      blocks = JSON.parse(rawBlocks);
+    } catch {
+      blocks = [];
+    }
+  }
+  if (!Array.isArray(blocks)) return [];
+  return blocks
+    .map((block) => {
+      const type = String(block?.type || '').trim().toLowerCase();
+      if (!type || !['text', 'image'].includes(type)) return null;
+      const value = type === 'text'
+        ? safeTrim(block?.value || block?.text || '')
+        : normalizeImageUrlValue(block?.value || block?.url || '');
+      if (!value) return null;
+      return { type, value };
+    })
+    .filter(Boolean);
+}
+
 function normalizeBlogResponse(blog) {
   const imageCandidate = [
     blog?.image_url,
@@ -3584,11 +3786,16 @@ function normalizeBlogResponse(blog) {
   ].find((v) => typeof v === 'string' && v.trim());
 
   const normalizedImage = normalizeImageUrlValue(imageCandidate);
+  const normalizedImageArray = normalizeImageArray(blog?.image_urls || blog?.imageUrls || blog?.images);
+  const normalizedBlocks = normalizeBlogBlocks(blog?.blocks || blog?.content_blocks || blog?.contentBlocks);
 
   return {
     ...blog,
     image_url: normalizedImage || blog?.image_url || '',
     imageUrl: normalizedImage || blog?.imageUrl || '',
+    image_urls: normalizedImageArray,
+    imageUrls: normalizedImageArray,
+    blocks: normalizedBlocks
   };
 }
 
@@ -3632,9 +3839,153 @@ const getPublishedBlogsPublic = async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch published blogs' });
   }
 };
+
+const getBlogById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!ObjectId.isValid(id)) return res.status(400).json({ error: 'Invalid blog ID' });
+    const db = await connectDB();
+    const coordinatorEmail = req.session.userEmail;
+    const blog = await db.collection('blogs').findOne({ _id: new ObjectId(id), coordinator: coordinatorEmail });
+    if (!blog) return res.status(404).json({ error: 'Blog not found or access denied' });
+    return res.json({ blog: normalizeBlogResponse(blog) });
+  } catch (error) {
+    console.error('Error fetching blog by id:', error);
+    return res.status(500).json({ error: 'Failed to fetch blog' });
+  }
+};
+
+const getBlogByIdPublic = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!ObjectId.isValid(id)) return res.status(400).json({ error: 'Invalid blog ID' });
+    const db = await connectDB();
+    const blog = await db.collection('blogs').findOne({ _id: new ObjectId(id) });
+    if (!blog) return res.status(404).json({ error: 'Blog not found' });
+    const isOwner = req.session?.userRole === 'coordinator'
+      && String(blog.coordinator || '').toLowerCase() === String(req.session?.userEmail || '').toLowerCase();
+    const isPublished = blog.status === 'published' || blog.published === true;
+    if (!isPublished && !isOwner) {
+      return res.status(403).json({ error: 'Blog is not published' });
+    }
+    return res.json({ blog: normalizeBlogResponse(blog) });
+  } catch (error) {
+    console.error('Error fetching public blog by id:', error);
+    return res.status(500).json({ error: 'Failed to fetch blog' });
+  }
+};
+
+const uploadBlogImages = async (req, res) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ error: 'No images uploaded' });
+    }
+    const coordinatorEmail = req.session.userEmail;
+    if (!coordinatorEmail) {
+      return res.status(401).json({ error: 'User not logged in' });
+    }
+
+    const uploads = [];
+    for (const file of req.files) {
+      const result = await uploadImageBuffer(file.buffer, {
+        folder: 'blogs',
+        public_id: `${Date.now()}_${file.originalname}`,
+        resource_type: 'image'
+      });
+      uploads.push({
+        url: result?.secure_url,
+        public_id: result?.public_id,
+        filename: file.originalname
+      });
+    }
+
+    return res.json({ images: uploads.filter((u) => u.url) });
+  } catch (error) {
+    console.error('Error uploading blog images:', error);
+    return res.status(500).json({ error: 'Failed to upload images' });
+  }
+};
+
+const getBlogReviews = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!ObjectId.isValid(id)) return res.status(400).json({ error: 'Invalid blog ID' });
+    const db = await connectDB();
+    const reviews = await db.collection('blog_reviews')
+      .find({ blog_id: new ObjectId(id) })
+      .sort({ created_at: -1 })
+      .toArray();
+
+    return res.json({
+      reviews: (reviews || []).map((r) => ({
+        ...r,
+        _id: r._id?.toString(),
+        user_name: r.user_name || r.user_email || 'User',
+        comment: r.comment || '',
+        created_at: r.created_at || r.review_date || new Date()
+      }))
+    });
+  } catch (error) {
+    console.error('Error fetching blog reviews:', error);
+    return res.status(500).json({ error: 'Failed to fetch reviews' });
+  }
+};
+
+const addBlogReview = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!ObjectId.isValid(id)) return res.status(400).json({ error: 'Invalid blog ID' });
+
+    const comment = safeTrim(req.body?.comment || req.body?.review || '');
+    const name = safeTrim(req.body?.name || req.body?.user_name || '');
+    if (!comment) return res.status(400).json({ error: 'Comment is required' });
+
+    const db = await connectDB();
+    const blog = await db.collection('blogs').findOne({ _id: new ObjectId(id) });
+    if (!blog) return res.status(404).json({ error: 'Blog not found' });
+    const isOwner = req.session?.userRole === 'coordinator'
+      && String(blog.coordinator || '').toLowerCase() === String(req.session?.userEmail || '').toLowerCase();
+    const isPublished = blog.status === 'published' || blog.published === true;
+    if (!isPublished && !isOwner) {
+      return res.status(403).json({ error: 'Blog is not published' });
+    }
+
+    const review = {
+      blog_id: new ObjectId(id),
+      user_name: name || req.session?.username || 'Anonymous',
+      user_email: req.session?.userEmail || '',
+      user_role: req.session?.userRole || 'guest',
+      comment,
+      created_at: new Date()
+    };
+    await db.collection('blog_reviews').insertOne(review);
+    return res.json({ success: true, review });
+  } catch (error) {
+    console.error('Error adding blog review:', error);
+    return res.status(500).json({ error: 'Failed to add review' });
+  }
+};
 const createBlog = async (req, res) => {
   try {
-    const { title, content, excerpt, tags, published, status, imageUrl, image_url, image, coverImage, cover_image } = req.body || {};
+    const {
+      title,
+      content,
+      excerpt,
+      tags,
+      published,
+      status,
+      imageUrl,
+      image_url,
+      image,
+      coverImage,
+      cover_image,
+      imageUrls,
+      image_urls,
+      images,
+      blocks,
+      contentBlocks,
+      content_blocks
+    } = req.body || {};
     const db = await connectDB();
     const coordinatorEmail = req.session.userEmail;
 
@@ -3643,8 +3994,10 @@ const createBlog = async (req, res) => {
     }
 
     const normalizedTitle = typeof title === 'string' ? title.trim() : '';
+    const normalizedBlocks = normalizeBlogBlocks(blocks || contentBlocks || content_blocks);
     const normalizedContent = typeof content === 'string' ? content.trim() : '';
-    if (!normalizedTitle || !normalizedContent) {
+    const derivedContent = normalizedContent || normalizedBlocks.filter((b) => b.type === 'text').map((b) => b.value).join('\n\n');
+    if (!normalizedTitle || !derivedContent) {
       return res.status(400).json({ error: 'Title and content are required' });
     }
 
@@ -3663,11 +4016,14 @@ const createBlog = async (req, res) => {
     const rawImageInput = [imageUrl, image_url, image, coverImage, cover_image]
       .find((v) => typeof v === 'string' && v.trim()) || '';
     const normalizedImageUrl = normalizeImageUrlValue(rawImageInput);
+    const normalizedImageUrls = normalizeImageArray(imageUrls || image_urls || images);
+    const blockImageUrls = normalizedBlocks.filter((b) => b.type === 'image').map((b) => b.value);
+    const mergedImageUrls = Array.from(new Set([...(normalizedImageUrls || []), ...(blockImageUrls || [])].filter(Boolean)));
 
 
     const blog = {
       title: normalizedTitle,
-      content: normalizedContent,
+      content: derivedContent,
       author: coordinatorEmail,
       coordinator: coordinatorEmail,
       created_date: new Date(),
@@ -3682,6 +4038,13 @@ const createBlog = async (req, res) => {
     if (normalizedImageUrl) {
       blog.image_url = normalizedImageUrl;
       blog.imageUrl = normalizedImageUrl;
+    }
+    if (mergedImageUrls.length > 0) {
+      blog.image_urls = mergedImageUrls;
+      blog.imageUrls = mergedImageUrls;
+    }
+    if (normalizedBlocks.length > 0) {
+      blog.blocks = normalizedBlocks;
     }
     Object.keys(blog).forEach((k) => blog[k] === undefined && delete blog[k]);
 
@@ -3749,6 +4112,42 @@ const updateBlog = async (req, res) => {
         $set.tags = updates.tags.split(',').map((t) => t.trim()).filter(Boolean);
       } else {
         return res.status(400).json({ error: 'Tags must be an array or comma-separated string' });
+      }
+    }
+
+    const incomingBlocks = updates.blocks !== undefined
+      ? updates.blocks
+      : (updates.contentBlocks !== undefined ? updates.contentBlocks : updates.content_blocks);
+    if (incomingBlocks !== undefined) {
+      const normalizedBlocks = normalizeBlogBlocks(incomingBlocks);
+      if (normalizedBlocks.length === 0) {
+        $unset.blocks = '';
+      } else {
+        $set.blocks = normalizedBlocks;
+        if (updates.content === undefined) {
+          $set.content = normalizedBlocks
+            .filter((b) => b.type === 'text')
+            .map((b) => b.value)
+            .join('\n\n');
+        }
+      }
+    }
+
+    const incomingImageUrls = updates.imageUrls !== undefined
+      ? updates.imageUrls
+      : (updates.image_urls !== undefined ? updates.image_urls : updates.images);
+    if (incomingImageUrls !== undefined) {
+      const normalizedArray = normalizeImageArray(incomingImageUrls);
+      if (normalizedArray.length === 0) {
+        $unset.image_urls = '';
+        $unset.imageUrls = '';
+      } else {
+        $set.image_urls = normalizedArray;
+        $set.imageUrls = normalizedArray;
+        if (!('image_url' in $set) && !('imageUrl' in $set)) {
+          $set.image_url = normalizedArray[0];
+          $set.imageUrl = normalizedArray[0];
+        }
       }
     }
 
@@ -4095,6 +4494,7 @@ const deleteChessEvent = async (req, res) => {
 module.exports = {
   // Middleware
   uploadTournamentFileMiddleware,
+  uploadBlogImagesMiddleware,
   // Streaming
   getStreams,
   createStream,
@@ -4141,6 +4541,11 @@ module.exports = {
   // Blogs
   getBlogs,
   getPublishedBlogsPublic,
+  getBlogById,
+  getBlogByIdPublic,
+  uploadBlogImages,
+  getBlogReviews,
+  addBlogReview,
   createBlog,
   updateBlog,
   deleteBlog,

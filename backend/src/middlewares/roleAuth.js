@@ -75,6 +75,7 @@ const isAdmin = (req, res, next) => {
         req.session.userRole = 'admin';
         req.session.userEmail = decoded.email;
         req.session.username = decoded.username;
+        req.session.userID = decoded.userId;
       }
       return next();
     }
@@ -93,12 +94,15 @@ const isAdmin = (req, res, next) => {
   const headerRole = (req.get('x-dev-role') || '').toLowerCase();
   const headerEmail = req.get('x-dev-email');
   if (isDev && headerRole === 'admin' && headerEmail) {
+    if (!req.session) {
+      req.session = {};
+    }
     req.session.userRole = 'admin';
     req.session.userEmail = headerEmail;
     req.session.username = req.session.username || headerEmail;
     return next();
   }
-  return res.status(403).send('Unauthorized');
+  return res.status(403).json({ success: false, message: 'Unauthorized' });
 };
 
 const isOrganizer = (req, res, next) => {
@@ -111,6 +115,7 @@ const isOrganizer = (req, res, next) => {
         req.session.userRole = 'organizer';
         req.session.userEmail = decoded.email;
         req.session.username = decoded.username;
+        req.session.userID = decoded.userId;
       }
       return next();
     }
@@ -127,12 +132,15 @@ const isOrganizer = (req, res, next) => {
   const headerRole = (req.get('x-dev-role') || '').toLowerCase();
   const headerEmail = req.get('x-dev-email');
   if (isDev && headerRole === 'organizer' && headerEmail) {
+    if (!req.session) {
+      req.session = {};
+    }
     req.session.userRole = 'organizer';
     req.session.userEmail = headerEmail;
     req.session.username = req.session.username || headerEmail;
     return next();
   }
-  return res.status(403).send('Unauthorized');
+  return res.status(403).json({ success: false, message: 'Unauthorized' });
 };
 
 const isCoordinator = (req, res, next) => {
@@ -145,6 +153,7 @@ const isCoordinator = (req, res, next) => {
         req.session.userRole = 'coordinator';
         req.session.userEmail = decoded.email;
         req.session.username = decoded.username;
+        req.session.userID = decoded.userId;
       }
       return next();
     }
@@ -161,12 +170,15 @@ const isCoordinator = (req, res, next) => {
   const headerRole = (req.get('x-dev-role') || '').toLowerCase();
   const headerEmail = req.get('x-dev-email');
   if (isDev && headerRole === 'coordinator' && headerEmail) {
+    if (!req.session) {
+      req.session = {};
+    }
     req.session.userRole = 'coordinator';
     req.session.userEmail = headerEmail;
     req.session.username = req.session.username || headerEmail;
     return next();
   }
-  return res.status(403).send('Unauthorized');
+  return res.status(403).json({ success: false, message: 'Unauthorized' });
 };
 
 const isPlayer = (req, res, next) => {
@@ -179,6 +191,7 @@ const isPlayer = (req, res, next) => {
         req.session.userRole = 'player';
         req.session.userEmail = decoded.email;
         req.session.username = decoded.username;
+        req.session.userID = decoded.userId;
       }
       return next();
     }
@@ -195,13 +208,19 @@ const isPlayer = (req, res, next) => {
   const headerEmail = req.get('x-dev-email');
   const headerUsername = req.get('x-dev-username');
   if (isDev && headerRole === 'player' && headerEmail) {
+    if (!req.session) {
+      req.session = {};
+    }
     req.session.userRole = 'player';
     req.session.userEmail = headerEmail;
     req.session.username = headerUsername || headerEmail.split('@')[0];
     console.log('DEV: isPlayer bypass enabled for', req.session.userEmail);
+    return next();
   }
-  if (req.session && req.session.userRole === 'player') next();
-  else res.status(403).send('Unauthorized');
+  if (req.session && req.session.userRole === 'player') {
+    return next();
+  }
+  return res.status(403).json({ success: false, message: 'Unauthorized' });
 };
 
 const isAdminOrOrganizer = (req, res, next) => {
@@ -214,6 +233,7 @@ const isAdminOrOrganizer = (req, res, next) => {
         req.session.userRole = decoded.role;
         req.session.userEmail = decoded.email;
         req.session.username = decoded.username;
+        req.session.userID = decoded.userId;
       }
       return next();
     }
@@ -225,8 +245,10 @@ const isAdminOrOrganizer = (req, res, next) => {
     }
   }
 
-  if (req.session && (req.session.userRole === 'admin' || req.session.userRole === 'organizer')) next();
-  else res.status(403).json({ success: false, message: 'Unauthorized' });
+  if (req.session && (req.session.userRole === 'admin' || req.session.userRole === 'organizer')) {
+    return next();
+  }
+  return res.status(403).json({ success: false, message: 'Unauthorized' });
 };
 
 module.exports = {

@@ -529,7 +529,7 @@ function EventCalendar() {
                         <div><strong>Type:</strong> {event.type || 'event'}</div>
                         <div><strong>Source:</strong> {event.source || 'event'}</div>
                       </div>
-                      {event.source === 'meeting' && event.isMine && (
+                      {(event.source === 'meeting' || event.source === 'calendar') && event.isMine && (
                         <div className="event-actions">
                           <button className="delete-btn" onClick={() => deleteEvent(event._id)}>
                             <i className="fas fa-trash" /> Delete

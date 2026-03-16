@@ -7,7 +7,7 @@ import usePlayerTheme from '../../hooks/usePlayerTheme';
 import AnimatedSidebar from '../../components/AnimatedSidebar';
 import { coordinatorLinks } from '../../constants/coordinatorLinks';
 
-const PAGE_SIZE = 6;
+const PAGE_SIZE = 10;
 
 const CATEGORIES = [
   'Chess Talk',

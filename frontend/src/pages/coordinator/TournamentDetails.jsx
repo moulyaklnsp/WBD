@@ -138,6 +138,10 @@ function TournamentDetails() {
   }, [id]);
 
   const saveTournament = async () => {
+    if (String(tournament?.status || '').toLowerCase() === 'completed') {
+      showMessage('Completed tournaments are read-only.', 'error');
+      return;
+    }
     setSaving(true);
     try {
       const payload = {
@@ -186,6 +190,22 @@ function TournamentDetails() {
 
   const rounds = typeof tournament.noOfRounds !== 'undefined' ? tournament.noOfRounds : (tournament.no_of_rounds || 0);
   const isTeam = (tournament.type || '').toLowerCase() === 'team';
+  const computePhase = () => {
+    const dateOnly = new Date(tournament.date);
+    const timeStr = (tournament.time || '').toString();
+    const [hh, mm] = (timeStr.match(/^\d{2}:\d{2}$/) ? timeStr.split(':') : ['00', '00']);
+    const start = new Date(dateOnly);
+    if (!isNaN(parseInt(hh)) && !isNaN(parseInt(mm))) {
+      start.setHours(parseInt(hh, 10), parseInt(mm, 10), 0, 0);
+    }
+    const end = new Date(start.getTime() + 60 * 60 * 1000);
+    const now = new Date();
+    if (now >= end) return 'Completed';
+    if (now >= start && now < end) return 'Ongoing';
+    return 'Upcoming';
+  };
+  const statusPhase = computePhase();
+  const isCompleted = statusPhase === 'Completed' || String(tournament.status || '').toLowerCase() === 'completed';
 
   return (
     <div style={{ minHeight: '100vh' }}>
@@ -239,30 +259,35 @@ function TournamentDetails() {
           <div className="grid">
             <div className="card">
               <h3 className="title"><i className="fas fa-edit" /> Edit Tournament</h3>
+              {isCompleted && (
+                <div style={{ marginBottom: '0.75rem', color: '#c62828', fontWeight: 600 }}>
+                  Completed tournaments are read-only.
+                </div>
+              )}
               <div className="row">
                 <div className="field">
                   <label>Name</label>
-                  <input value={editForm.tournamentName} onChange={(e) => setEditForm((p) => ({ ...p, tournamentName: e.target.value }))} />
+                  <input value={editForm.tournamentName} onChange={(e) => setEditForm((p) => ({ ...p, tournamentName: e.target.value }))} disabled={isCompleted} />
                 </div>
                 <div className="field">
                   <label>Date</label>
-                  <input type="date" value={editForm.tournamentDate} onChange={(e) => setEditForm((p) => ({ ...p, tournamentDate: e.target.value }))} />
+                  <input type="date" value={editForm.tournamentDate} onChange={(e) => setEditForm((p) => ({ ...p, tournamentDate: e.target.value }))} disabled={isCompleted} />
                 </div>
                 <div className="field">
                   <label>Time</label>
-                  <input type="time" value={editForm.time} onChange={(e) => setEditForm((p) => ({ ...p, time: e.target.value }))} />
+                  <input type="time" value={editForm.time} onChange={(e) => setEditForm((p) => ({ ...p, time: e.target.value }))} disabled={isCompleted} />
                 </div>
                 <div className="field">
                   <label>Location</label>
-                  <input value={editForm.location} onChange={(e) => setEditForm((p) => ({ ...p, location: e.target.value }))} />
+                  <input value={editForm.location} onChange={(e) => setEditForm((p) => ({ ...p, location: e.target.value }))} disabled={isCompleted} />
                 </div>
                 <div className="field">
                   <label>Entry Fee</label>
-                  <input type="number" min="0" value={editForm.entryFee} onChange={(e) => setEditForm((p) => ({ ...p, entryFee: e.target.value }))} />
+                  <input type="number" min="0" value={editForm.entryFee} onChange={(e) => setEditForm((p) => ({ ...p, entryFee: e.target.value }))} disabled={isCompleted} />
                 </div>
                 <div className="field">
                   <label>Type</label>
-                  <select value={editForm.type} onChange={(e) => setEditForm((p) => ({ ...p, type: e.target.value }))}>
+                  <select value={editForm.type} onChange={(e) => setEditForm((p) => ({ ...p, type: e.target.value }))} disabled={isCompleted}>
                     <option value="">Select</option>
                     <option value="Individual">Individual</option>
                     <option value="Team">Team</option>
@@ -271,9 +296,9 @@ function TournamentDetails() {
               </div>
               <div className="field" style={{ marginBottom: '0.8rem' }}>
                 <label>No. of Rounds</label>
-                <input type="number" min="1" value={editForm.noOfRounds} onChange={(e) => setEditForm((p) => ({ ...p, noOfRounds: e.target.value }))} />
+                <input type="number" min="1" value={editForm.noOfRounds} onChange={(e) => setEditForm((p) => ({ ...p, noOfRounds: e.target.value }))} disabled={isCompleted} />
               </div>
-              <button className="btn btn-primary" onClick={saveTournament} disabled={saving}>
+              <button className="btn btn-primary" onClick={saveTournament} disabled={saving || isCompleted}>
                 <i className="fas fa-save" /> {saving ? 'Saving...' : 'Save'}
               </button>
             </div>

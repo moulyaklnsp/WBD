@@ -6,6 +6,7 @@ import { fetchAsCoordinator } from '../../utils/fetchWithRole';
 import usePlayerTheme from '../../hooks/usePlayerTheme';
 import AnimatedSidebar from '../../components/AnimatedSidebar';
 import { coordinatorLinks } from '../../constants/coordinatorLinks';
+import SearchFilterRow from '../../components/SearchFilterRow';
 
 const sectionVariants = {
   hidden: { opacity: 0, y: 28, scale: 0.97 },
@@ -41,9 +42,9 @@ function CoordinatorMeetings() {
 
   const [organized, setOrganized] = useState([]);
   const [upcoming, setUpcoming] = useState([]);
-  const [orgVisible, setOrgVisible] = useState(5);
-  const [upcVisible, setUpcVisible] = useState(5);
-  const rowsPerPage = 5;
+  const [orgPage, setOrgPage] = useState(1);
+  const [upcPage, setUpcPage] = useState(1);
+  const rowsPerPage = 10;
 
   // Search states (mimic /js/searchbar.js behavior)
   const [orgSearch, setOrgSearch] = useState({ attr: 0, q: '' });
@@ -54,7 +55,7 @@ function CoordinatorMeetings() {
       const res = await fetchAsCoordinator('/coordinator/api/meetings/organized');
       const data = await res.json();
       setOrganized(Array.isArray(data) ? data : []);
-      setOrgVisible(rowsPerPage);
+      setOrgPage(1);
     } catch (e) {
       console.error(e);
       setOrganized([]);
@@ -66,7 +67,7 @@ function CoordinatorMeetings() {
       const res = await fetchAsCoordinator('/coordinator/api/meetings/upcoming');
       const data = await res.json();
       setUpcoming(Array.isArray(data) ? data : []);
-      setUpcVisible(rowsPerPage);
+      setUpcPage(1);
     } catch (e) {
       console.error(e);
       setUpcoming([]);
@@ -157,7 +158,15 @@ function CoordinatorMeetings() {
   const orgFiltered = useMemo(() => applySearchFilter(organized, orgSearch), [organized, orgSearch]);
   const upcFiltered = useMemo(() => applySearchFilter(upcoming, upcSearch), [upcoming, upcSearch]);
 
-  const renderTable = (rows, visible, setVisible) => {
+  useEffect(() => {
+    setOrgPage(1);
+  }, [orgSearch]);
+
+  useEffect(() => {
+    setUpcPage(1);
+  }, [upcSearch]);
+
+  const renderTable = (rows, page) => {
     if (!rows || rows.length === 0) {
       return (
         <tbody>
@@ -167,7 +176,8 @@ function CoordinatorMeetings() {
         </tbody>
       );
     }
-    const slice = rows.slice(0, visible);
+    const start = (page - 1) * rowsPerPage;
+    const slice = rows.slice(start, start + rowsPerPage);
     return (
       <tbody>
         {slice.map((m, idx) => (
@@ -207,6 +217,10 @@ function CoordinatorMeetings() {
         .message.success { background:rgba(76,175,80,0.15); color:#1b5e20; }
         .message.error { background:rgba(198,40,40,0.15); color:#c62828; }
         .action-btn { display:inline-flex; align-items:center; gap:0.5rem; background:var(--sky-blue); color:var(--sea-green); text-decoration:none; padding:0.8rem 1.5rem; border-radius:8px; font-family:'Cinzel', serif; font-weight:bold; cursor:pointer; border:none; }
+        .pagination { display:flex; justify-content:center; align-items:center; gap:0.5rem; margin:1rem 0; flex-wrap:wrap; }
+        .page-btn { background:var(--card-bg); color:var(--text-color); border:1px solid var(--card-border); padding:0.45rem 0.85rem; border-radius:8px; cursor:pointer; font-family:'Cinzel', serif; font-weight:bold; }
+        .page-btn.active { background:var(--sea-green); color:var(--on-accent); border-color:var(--sea-green); }
+        .page-btn:disabled { opacity:0.6; cursor:not-allowed; }
       `}</style>
 
       <div className="page player-neo">
@@ -302,15 +316,17 @@ function CoordinatorMeetings() {
             animate="visible"
           >
             <h3 style={{ fontFamily: 'Cinzel, serif', fontSize: '1.8rem', margin: '2rem 0', textAlign: 'center', color: 'var(--sea-green)' }}>Organized Meetings</h3>
-            <div className="search-row">
-              <select value={orgSearch.attr} onChange={(e) => setOrgSearch((s) => ({ ...s, attr: parseInt(e.target.value, 10) }))} className="search-select">
-                <option value={0}>Title</option>
-                <option value={1}>Date</option>
-                <option value={2}>Time</option>
-                <option value={3}>Link</option>
-              </select>
-              <input placeholder="Search..." value={orgSearch.q} onChange={(e) => setOrgSearch((s) => ({ ...s, q: e.target.value }))} className="search-input" />
-            </div>
+            <SearchFilterRow
+              value={orgSearch}
+              options={[
+                { value: 0, label: 'Title' },
+                { value: 1, label: 'Date' },
+                { value: 2, label: 'Time' },
+                { value: 3, label: 'Link' }
+              ]}
+              onAttrChange={(val) => setOrgSearch((s) => ({ ...s, attr: parseInt(val, 10) }))}
+              onQueryChange={(val) => setOrgSearch((s) => ({ ...s, q: val }))}
+            />
             <table className="meetings-table">
               <thead>
                 <tr>
@@ -320,27 +336,36 @@ function CoordinatorMeetings() {
                   <th><i className="fas fa-link" /> Link</th>
                 </tr>
               </thead>
-              {renderTable(orgFiltered, orgVisible, setOrgVisible)}
+              {renderTable(orgFiltered, orgPage)}
             </table>
-            <div style={{ textAlign: 'center', margin: '1rem 0', display: 'flex', justifyContent: 'center', gap: '1rem' }}>
-              {orgVisible < orgFiltered.length && (
-                <button type="button" className="action-btn" onClick={() => setOrgVisible((v) => Math.min(v + rowsPerPage, orgFiltered.length))}><i className="fas fa-chevron-down" /> More</button>
-              )}
-              {orgVisible > rowsPerPage && (
-                <button type="button" className="action-btn" onClick={() => setOrgVisible(rowsPerPage)}><i className="fas fa-chevron-up" /> Hide</button>
-              )}
-            </div>
+            {Math.ceil(orgFiltered.length / rowsPerPage) > 1 && (
+              <div className="pagination">
+                <button type="button" className="page-btn" onClick={() => setOrgPage((p) => Math.max(1, p - 1))} disabled={orgPage === 1}>
+                  <i className="fas fa-chevron-left" />
+                </button>
+                {Array.from({ length: Math.ceil(orgFiltered.length / rowsPerPage) }, (_, i) => i + 1).map((p) => (
+                  <button key={p} type="button" className={`page-btn ${p === orgPage ? 'active' : ''}`} onClick={() => setOrgPage(p)}>
+                    {p}
+                  </button>
+                ))}
+                <button type="button" className="page-btn" onClick={() => setOrgPage((p) => Math.min(Math.ceil(orgFiltered.length / rowsPerPage), p + 1))} disabled={orgPage === Math.ceil(orgFiltered.length / rowsPerPage)}>
+                  <i className="fas fa-chevron-right" />
+                </button>
+              </div>
+            )}
 
             <h3 style={{ fontFamily: 'Cinzel, serif', fontSize: '1.8rem', margin: '2rem 0', textAlign: 'center', color: 'var(--sea-green)' }}>Upcoming Meetings</h3>
-            <div className="search-row">
-              <select value={upcSearch.attr} onChange={(e) => setUpcSearch((s) => ({ ...s, attr: parseInt(e.target.value, 10) }))} className="search-select">
-                <option value={0}>Title</option>
-                <option value={1}>Date</option>
-                <option value={2}>Time</option>
-                <option value={3}>Link</option>
-              </select>
-              <input placeholder="Search..." value={upcSearch.q} onChange={(e) => setUpcSearch((s) => ({ ...s, q: e.target.value }))} className="search-input" />
-            </div>
+            <SearchFilterRow
+              value={upcSearch}
+              options={[
+                { value: 0, label: 'Title' },
+                { value: 1, label: 'Date' },
+                { value: 2, label: 'Time' },
+                { value: 3, label: 'Link' }
+              ]}
+              onAttrChange={(val) => setUpcSearch((s) => ({ ...s, attr: parseInt(val, 10) }))}
+              onQueryChange={(val) => setUpcSearch((s) => ({ ...s, q: val }))}
+            />
             <table className="meetings-table">
               <thead>
                 <tr>
@@ -350,16 +375,23 @@ function CoordinatorMeetings() {
                   <th><i className="fas fa-link" /> Link</th>
                 </tr>
               </thead>
-              {renderTable(upcFiltered, upcVisible, setUpcVisible)}
+              {renderTable(upcFiltered, upcPage)}
             </table>
-            <div style={{ textAlign: 'center', margin: '1rem 0', display: 'flex', justifyContent: 'center', gap: '1rem' }}>
-              {upcVisible < upcFiltered.length && (
-                <button type="button" className="action-btn" onClick={() => setUpcVisible((v) => Math.min(v + rowsPerPage, upcFiltered.length))}><i className="fas fa-chevron-down" /> More</button>
-              )}
-              {upcVisible > rowsPerPage && (
-                <button type="button" className="action-btn" onClick={() => setUpcVisible(rowsPerPage)}><i className="fas fa-chevron-up" /> Hide</button>
-              )}
-            </div>
+            {Math.ceil(upcFiltered.length / rowsPerPage) > 1 && (
+              <div className="pagination">
+                <button type="button" className="page-btn" onClick={() => setUpcPage((p) => Math.max(1, p - 1))} disabled={upcPage === 1}>
+                  <i className="fas fa-chevron-left" />
+                </button>
+                {Array.from({ length: Math.ceil(upcFiltered.length / rowsPerPage) }, (_, i) => i + 1).map((p) => (
+                  <button key={p} type="button" className={`page-btn ${p === upcPage ? 'active' : ''}`} onClick={() => setUpcPage(p)}>
+                    {p}
+                  </button>
+                ))}
+                <button type="button" className="page-btn" onClick={() => setUpcPage((p) => Math.min(Math.ceil(upcFiltered.length / rowsPerPage), p + 1))} disabled={upcPage === Math.ceil(upcFiltered.length / rowsPerPage)}>
+                  <i className="fas fa-chevron-right" />
+                </button>
+              </div>
+            )}
 
             <div style={{ textAlign: 'right' }}>
               <Link to="/coordinator/coordinator_dashboard" className="back-to-dashboard"><i className="fas fa-arrow-left" /> Back to Dashboard</Link>

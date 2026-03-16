@@ -154,6 +154,9 @@ app.use(chatRoutes);                                    // /api/chat/*
 app.use(userRoutes);                                    // /api/users
 app.use(logsRoutes);                                    // /api/logs/frontend
 app.get('/api/public/coordinator-blogs', coordinatorController.getPublishedBlogsPublic);
+app.get('/api/public/coordinator-blogs/:id/reviews', coordinatorController.getBlogReviews);
+app.post('/api/public/coordinator-blogs/:id/reviews', coordinatorController.addBlogReview);
+app.get('/api/public/coordinator-blogs/:id', coordinatorController.getBlogByIdPublic);
 app.use('/admin',       isAdmin,       adminRoutes);
 app.use('/organizer',   isOrganizer,   organizerRoutes);
 app.use('/coordinator', isCoordinator, coordinatorRoutes);

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import '../../styles/playerNeoNoir.css';
 import { motion } from 'framer-motion';
@@ -32,6 +32,9 @@ function EnrolledPlayers() {
   const [type, setType] = useState(''); // 'Individual' | 'Team'
   const [individualPlayers, setIndividualPlayers] = useState([]);
   const [teamEnrollments, setTeamEnrollments] = useState([]);
+  const [individualPage, setIndividualPage] = useState(1);
+  const [teamPage, setTeamPage] = useState(1);
+  const rowsPerPage = 10;
 
   useEffect(() => {
     const load = async () => {
@@ -50,6 +53,8 @@ function EnrolledPlayers() {
         setType(data.tournamentType || '');
         setIndividualPlayers(Array.isArray(data.individualPlayers) ? data.individualPlayers : []);
         setTeamEnrollments(Array.isArray(data.teamEnrollments) ? data.teamEnrollments : []);
+        setIndividualPage(1);
+        setTeamPage(1);
       } catch (e) {
         console.error(e);
         setError('Failed to load enrolled players.');
@@ -59,6 +64,18 @@ function EnrolledPlayers() {
     };
     load();
   }, [tournamentId]);
+
+  const individualTotalPages = Math.max(1, Math.ceil(individualPlayers.length / rowsPerPage));
+  const paginatedIndividuals = useMemo(() => {
+    const start = (individualPage - 1) * rowsPerPage;
+    return individualPlayers.slice(start, start + rowsPerPage);
+  }, [individualPlayers, individualPage, rowsPerPage]);
+
+  const teamTotalPages = Math.max(1, Math.ceil(teamEnrollments.length / rowsPerPage));
+  const paginatedTeams = useMemo(() => {
+    const start = (teamPage - 1) * rowsPerPage;
+    return teamEnrollments.slice(start, start + rowsPerPage);
+  }, [teamEnrollments, teamPage, rowsPerPage]);
 
   return (
     <div style={{ minHeight: '100vh' }}>
@@ -77,6 +94,10 @@ function EnrolledPlayers() {
         .status-pending { color:#c62828; font-weight:700; }
         .action-btn { display:inline-flex; align-items:center; gap:0.5rem; background:var(--sea-green); color:var(--on-accent); text-decoration:none; padding:0.8rem 1.5rem; border-radius:8px; font-family:'Cinzel', serif; font-weight:bold; }
         .error-text { text-align:center; color:#c62828; margin-top:1rem; }
+        .pagination { display:flex; justify-content:center; align-items:center; gap:0.5rem; margin:1rem 0; flex-wrap:wrap; }
+        .page-btn { background:var(--card-bg); color:var(--text-color); border:1px solid var(--card-border); padding:0.45rem 0.85rem; border-radius:8px; cursor:pointer; font-family:'Cinzel', serif; font-weight:bold; }
+        .page-btn.active { background:var(--sea-green); color:var(--on-accent); border-color:var(--sea-green); }
+        .page-btn:disabled { opacity:0.6; cursor:not-allowed; }
       `}</style>
 
       <div className="page player-neo">
@@ -147,7 +168,7 @@ function EnrolledPlayers() {
                   </tr>
                 </thead>
                 <tbody>
-                  {individualPlayers.map((p, idx) => (
+                  {paginatedIndividuals.map((p, idx) => (
                     <tr key={`${p.username}-${idx}`}>
                       <td>{p.username}</td>
                       <td>{p.college}</td>
@@ -156,6 +177,21 @@ function EnrolledPlayers() {
                   ))}
                 </tbody>
               </table>
+              {individualTotalPages > 1 && (
+                <div className="pagination">
+                  <button type="button" className="page-btn" onClick={() => setIndividualPage((p) => Math.max(1, p - 1))} disabled={individualPage === 1}>
+                    <i className="fas fa-chevron-left" />
+                  </button>
+                  {Array.from({ length: individualTotalPages }, (_, i) => i + 1).map((p) => (
+                    <button key={p} type="button" className={`page-btn ${p === individualPage ? 'active' : ''}`} onClick={() => setIndividualPage(p)}>
+                      {p}
+                    </button>
+                  ))}
+                  <button type="button" className="page-btn" onClick={() => setIndividualPage((p) => Math.min(individualTotalPages, p + 1))} disabled={individualPage === individualTotalPages}>
+                    <i className="fas fa-chevron-right" />
+                  </button>
+                </div>
+              )}
             </motion.div>
           )}
 
@@ -179,7 +215,7 @@ function EnrolledPlayers() {
                   </tr>
                 </thead>
                 <tbody>
-                  {teamEnrollments.map((t, idx) => {
+                  {paginatedTeams.map((t, idx) => {
                     const p1 = t.player1_approved;
                     const p2 = t.player2_approved;
                     const p3 = t.player3_approved;
@@ -211,6 +247,21 @@ function EnrolledPlayers() {
                   })}
                 </tbody>
               </table>
+              {teamTotalPages > 1 && (
+                <div className="pagination">
+                  <button type="button" className="page-btn" onClick={() => setTeamPage((p) => Math.max(1, p - 1))} disabled={teamPage === 1}>
+                    <i className="fas fa-chevron-left" />
+                  </button>
+                  {Array.from({ length: teamTotalPages }, (_, i) => i + 1).map((p) => (
+                    <button key={p} type="button" className={`page-btn ${p === teamPage ? 'active' : ''}`} onClick={() => setTeamPage(p)}>
+                      {p}
+                    </button>
+                  ))}
+                  <button type="button" className="page-btn" onClick={() => setTeamPage((p) => Math.min(teamTotalPages, p + 1))} disabled={teamPage === teamTotalPages}>
+                    <i className="fas fa-chevron-right" />
+                  </button>
+                </div>
+              )}
             </motion.div>
           )}
 

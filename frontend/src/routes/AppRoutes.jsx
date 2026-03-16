@@ -16,6 +16,7 @@ import Signup from '../pages/Signup';
 import ForgotPassword from '../pages/ForgotPassword';
 import ContactUs from '../pages/ContactUs';
 import Blogs from '../pages/Blogs';
+import BlogDetail from '../pages/BlogDetail';
 import Verify from '../pages/auth/Verify';
 import ChessStory from '../pages/ChessStory';
 import ErrorPage from '../pages/ErrorPage';
@@ -50,6 +51,7 @@ import TournamentDetails from '../pages/coordinator/TournamentDetails';
 import TournamentComplaints from '../pages/coordinator/TournamentComplaints';
 import EventCalendar from '../pages/coordinator/EventCalendar';
 import CoordinatorBlogs from '../pages/coordinator/CoordinatorBlogs';
+import CoordinatorBlogDetail from '../pages/coordinator/CoordinatorBlogDetail';
 import CoordinatorStreamingControl from '../pages/coordinator/CoordinatorStreamingControl';
 import CoordinatorChessEvents from '../pages/coordinator/CoordinatorChessEvents';
 
@@ -111,6 +113,7 @@ export default function AppRoutes() {
       <Route path="/verify" element={<AnimatedPageLayout><Verify /></AnimatedPageLayout>} />
       <Route path="/contactus" element={<AnimatedPageLayout><ContactUs /></AnimatedPageLayout>} />
       <Route path="/blogs" element={<AnimatedPageLayout><Blogs /></AnimatedPageLayout>} />
+      <Route path="/blogs/:id" element={<AnimatedPageLayout><BlogDetail /></AnimatedPageLayout>} />
 
       {/* ═══ Player Routes ═══ */}
       <Route path="/player/player_dashboard" element={<AnimatedPageLayout><PlayerDashboard /></AnimatedPageLayout>} />
@@ -143,6 +146,7 @@ export default function AppRoutes() {
       <Route path="/coordinator/event_calendar" element={<AnimatedPageLayout><EventCalendar /></AnimatedPageLayout>} />
       <Route path="/coordinator/global_calendar" element={<AnimatedPageLayout><EventCalendar /></AnimatedPageLayout>} />
       <Route path="/coordinator/blogs" element={<AnimatedPageLayout><CoordinatorBlogs /></AnimatedPageLayout>} />
+      <Route path="/coordinator/blogs/:id" element={<AnimatedPageLayout><CoordinatorBlogDetail /></AnimatedPageLayout>} />
       <Route path="/coordinator/streaming_control" element={<AnimatedPageLayout><CoordinatorStreamingControl /></AnimatedPageLayout>} />
       <Route path="/coordinator/chess_events" element={<AnimatedPageLayout><CoordinatorChessEvents /></AnimatedPageLayout>} />
 
