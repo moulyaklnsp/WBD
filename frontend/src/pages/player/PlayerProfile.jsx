@@ -9,13 +9,6 @@ function PlayerProfile() {
 
   const [message, setMessage] = useState(null); // { type: 'success' | 'error', text: string }
   const [player, setPlayer] = useState({});
-  const [showPayment, setShowPayment] = useState(false);
-  const MAX_WALLET_BALANCE = 100000;
-
-  // Transactions
-  const [transactions, setTransactions] = useState([]);
-  const [loadingTransactions, setLoadingTransactions] = useState(false);
-  const [expandTransactions, setExpandTransactions] = useState(false);
 
   // Profile editing (photo + fields)
   const [editing, setEditing] = useState(false);
@@ -203,22 +196,6 @@ function PlayerProfile() {
     }
   };
 
-  const loadWalletTransactions = async () => {
-    setLoadingTransactions(true);
-    try {
-      const res = await fetchWithAuth('/player/api/wallet-transactions');
-      if (!res) return;
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setTransactions(data.transactions || []);
-      }
-    } catch (err) {
-      console.error('Error loading wallet transactions:', err);
-    } finally {
-      setLoadingTransactions(false);
-    }
-  };
-
   const formatDateTime = (value) => {
     if (!value) return 'N/A';
     const d = new Date(value);
@@ -250,7 +227,6 @@ function PlayerProfile() {
 
   useEffect(() => {
     loadProfile();
-    loadWalletTransactions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -325,103 +301,6 @@ function PlayerProfile() {
                   <div className={`mini-msg ${photoStatus.type === 'success' ? 'ok' : 'err'}`}>{photoStatus.text}</div>
                 )}
               </div>
-            )}
-
-            {/* Wallet Section (Hidden when editing to prevent accidental changes) */}
-            {!editing && (
-              <section className="profile-info" style={{ marginBottom: '2rem' }}>
-                <div className="info-section" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-                  <div style={{ flex: 1, minWidth: '250px' }}>
-                    <h3 style={{ margin: 0, fontFamily: 'Cinzel, serif', color: 'var(--sea-green)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <i className="fas fa-wallet" /> My Wallet
-                    </h3>
-                    <div style={{ fontSize: '1.8rem', fontWeight: 'bold', marginTop: '0.5rem', marginLeft: '2rem' }}>
-                      ₹{player.walletBalance ? player.walletBalance.toLocaleString('en-IN') : 0}
-                    </div>
-                  </div>
-                  <button 
-                    className="btn" 
-                    onClick={() => setShowPayment(true)}
-                    disabled={(player.walletBalance || 0) >= MAX_WALLET_BALANCE}
-                  >
-                    <i className="fas fa-credit-card" style={{ marginRight: '0.5rem' }} />
-                    {(player.walletBalance || 0) >= MAX_WALLET_BALANCE ? 'Limit Reached' : 'Add Card / QR Funds'}
-                  </button>
-                </div>
-
-                {/* Transaction History */}
-                <div style={{ marginTop: '1.5rem', borderTop: '1px solid var(--card-border)', paddingTop: '1.5rem' }}>
-                  <button
-                    onClick={() => setExpandTransactions(!expandTransactions)}
-                    style={{
-                      background: 'transparent',
-                      border: 'none',
-                      color: 'var(--sea-green)',
-                      cursor: 'pointer',
-                      fontFamily: 'Cinzel, serif',
-                      fontSize: '1rem',
-                      fontWeight: 'bold',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.5rem',
-                      padding: 0,
-                      marginBottom: '1rem'
-                    }}
-                  >
-                    <i className={`fas fa-chevron-${expandTransactions ? 'down' : 'right'}`} />
-                    Transaction History
-                  </button>
-
-                  {expandTransactions && (
-                    <div style={{
-                      maxHeight: '400px',
-                      overflowY: 'auto',
-                      border: '1px solid var(--card-border)',
-                      borderRadius: '8px',
-                      backgroundColor: 'var(--content-bg)'
-                    }}>
-                      {loadingTransactions ? (
-                        <div style={{ padding: '1rem', textAlign: 'center' }}>Loading transactions...</div>
-                      ) : transactions.length === 0 ? (
-                        <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)' }}>No transactions yet</div>
-                      ) : (
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
-                          <thead style={{ position: 'sticky', top: 0, backgroundColor: 'rgba(var(--sea-green-rgb), 0.1)', borderBottom: '2px solid var(--card-border)' }}>
-                            <tr>
-                              <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: 'bold', color: 'var(--sea-green)' }}>Date</th>
-                              <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: 'bold', color: 'var(--sea-green)' }}>Description</th>
-                              <th style={{ padding: '0.75rem', textAlign: 'right', fontWeight: 'bold', color: 'var(--sea-green)' }}>Amount</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {transactions.map((tx, idx) => (
-                              <tr key={idx} style={{ borderBottom: '1px solid var(--card-border)', backgroundColor: idx % 2 === 0 ? 'transparent' : 'rgba(var(--sea-green-rgb), 0.02)' }}>
-                                <td style={{ padding: '0.75rem', whiteSpace: 'nowrap', fontSize: '0.85rem' }}>{formatDateTime(tx.date)}</td>
-                                <td style={{ padding: '0.75rem' }}>{tx.description || 'N/A'}</td>
-                                <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: 'bold', color: tx.type === 'credit' ? 'var(--sea-green)' : '#d32f2f' }}>
-                                  {tx.type === 'credit' ? '+' : '-'}₹{(tx.amount || 0).toLocaleString('en-IN')}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </section>
-            )}
-
-            {showPayment && (
-              <PaymentGatewayModal
-                walletBalance={player.walletBalance || 0}
-                onClose={() => setShowPayment(false)}
-                onSuccess={(newBal) => {
-                  setPlayer(prev => ({ ...prev, walletBalance: newBal }));
-                  setMessage({ type: 'success', text: `Wallet funded successfully! Your new balance is ₹${newBal.toLocaleString('en-IN')}.` });
-                  loadWalletTransactions();
-                }}
-              />
             )}
 
             <section className="profile-info">

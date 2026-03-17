@@ -34,6 +34,7 @@ import PlayerStore from '../pages/player/PlayerStore';
 import PlayerSubscription from '../pages/player/PlayerSubscription';
 import PlayerWatch from '../pages/player/PlayerWatch';
 import PlayerTv from '../pages/player/PlayerTv';
+import PlayerWallet from '../pages/player/PlayerWallet';
 
 // ─── Coordinator Pages ───────────────────────────────────────────
 import CoordinatorDashboard from '../pages/coordinator/CoordinatorDashboard';
@@ -131,6 +132,7 @@ export default function AppRoutes() {
       <Route path="/player/subscription" element={<AnimatedPageLayout><PlayerSubscription /></AnimatedPageLayout>} />
       <Route path="/player/watch" element={<AnimatedPageLayout><PlayerWatch /></AnimatedPageLayout>} />
       <Route path="/player/tv" element={<AnimatedPageLayout><PlayerTv /></AnimatedPageLayout>} />
+      <Route path="/player/wallet" element={<AnimatedPageLayout><PlayerWallet /></AnimatedPageLayout>} />
 
       {/* ═══ Coordinator Routes ═══ */}
       <Route path="/coordinator/coordinator_dashboard" element={<AnimatedPageLayout><CoordinatorDashboard /></AnimatedPageLayout>} />

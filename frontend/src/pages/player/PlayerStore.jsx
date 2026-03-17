@@ -46,7 +46,6 @@ function PlayerStore() {
   const [playerName, setPlayerName] = useState('');
   const [playerCollege, setPlayerCollege] = useState('');
   const [filter, setFilter] = useState({ search: '', category: '' });
-  const [showPayment, setShowPayment] = useState(false);
 
   // Cart state
   const [cart, setCart] = useState([]);
@@ -634,23 +633,17 @@ function PlayerStore() {
         {errorMsg && <div className="alert alert-error">{errorMsg}</div>}
 
         {/* ─── Wallet Bar ─── */}
-        <div className="wallet-bar">
+        <div className="wallet-bar" style={{ cursor: 'pointer' }} onClick={() => navigate('/player/wallet')}>
           <div>
             <div className="wallet-balance">💰 ₹{walletBalance.toLocaleString('en-IN')}</div>
             {subscription && <div style={{ fontSize: '0.8rem', opacity: 0.8 }}>Plan: {subscription.plan} ({discountPercentage}% off)</div>}
           </div>
-          <div style={{ fontSize: '0.85rem', opacity: 0.7, alignSelf: 'center' }}>
-            Manage funds in your Profile
+          <div style={{ fontSize: '0.85rem', opacity: 0.9, alignSelf: 'center', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            Go to Wallet <i className="fas fa-arrow-right" />
           </div>
         </div>
 
-        {showPayment && (
-          <PaymentGatewayModal
-            walletBalance={walletBalance}
-            onClose={() => setShowPayment(false)}
-            onSuccess={(newBal) => { setWalletBalance(Math.min(newBal, MAX_WALLET_BALANCE)); flash('Funds added successfully!'); }}
-          />
-        )}
+
 
         {/* ═══════════════ STORE VIEW ═══════════════ */}
         {view === 'Store' && (
