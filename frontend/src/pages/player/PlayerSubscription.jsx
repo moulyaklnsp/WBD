@@ -209,13 +209,13 @@ function PlayerSubscription() {
 
         {loading ? <p style={{ textAlign: 'center' }}>Loading...</p> : (
           <>
-            {/* Wallet */}
-            <div className="wallet-bar">
+            {/* Wallet Link */}
+            <div className="wallet-bar" style={{ cursor: 'pointer' }} onClick={() => navigate('/player/wallet')}>
               <div>
                 <div className="wallet-balance">💰 ₹{walletBalance.toLocaleString('en-IN')}</div>
               </div>
-              <div style={{ fontSize: '0.85rem', opacity: 0.7, alignSelf: 'center' }}>
-                Manage funds in your Profile
+              <div style={{ fontSize: '0.85rem', opacity: 0.9, alignSelf: 'center', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                Go to Wallet <i className="fas fa-arrow-right" />
               </div>
             </div>
 

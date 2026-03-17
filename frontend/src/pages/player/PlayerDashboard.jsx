@@ -317,6 +317,7 @@ function PlayerDashboard() {
   const playerLinks = [
     { path: '/player/player_profile', label: 'Profile', icon: 'fas fa-user' },
     { path: '/player/growth', label: 'Growth Tracking', icon: 'fas fa-chart-line' },
+    { path: '/player/wallet', label: 'Wallet', icon: 'fas fa-wallet' },
     { path: '/player/player_tournament', label: 'Tournaments', icon: 'fas fa-trophy' },
     { path: '/player/watch', label: 'Watch', icon: 'fas fa-video' },
     { path: '/player/subscription', label: 'Manage Subscription', icon: 'fas fa-star' },
