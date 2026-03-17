@@ -447,9 +447,12 @@ function PlayerProfile() {
                     <div className="avatar">
                       {(photoPreviewUrl || player.profile_photo_url) ? (
                         <img
-                          src={photoPreviewUrl || player.profile_photo_url}
-                          alt="Profile"
-                          onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                            src={photoPreviewUrl || (player.profile_photo_url ? `${player.profile_photo_url}?cb=${player.updated_date ? new Date(player.updated_date).getTime() : Date.now()}` : '')}
+                            alt="Profile"
+                            crossOrigin="anonymous"
+                            onError={(e) => { 
+                              console.error('Image load error for:', e.target.src);
+                            }}
                         />
                       ) : null}
                     </div>

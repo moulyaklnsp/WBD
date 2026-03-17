@@ -1786,14 +1786,40 @@ const getGrowthAnalytics = async (req, res) => {
     // ── Scan all tournament pairings for this player ──
     const username = user.name;
     const pairingDocs = await db.collection('tournament_pairings').find({}).toArray();
+      const teamPairingDocs = await db.collection('tournament_team_pairings').find({}).toArray();
     const gameHistory = [];
     let realWins = 0, realLosses = 0, realDraws = 0;
     let whiteWins = 0, whiteLosses = 0, whiteDraws = 0;
     let blackWins = 0, blackLosses = 0, blackDraws = 0;
     let currentStreak = 0, winStreak = 0, loseStreak = 0, currentLoseStreak = 0;
+      // Collect all games first, then sort by date
+      const rawGames = [];
 
-    // Collect all games first, then sort by date
-    const rawGames = [];
+      for (const doc of teamPairingDocs || []) {
+        const tournament = await db.collection('tournaments').findOne({ _id: doc.tournament_id });
+        const tournamentName = tournament?.name || 'Team Tournament';
+        const tournamentDate = tournament?.date ? new Date(tournament.date) : new Date();
+
+        for (const round of (doc.rounds || [])) {
+          for (const match of (match.matches || [])) {
+            for (const pairing of (match.boards || [])) {
+              const parsed = parseOutcome(pairing, username);
+              if (!parsed) continue;
+
+              const gameDate = new Date(tournamentDate);
+              gameDate.setHours(gameDate.getHours() + (round.round || 1));
+
+              rawGames.push({
+                date: gameDate,
+                dateStr: gameDate.toISOString().split('T')[0],
+                ...parsed,
+                tournamentName,
+                round: round.round || 1
+              });
+            }
+          }
+        }
+      }
 
     for (const doc of pairingDocs) {
       const tournament = await db.collection('tournaments').findOne({ _id: doc.tournament_id });
@@ -3256,7 +3282,10 @@ module.exports = {
   submitReview,
   getProductReviews,
   getAnnouncements,
+  getNews,
   uploadWallpaper,
   uploadWallpaperMiddleware,
   getWalletTransactions,
 };
+
+
