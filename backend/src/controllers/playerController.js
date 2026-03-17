@@ -1526,7 +1526,7 @@ const buyProduct = async (req, res) => {
 
   try {
     const db = await connectDB();
-    const { price, buyer, college, productId } = req.body;
+    const { price, buyer, college, productId, deliveryAddress } = req.body;
 
     if (!price || !productId) {
       return res.status(400).json({ success: false, message: 'Invalid request' });
@@ -1607,6 +1607,7 @@ const buyProduct = async (req, res) => {
         total: Number(numericPrice),
         status: 'pending',
         delivery_verified: false,
+        delivery_address: deliveryAddress || '',
         createdAt: new Date()
       });
     } catch (e) {
@@ -2515,6 +2516,7 @@ const createOrder = async (req, res) => {
       total,
       status: 'pending',
       delivery_verified: false,
+      delivery_address: req.body?.deliveryAddress || '',
       createdAt: new Date()
     });
 
