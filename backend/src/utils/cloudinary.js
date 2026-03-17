@@ -5,9 +5,9 @@ let isConfigured = false;
 
 function ensureConfigured() {
   if (isConfigured) return;
-  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-  const apiKey = process.env.CLOUDINARY_API_KEY;
-  const apiSecret = process.env.CLOUDINARY_API_SECRET;
+  const cloudName = (process.env.CLOUDINARY_CLOUD_NAME || '').trim();
+  const apiKey = (process.env.CLOUDINARY_API_KEY || '').trim();
+  const apiSecret = (process.env.CLOUDINARY_API_SECRET || '').trim();
 
   if (!cloudName || !apiKey || !apiSecret) {
     throw new Error('Cloudinary env vars missing: CLOUDINARY_CLOUD_NAME/CLOUDINARY_API_KEY/CLOUDINARY_API_SECRET');
@@ -24,19 +24,36 @@ function ensureConfigured() {
 
 function uploadImageBuffer(buffer, options = {}) {
   ensureConfigured();
+  
+  if (!buffer || !Buffer.isBuffer(buffer)) {
+    return Promise.reject(new Error('Invalid buffer provided to uploadImageBuffer'));
+  }
+  
   return new Promise((resolve, reject) => {
-    const uploadStream = cloudinary.uploader.upload_stream(
-      {
-        resource_type: 'image',
-        ...options
-      },
-      (err, result) => {
-        if (err) return reject(err);
-        return resolve(result);
-      }
-    );
+    try {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          resource_type: 'image',
+          quality: 'auto',
+          ...options
+        },
+        (err, result) => {
+          if (err) {
+            console.error('Cloudinary upload_stream error:', err);
+            return reject(err);
+          }
+          if (!result) {
+            return reject(new Error('Cloudinary returned no result'));
+          }
+          return resolve(result);
+        }
+      );
 
-    streamifier.createReadStream(buffer).pipe(uploadStream);
+      streamifier.createReadStream(buffer).pipe(uploadStream);
+    } catch (streamErr) {
+      console.error('Error creating upload stream:', streamErr);
+      reject(streamErr);
+    }
   });
 }
 
@@ -46,6 +63,7 @@ async function destroyImage(publicId) {
   try {
     return await cloudinary.uploader.destroy(publicId, { resource_type: 'image' });
   } catch (e) {
+    console.warn('Warning: Failed to delete Cloudinary image:', publicId, e.message);
     return null;
   }
 }

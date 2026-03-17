@@ -10,9 +10,9 @@ async function connectDB() {
   const client = new MongoClient(uri);
   try {
     await client.connect();
-    console.log('MongoDB URI:', uri.replace(/:[^:@]+@/, ':****@'));
+    // console.log('MongoDB URI:', uri.replace(/:[^:@]+@/, ':****@'));
     db = client.db(dbName);
-    console.log('Connected to MongoDB');
+    // console.log('Connected to MongoDB');
 
     await initializeCollections(db);
     return db;
@@ -589,7 +589,7 @@ async function initializeCollections(db) {
     }
   });
 
-  console.log('All collections initialized with schemas');
+  // console.log('All collections initialized with schemas');
 }
 
 module.exports = { connectDB };

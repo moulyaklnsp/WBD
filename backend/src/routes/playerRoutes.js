@@ -225,6 +225,20 @@ router.get('/api/compare', playerController.comparePlayer);
  *         description: Funds added
  */
 router.post('/api/add-funds', playerController.addFunds);
+
+/**
+ * @swagger
+ * /player/api/wallet-transactions:
+ *   get:
+ *     summary: Get wallet transaction history
+ *     tags: [Player]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Wallet transactions list sorted by date (newest first)
+ */
+router.get('/api/wallet-transactions', playerController.getWalletTransactions);
 // Razorpay endpoints (create order, verify payment)
 router.post('/api/razorpay/create-order', paymentController.createRazorpayOrder);
 router.post('/api/razorpay/verify', paymentController.verifyRazorpayPayment);

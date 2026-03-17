@@ -13,14 +13,17 @@ function platformIcon(platform) {
   return 'fas fa-broadcast-tower';
 }
 
-function getEmbedUrl(url) {
+function getEmbedUrl(url, isHovered) {
   if (!url) return null;
+  const auto = isHovered ? '1' : '0';
+  const autoTwitch = isHovered ? 'true' : 'false';
+  
   const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/);
-  if (ytMatch) return { type: 'youtube', src: `https://www.youtube.com/embed/${ytMatch[1]}?autoplay=1` };
+  if (ytMatch) return { type: 'youtube', src: `https://www.youtube.com/embed/${ytMatch[1]}?autoplay=${auto}&mute=${auto}` };
   const ytLive = url.match(/youtube\.com\/live\/([a-zA-Z0-9_-]+)/);
-  if (ytLive) return { type: 'youtube', src: `https://www.youtube.com/embed/${ytLive[1]}?autoplay=1` };
+  if (ytLive) return { type: 'youtube', src: `https://www.youtube.com/embed/${ytLive[1]}?autoplay=${auto}&mute=${auto}` };
   const twitchMatch = url.match(/twitch\.tv\/([a-zA-Z0-9_]+)/);
-  if (twitchMatch) return { type: 'twitch', src: `https://player.twitch.tv/?channel=${twitchMatch[1]}&parent=${window.location.hostname}` };
+  if (twitchMatch) return { type: 'twitch', src: `https://player.twitch.tv/?channel=${twitchMatch[1]}&parent=${window.location.hostname}&autoplay=${autoTwitch}&muted=${autoTwitch}` };
   return null;
 }
 
@@ -38,6 +41,7 @@ export default function PlayerWatch() {
   const [loading, setLoading] = useState(true);
   const [streamFilter, setStreamFilter] = useState('all');
   const [activeEmbed, setActiveEmbed] = useState(null);
+  const [hoveredStreamId, setHoveredStreamId] = useState(null);
 
   const loadStreams = useCallback(async () => {
     setLoading(true);
@@ -128,9 +132,15 @@ export default function PlayerWatch() {
           ) : liveStreams.length > 0 ? (
             <div className="mini-grid">
               {liveStreams.map((stream) => {
-                const embed = getEmbedUrl(stream.url);
+                const isHovered = hoveredStreamId === stream._id;
+                const embed = getEmbedUrl(stream.url, isHovered);
                 return (
-                  <div key={stream._id} className="card feature-card stream-card">
+                  <div 
+                    key={stream._id} 
+                    className="card feature-card stream-card"
+                    onMouseEnter={() => setHoveredStreamId(stream._id)}
+                    onMouseLeave={() => setHoveredStreamId(null)}
+                  >
                     <div className="tv-card">
                       <div className="tv-left">
                         <div className="tv-logo" style={{ background: 'rgba(255,68,68,0.1)' }}>
