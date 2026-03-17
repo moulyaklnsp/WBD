@@ -27,7 +27,11 @@ const morgan         = require('morgan');
 const rfs            = require('rotating-file-stream');
 const swaggerUi      = require('swagger-ui-express');
 
+// Suppress dotenv tip messages
+const originalLog = console.log;
+console.log = () => {};
 require('dotenv').config({ path: path.resolve(__dirname, '..', '.env') });
+console.log = originalLog;
 
 // ─── Internal modules ─────────────────────────────────────────────────────────
 const { connectDB }          = require('./config/database');

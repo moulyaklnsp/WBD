@@ -11,6 +11,21 @@ try { multer = require('multer'); } catch (e) { multer = null; }
 
 const BCRYPT_ROUNDS = 12;
 const isBcryptHash = (value) => typeof value === 'string' && /^\$2[aby]\$/.test(value);
+
+// Create multer instance once (reusable)
+let photoUploader;
+if (multer) {
+  photoUploader = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 2 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+      const ok = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes((file.mimetype || '').toLowerCase());
+      if (!ok) return cb(new Error('Only image files (jpg, png, webp, gif) are allowed.'));
+      cb(null, true);
+    }
+  }).single('photo');
+}
+
 const verifyPasswordAndMaybeMigrate = async (db, user, plainPassword) => {
   const stored = user?.password;
   if (!stored || typeof stored !== 'string') return false;
@@ -202,6 +217,23 @@ const getTournaments = async (req, res) => {
 };
 
 // 3. POST /api/join-individual
+// ── Wallet Transaction Helper ──
+const insertWalletTransaction = async (db, userId, userEmail, type, amount, description) => {
+  try {
+    await db.collection('wallet_transactions').insertOne({
+      user_id: new ObjectId(userId),
+      user_email: userEmail,
+      type, // 'credit' or 'debit'
+      amount: parseFloat(amount),
+      description,
+      date: new Date()
+    });
+  } catch (err) {
+    console.error('Error logging wallet transaction:', err);
+    // Don't fail the main operation if transaction logging fails
+  }
+};
+
 const joinIndividual = async (req, res) => {
   if (!req.session.username || !req.session.userEmail) {
     return res.status(401).json({ error: 'Please log in' });
@@ -245,6 +277,10 @@ const joinIndividual = async (req, res) => {
       { $inc: { wallet_balance: -fee } },
       { upsert: true }
     );
+
+    if (fee > 0) {
+      await insertWalletTransaction(db, user._id, req.session.userEmail, 'debit', fee, `Tournament Entry: ${tournament.name}`);
+    }
 
     await db.collection('tournament_players').insertOne({
       tournament_id: new ObjectId(tournamentId),
@@ -360,6 +396,8 @@ const joinTeam = async (req, res) => {
         { $inc: { wallet_balance: -entryFee } },
         { upsert: true }
       );
+      const userEmail = req.session.userEmail || username + '@tournament.local';
+      await insertWalletTransaction(db, user._id, userEmail, 'debit', entryFee, `Team Tournament Entry: ${tournament.name}`);
     }
 
     // Enroll team - captain is auto-approved
@@ -667,57 +705,66 @@ const uploadPhoto = async (req, res) => {
     const existingPublicId = (user.profile_photo_public_id || '').toString();
     const desiredPublicId = existingPublicId || `chesshive/profile-photos/player_${user._id}`;
 
-    const result = await uploadImageBuffer(req.file.buffer, {
-      folder: 'chesshive/profile-photos',
-      public_id: desiredPublicId.split('/').pop(),
-      overwrite: true,
-      invalidate: true
-    });
+    let result;
+    try {
+      result = await uploadImageBuffer(req.file.buffer, {
+        folder: 'chesshive/profile-photos',
+        public_id: desiredPublicId.split('/').pop(),
+        overwrite: true,
+        invalidate: true
+      });
+    } catch (uploadErr) {
+      console.error('Cloudinary upload error:', uploadErr);
+      return res.status(500).json({ error: 'Failed to upload to cloud storage: ' + (uploadErr.message || 'Unknown error') });
+    }
 
     const newUrl = result?.secure_url;
     const newPublicId = result?.public_id;
     if (!newUrl || !newPublicId) {
-      return res.status(500).json({ error: 'Failed to upload profile photo' });
+      console.error('Cloudinary upload returned incomplete data:', { result, newUrl, newPublicId });
+      return res.status(500).json({ error: 'Cloudinary upload returned incomplete data' });
     }
 
     // Best-effort cleanup of previous Cloudinary asset (if public_id changed)
     if (existingPublicId && existingPublicId !== newPublicId) {
-      await destroyImage(existingPublicId);
+      try {
+        await destroyImage(existingPublicId);
+      } catch (delErr) {
+        console.warn('Failed to delete old profile photo:', delErr);
+      }
     }
 
-    await db.collection('users').updateOne(
-      { _id: user._id },
-      { $set: { profile_photo_url: newUrl, profile_photo_public_id: newPublicId, updated_date: new Date() } }
-    );
+    try {
+      await db.collection('users').updateOne(
+        { _id: user._id },
+        { $set: { profile_photo_url: newUrl, profile_photo_public_id: newPublicId, updated_date: new Date() } }
+      );
+    } catch (dbErr) {
+      console.error('Database update error:', dbErr);
+      return res.status(500).json({ error: 'Failed to save photo information: ' + (dbErr.message || 'Unknown error') });
+    }
 
     return res.json({ success: true, profile_photo_url: newUrl });
   } catch (err) {
     console.error('Error updating profile photo:', err);
-    return res.status(500).json({ error: 'Failed to update profile photo' });
+    return res.status(500).json({ error: 'Failed to update profile photo: ' + (err.message || 'Unknown error') });
   }
 };
 
 // Multer middleware for photo upload
 const uploadPhotoMiddleware = (req, res, next) => {
-  if (!multer) {
+  if (!multer || !photoUploader) {
     return res.status(500).json({ error: 'Upload support is not available (multer not installed).' });
   }
   if (!req.session.userEmail) {
     return res.status(401).json({ error: 'Please log in' });
   }
 
-  const uploader = multer({
-    storage: multer.memoryStorage(),
-    limits: { fileSize: 2 * 1024 * 1024 },
-    fileFilter: (r, file, cb) => {
-      const ok = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes((file.mimetype || '').toLowerCase());
-      if (!ok) return cb(new Error('Only image files (jpg, png, webp, gif) are allowed.'));
-      cb(null, true);
+  photoUploader(req, res, (err) => {
+    if (err) {
+      console.error('Multer error:', err);
+      return res.status(400).json({ error: 'File upload error: ' + (err.message || 'Unknown error') });
     }
-  }).single('photo');
-
-  uploader(req, res, (err) => {
-    if (err) return res.status(400).json({ error: err.message || 'Upload failed' });
     return next();
   });
 };
@@ -1021,6 +1068,9 @@ const addFunds = async (req, res) => {
   if (result.matchedCount === 0 && result.upsertedCount === 0) {
     return res.status(500).json({ error: 'Failed to update balance' });
   }
+
+  // Log wallet transaction
+  await insertWalletTransaction(db, user._id, req.session.userEmail, 'credit', numericAmount, 'Add Funds to Wallet');
 
   res.json({ success: true, walletBalance: cappedBalance, message: 'Funds added successfully' });
 };
@@ -1514,6 +1564,10 @@ const buyProduct = async (req, res) => {
       { $inc: { wallet_balance: -numericPrice } },
       { upsert: true }
     );
+
+    const productName = product?.name || 'Unknown Product';
+    await insertWalletTransaction(db, user._id, req.session.userEmail, 'debit', numericPrice, `Store Purchase: ${productName}`);
+
     console.log('Updating product availability');
     await db.collection('products').updateOne(
       { _id: new ObjectId(productId) },
@@ -1607,6 +1661,7 @@ const subscribePlan = async (req, res) => {
       { user_id: user._id },
       { $inc: { wallet_balance: -numericPrice } }
     );
+    await insertWalletTransaction(db, user._id, req.session.userEmail, 'debit', numericPrice, `Subscription to ${plan} Plan`);
 
     // Set subscription duration (1 month)
     const startDate = new Date();
@@ -2383,6 +2438,7 @@ const createOrder = async (req, res) => {
 
     // Deduct wallet
     await db.collection('user_balances').updateOne({ user_id: user._id }, { $inc: { wallet_balance: -total } });
+    await insertWalletTransaction(db, user._id, req.session.userEmail, 'debit', total, `Store Purchase: Cart Order`);
 
     // Reduce product availability
     for (const item of cart.items) {
@@ -3126,6 +3182,31 @@ const getNews = async (req, res) => {
   }
 };
 
+// 23. GET /api/wallet-transactions
+const getWalletTransactions = async (req, res) => {
+  if (!req.session.userEmail) {
+    return res.status(401).json({ error: 'Please log in' });
+  }
+
+  try {
+    const db = await connectDB();
+    const user = await db.collection('users').findOne({ email: req.session.userEmail, role: 'player', isDeleted: 0 });
+    if (!user) {
+      return res.status(404).json({ error: 'Player not found' });
+    }
+
+    const transactions = await db.collection('wallet_transactions')
+      .find({ user_id: user._id })
+      .sort({ date: -1 })
+      .toArray();
+
+    res.json({ success: true, transactions });
+  } catch (err) {
+    console.error('Error fetching wallet transactions:', err);
+    res.status(500).json({ error: 'Failed to fetch transactions' });
+  }
+};
+
 module.exports = {
   getDashboard,
   getTournaments,
@@ -3177,5 +3258,5 @@ module.exports = {
   getAnnouncements,
   uploadWallpaper,
   uploadWallpaperMiddleware,
-  getNews
+  getWalletTransactions,
 };
