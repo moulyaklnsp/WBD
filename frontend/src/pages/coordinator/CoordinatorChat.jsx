@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import usePlayerTheme from '../../hooks/usePlayerTheme';
 import { createSocket } from '../../utils/socket';
 import EmojiPicker from 'emoji-picker-react';
+import ChatChoiceEmblem from '../../components/ChatChoiceEmblem';
 
 // Coordinator version of PlayerChat with coordinator-specific functionality
 // Replicates PlayerChat design and modes with coordinator features
@@ -334,75 +334,6 @@ function CoordinatorChat() {
     searchResultHover: { transform: 'translateY(-2px)', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' },
   };
 
-  // Coordinator-specific emblems (different from player emblems)
-  const CoordinatorGlobeEmblem = () => (
-    <svg viewBox="0 0 100 100" width="128" height="128" aria-hidden="true" focusable="false">
-      {/* Coordinator network ring */}
-      <circle cx="50" cy="50" r="40" fill="none" stroke="var(--sky-blue)" strokeWidth="2" opacity="0.55" />
-
-      {/* Management connections */}
-      <path d="M50 10 L90 50 L50 90 L10 50 Z" fill="none" stroke="var(--sky-blue)" strokeWidth="1.6" opacity="0.35" strokeLinejoin="round" />
-
-      {/* Coordinator nodes */}
-      <circle cx="50" cy="10" r="3" fill="var(--sky-blue)" opacity="0.95" />
-      <circle cx="90" cy="50" r="3" fill="var(--sky-blue)" opacity="0.95" />
-      <circle cx="50" cy="90" r="3" fill="var(--sky-blue)" opacity="0.95" />
-      <circle cx="10" cy="50" r="3" fill="var(--sky-blue)" opacity="0.95" />
-
-      {/* Central coordination hub */}
-      <circle cx="50" cy="50" r="28" fill="none" stroke="var(--sea-green)" strokeWidth="4" opacity="0.95" />
-
-      {/* Coordination lines */}
-      <path d="M50 22 C44 30 44 70 50 78" fill="none" stroke="var(--sea-green)" strokeWidth="2" opacity="0.65" strokeLinecap="round" />
-      <path d="M50 22 C56 30 56 70 50 78" fill="none" stroke="var(--sea-green)" strokeWidth="2" opacity="0.65" strokeLinecap="round" />
-
-      {/* Management levels */}
-      <path d="M27 42 C38 48 62 48 73 42" fill="none" stroke="var(--sea-green)" strokeWidth="2" opacity="0.6" strokeLinecap="round" />
-      <path d="M25 50 C36 56 64 56 75 50" fill="none" stroke="var(--sea-green)" strokeWidth="2" opacity="0.7" strokeLinecap="round" />
-      <path d="M27 58 C38 52 62 52 73 58" fill="none" stroke="var(--sea-green)" strokeWidth="2" opacity="0.6" strokeLinecap="round" />
-
-      {/* Coordinator badge */}
-      <circle cx="50" cy="50" r="22" fill="none" stroke="var(--sea-green)" strokeWidth="1.5" opacity="0.25" />
-      <text x="50" y="55" textAnchor="middle" fontSize="12" fill="var(--sea-green)" opacity="0.8">C</text>
-    </svg>
-  );
-
-  const CoordinatorTeamEmblem = () => (
-    <svg viewBox="0 0 100 100" width="128" height="128" aria-hidden="true" focusable="false">
-      {/* Team members */}
-      <circle cx="35" cy="40" r="9" fill="none" stroke="var(--sea-green)" strokeWidth="3" />
-      <path d="M20 67 C24 56 46 56 50 67" fill="none" stroke="var(--sea-green)" strokeWidth="3" strokeLinecap="round" />
-
-      <circle cx="65" cy="40" r="9" fill="none" stroke="var(--sea-green)" strokeWidth="3" opacity="0.9" />
-      <path d="M50 67 C54 56 76 56 80 67" fill="none" stroke="var(--sea-green)" strokeWidth="3" strokeLinecap="round" opacity="0.9" />
-
-      {/* Coordinator connection */}
-      <path d="M44 48 C50 52 50 52 56 48" fill="none" stroke="var(--sky-blue)" strokeWidth="2.5" strokeLinecap="round" opacity="0.9" />
-
-      {/* Management circle */}
-      <circle cx="50" cy="50" r="40" fill="none" stroke="var(--sky-blue)" strokeWidth="2" opacity="0.65" />
-      <circle cx="50" cy="10" r="3" fill="var(--sky-blue)" />
-      <circle cx="90" cy="50" r="3" fill="var(--sky-blue)" />
-      <circle cx="50" cy="90" r="3" fill="var(--sky-blue)" />
-      <circle cx="10" cy="50" r="3" fill="var(--sky-blue)" />
-
-      {/* Coordinator crown */}
-      <path d="M45 35 L50 30 L55 35 L50 40 Z" fill="var(--sea-green)" opacity="0.7" />
-    </svg>
-  );
-
-  const ChoiceEmblem = ({ kind }) => (
-    <span style={styles.choiceEmblemShell} aria-hidden="true">
-      <motion.span
-        animate={{ rotateY: 360 }}
-        transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
-        style={{ display: 'inline-flex', perspective: '1000px', filter: 'drop-shadow(0 0 18px rgba(0,0,0,0.15))' }}
-      >
-        {kind === 'global' ? <CoordinatorGlobeEmblem /> : <CoordinatorTeamEmblem />}
-      </motion.span>
-    </span>
-  );
-
   return (
     <div style={styles.root}>
       {!joined ? (
@@ -441,7 +372,7 @@ function CoordinatorChat() {
                 style={styles.choiceButton}
                 onClick={() => { setReceiver('All'); setChatMode('global'); }}
               >
-                <ChoiceEmblem kind="global" />
+                <ChatChoiceEmblem kind="global" shellStyle={styles.choiceEmblemShell} />
                 <div style={styles.choiceLabel}>Global Coordination</div>
               </button>
               <button
@@ -449,7 +380,7 @@ function CoordinatorChat() {
                 style={styles.choiceButton}
                 onClick={() => setChatMode('private_search')}
               >
-                <ChoiceEmblem kind="private" />
+                <ChatChoiceEmblem kind="private" shellStyle={styles.choiceEmblemShell} />
                 <div style={styles.choiceLabel}>One-on-one Communication</div>
               </button>
             </div>
