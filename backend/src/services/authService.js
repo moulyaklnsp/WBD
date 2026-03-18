@@ -3,8 +3,9 @@
  * Controllers call these methods; they delegate DB work to models.
  */
 const bcrypt = require('bcryptjs');
-const UserModel = require('../models/UserModel');
-const TokenModel = require('../models/TokenModel');
+const { getModel } = require('../models');
+const UserModel = getModel('users');
+const TokenModel = getModel('refresh_tokens');
 const { generateTokenPair, verifyRefreshToken, verifyAccessToken, extractTokenFromHeader } = require('../utils/jwt');
 
 const AuthService = {

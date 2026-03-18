@@ -1,0 +1,413 @@
+const { connectDB } = require('../../config/database');
+const { ObjectId } = require('mongodb');
+const Player = require('../../models/Player');
+const Team = require('../../models/Team');
+const { swissPairing, swissTeamPairing } = require('../../utils/swissPairing');
+const { getModel } = require('../../models');
+const TournamentPlayersModel = getModel('tournament_players');
+const TournamentPairingsModel = getModel('tournament_pairings');
+const UserModel = getModel('users');
+const PlayerStatsModel = getModel('player_stats');
+const TournamentModel = getModel('tournaments');
+const TeamEnrollmentsModel = getModel('enrolledtournaments_team');
+const TournamentTeamPairingsModel = getModel('tournament_team_pairings');
+
+const createError = (message, statusCode) => Object.assign(new Error(message), { statusCode });
+const resolveDb = async (db) => (db ? db : connectDB());
+
+const PairingsService = {
+  async getPairings(db, { tournamentId, totalRounds }) {
+    if (!tournamentId) throw createError('Tournament ID is required', 400);
+
+    const database = await resolveDb(db);
+    const rows = await TournamentPlayersModel.findMany(database, { tournament_id: new ObjectId(tournamentId) });
+    if (rows.length === 0) {
+      return { roundNumber: 1, allRounds: [], message: 'No players enrolled' };
+    }
+
+    let storedPairings = await TournamentPairingsModel.findOne(database, { tournament_id: new ObjectId(tournamentId) });
+    let allRounds;
+
+    if (!storedPairings || storedPairings.totalRounds !== totalRounds || rows.length !== (storedPairings.rounds[0]?.pairings?.length * 2 || 0) + (storedPairings.rounds[0]?.byePlayer ? 1 : 0)) {
+      const players = rows.map(row => new Player(row._id, row.username, row.college, row.gender));
+      allRounds = swissPairing(players, totalRounds);
+
+      await TournamentPairingsModel.deleteOne(database, { tournament_id: new ObjectId(tournamentId) });
+      await TournamentPairingsModel.insertOne(database, {
+        tournament_id: new ObjectId(tournamentId),
+        totalRounds: totalRounds,
+        rounds: allRounds.map(round => ({
+          round: round.round,
+          pairings: round.pairings.map(pairing => ({
+            player1: { id: pairing.player1.id, username: pairing.player1.username, score: pairing.player1.score },
+            player2: { id: pairing.player2.id, username: pairing.player2.username, score: pairing.player2.score },
+            result: pairing.result,
+            resultCode: pairing.resultCode || null
+          })),
+          byePlayer: round.byePlayer ? {
+            id: round.byePlayer.id,
+            username: round.byePlayer.username,
+            score: round.byePlayer.score
+          } : null
+        }))
+      });
+
+      const playerStatsMap = {};
+      for (const round of allRounds) {
+        for (const pairing of round.pairings) {
+          const p1 = pairing.player1.username;
+          const p2 = pairing.player2.username;
+          const code = pairing.resultCode || '';
+          if (!playerStatsMap[p1]) playerStatsMap[p1] = { wins: 0, losses: 0, draws: 0 };
+          if (!playerStatsMap[p2]) playerStatsMap[p2] = { wins: 0, losses: 0, draws: 0 };
+
+          if (code === '1-0') {
+            playerStatsMap[p1].wins++;
+            playerStatsMap[p2].losses++;
+          } else if (code === '0-1') {
+            playerStatsMap[p2].wins++;
+            playerStatsMap[p1].losses++;
+          } else if (code === '0.5-0.5') {
+            playerStatsMap[p1].draws++;
+            playerStatsMap[p2].draws++;
+          }
+        }
+      }
+
+      for (const [username, delta] of Object.entries(playerStatsMap)) {
+        const playerUser = await UserModel.findOne(database, { name: username, role: 'player' });
+        if (!playerUser) continue;
+        await PlayerStatsModel.updateOne(
+          database,
+          { player_id: playerUser._id },
+          {
+            $inc: { wins: delta.wins, losses: delta.losses, draws: delta.draws, gamesPlayed: delta.wins + delta.losses + delta.draws },
+            $setOnInsert: { rating: 500, winRate: 0 }
+          },
+          { upsert: true }
+        );
+        const updatedStats = await PlayerStatsModel.findOne(database, { player_id: playerUser._id });
+        if (updatedStats && updatedStats.gamesPlayed > 0) {
+          const newWinRate = Math.round((updatedStats.wins / updatedStats.gamesPlayed) * 100);
+          await PlayerStatsModel.updateOne(
+            database,
+            { player_id: playerUser._id },
+            { $set: { winRate: newWinRate } }
+          );
+        }
+      }
+    } else {
+      allRounds = storedPairings.rounds.map(round => {
+        const pairings = round.pairings.map(pairing => {
+          const player1 = new Player(pairing.player1.id, pairing.player1.username);
+          player1.score = pairing.player1.score;
+          const player2 = new Player(pairing.player2.id, pairing.player2.username);
+          player2.score = pairing.player2.score;
+          return { player1, player2, result: pairing.result };
+        });
+        const byePlayer = round.byePlayer ? new Player(round.byePlayer.id, round.byePlayer.username) : null;
+        if (byePlayer) byePlayer.score = round.byePlayer.score;
+        return { round: round.round, pairings, byePlayer };
+      });
+    }
+
+    return { roundNumber: totalRounds, allRounds };
+  },
+
+  async getRankings(db, { tournamentId }) {
+    if (!tournamentId) throw createError('Tournament ID is required', 400);
+    const database = await resolveDb(db);
+    const tid = new ObjectId(tournamentId);
+    const rows = await TournamentPlayersModel.findMany(database, { tournament_id: tid });
+    if (rows.length === 0) {
+      return { rankings: [], tournamentId };
+    }
+
+    let storedPairings = await TournamentPairingsModel.findOne(database, { tournament_id: tid });
+    let rankings = [];
+
+    if (!storedPairings) {
+      const totalRounds = 5;
+      const players = rows.map(row => new Player(row._id, row.username, row.college, row.gender));
+      const allRounds = swissPairing(players, totalRounds);
+      await TournamentPairingsModel.insertOne(database, {
+        tournament_id: tid,
+        totalRounds: totalRounds,
+        rounds: allRounds.map(round => ({
+          round: round.round,
+          pairings: round.pairings.map(pairing => ({
+            player1: {
+              id: pairing.player1.id,
+              username: pairing.player1.username,
+              score: pairing.player1.score
+            },
+            player2: {
+              id: pairing.player2.id,
+              username: pairing.player2.username,
+              score: pairing.player2.score
+            },
+            result: pairing.result
+          })),
+          byePlayer: round.byePlayer ? {
+            id: round.byePlayer.id,
+            username: round.byePlayer.username,
+            score: round.byePlayer.score
+          } : null
+        }))
+      });
+      rankings = players.sort((a, b) => b.score - a.score).map((p, index) => ({
+        rank: index + 1,
+        playerName: p.username,
+        score: p.score
+      }));
+    } else {
+      const playersMap = new Map();
+      rows.forEach(row => {
+        playersMap.set(row._id.toString(), {
+          id: row._id.toString(),
+          username: row.username,
+          score: 0
+        });
+      });
+      storedPairings.rounds.forEach(round => {
+        round.pairings.forEach(pairing => {
+          const player1 = playersMap.get(pairing.player1.id.toString());
+          const player2 = playersMap.get(pairing.player2.id.toString());
+          if (player1) player1.score = pairing.player1.score;
+          if (player2) player2.score = pairing.player2.score;
+        });
+        if (round.byePlayer) {
+          const byePlayer = playersMap.get(round.byePlayer.id.toString());
+          if (byePlayer) byePlayer.score = round.byePlayer.score;
+        }
+      });
+      rankings = Array.from(playersMap.values())
+        .sort((a, b) => b.score - a.score)
+        .map((p, index) => ({
+          rank: index + 1,
+          playerName: p.username,
+          score: p.score
+        }));
+    }
+
+    return { rankings, tournamentId };
+  },
+
+  async getTeamPairings(db, { tournamentId, totalRounds }) {
+    if (!tournamentId) throw createError('Tournament ID is required', 400);
+    const database = await resolveDb(db);
+    const tid = new ObjectId(tournamentId);
+
+    const tournament = await TournamentModel.findOne(database, { _id: tid });
+    if (!tournament) throw createError('Tournament not found', 404);
+
+    const tournamentType = (tournament.type || '').toLowerCase();
+    if (!['team', 'group'].includes(tournamentType)) {
+      throw createError('This is not a team tournament', 400);
+    }
+
+    const approvedTeams = await TeamEnrollmentsModel.findMany(database, {
+      tournament_id: tid,
+      approved: 1
+    });
+
+    if (approvedTeams.length === 0) {
+      return { roundNumber: 1, allRounds: [], message: 'No approved teams enrolled', isTeamTournament: true };
+    }
+
+    let storedPairings = await TournamentTeamPairingsModel.findOne(database, { tournament_id: tid });
+    let allRounds;
+
+    const expectedTeamCount = storedPairings?.rounds?.[0]?.pairings?.length * 2 + (storedPairings?.rounds?.[0]?.byeTeam ? 1 : 0);
+    if (!storedPairings || storedPairings.totalRounds !== totalRounds || approvedTeams.length !== expectedTeamCount) {
+      const teams = approvedTeams.map(enrollment => new Team(
+        enrollment._id,
+        `Team ${enrollment.captain_name}`,
+        enrollment.captain_name,
+        enrollment.player1_name,
+        enrollment.player2_name,
+        enrollment.player3_name
+      ));
+
+      allRounds = swissTeamPairing(teams, totalRounds);
+
+      await TournamentTeamPairingsModel.deleteOne(database, { tournament_id: tid });
+      await TournamentTeamPairingsModel.insertOne(database, {
+        tournament_id: tid,
+        totalRounds: totalRounds,
+        rounds: allRounds.map(round => ({
+          round: round.round,
+          pairings: round.pairings.map(pairing => ({
+            team1: {
+              id: pairing.team1.id,
+              teamName: pairing.team1.teamName,
+              captainName: pairing.team1.captainName,
+              player1: pairing.team1.player1,
+              player2: pairing.team1.player2,
+              player3: pairing.team1.player3,
+              score: pairing.team1.score
+            },
+            team2: {
+              id: pairing.team2.id,
+              teamName: pairing.team2.teamName,
+              captainName: pairing.team2.captainName,
+              player1: pairing.team2.player1,
+              player2: pairing.team2.player2,
+              player3: pairing.team2.player3,
+              score: pairing.team2.score
+            },
+            result: pairing.result
+          })),
+          byeTeam: round.byeTeam ? {
+            id: round.byeTeam.id,
+            teamName: round.byeTeam.teamName,
+            captainName: round.byeTeam.captainName,
+            player1: round.byeTeam.player1,
+            player2: round.byeTeam.player2,
+            player3: round.byeTeam.player3,
+            score: round.byeTeam.score
+          } : null
+        }))
+      });
+    } else {
+      allRounds = storedPairings.rounds.map(round => {
+        const pairings = round.pairings.map(pairing => {
+          const team1 = new Team(pairing.team1.id, pairing.team1.teamName, pairing.team1.captainName, pairing.team1.player1, pairing.team1.player2, pairing.team1.player3);
+          team1.score = pairing.team1.score;
+          const team2 = new Team(pairing.team2.id, pairing.team2.teamName, pairing.team2.captainName, pairing.team2.player1, pairing.team2.player2, pairing.team2.player3);
+          team2.score = pairing.team2.score;
+          return { team1, team2, result: pairing.result };
+        });
+        const byeTeam = round.byeTeam ? new Team(round.byeTeam.id, round.byeTeam.teamName, round.byeTeam.captainName, round.byeTeam.player1, round.byeTeam.player2, round.byeTeam.player3) : null;
+        if (byeTeam) byeTeam.score = round.byeTeam.score;
+        return { round: round.round, pairings, byeTeam };
+      });
+    }
+
+    return { roundNumber: totalRounds, allRounds, isTeamTournament: true };
+  },
+
+  async getTeamRankings(db, { tournamentId }) {
+    if (!tournamentId) throw createError('Tournament ID is required', 400);
+
+    const database = await resolveDb(db);
+    const tid = new ObjectId(tournamentId);
+
+    const tournament = await TournamentModel.findOne(database, { _id: tid });
+    if (!tournament) throw createError('Tournament not found', 404);
+
+    const tournamentType = (tournament.type || '').toLowerCase();
+    if (!['team', 'group'].includes(tournamentType)) {
+      throw createError('This is not a team tournament', 400);
+    }
+
+    const approvedTeams = await TeamEnrollmentsModel.findMany(database, {
+      tournament_id: tid,
+      approved: 1
+    });
+
+    if (approvedTeams.length === 0) {
+      return { rankings: [], tournamentId, isTeamTournament: true };
+    }
+
+    let storedPairings = await TournamentTeamPairingsModel.findOne(database, { tournament_id: tid });
+    let rankings = [];
+
+    if (!storedPairings) {
+      const totalRounds = 5;
+      const teams = approvedTeams.map(enrollment => new Team(
+        enrollment._id,
+        `Team ${enrollment.captain_name}`,
+        enrollment.captain_name,
+        enrollment.player1_name,
+        enrollment.player2_name,
+        enrollment.player3_name
+      ));
+
+      const allRounds = swissTeamPairing(teams, totalRounds);
+      await TournamentTeamPairingsModel.insertOne(database, {
+        tournament_id: tid,
+        totalRounds: totalRounds,
+        rounds: allRounds.map(round => ({
+          round: round.round,
+          pairings: round.pairings.map(pairing => ({
+            team1: {
+              id: pairing.team1.id,
+              teamName: pairing.team1.teamName,
+              captainName: pairing.team1.captainName,
+              player1: pairing.team1.player1,
+              player2: pairing.team1.player2,
+              player3: pairing.team1.player3,
+              score: pairing.team1.score
+            },
+            team2: {
+              id: pairing.team2.id,
+              teamName: pairing.team2.teamName,
+              captainName: pairing.team2.captainName,
+              player1: pairing.team2.player1,
+              player2: pairing.team2.player2,
+              player3: pairing.team2.player3,
+              score: pairing.team2.score
+            },
+            result: pairing.result
+          })),
+          byeTeam: round.byeTeam ? {
+            id: round.byeTeam.id,
+            teamName: round.byeTeam.teamName,
+            captainName: round.byeTeam.captainName,
+            player1: round.byeTeam.player1,
+            player2: round.byeTeam.player2,
+            player3: round.byeTeam.player3,
+            score: round.byeTeam.score
+          } : null
+        }))
+      });
+
+      rankings = teams.sort((a, b) => b.score - a.score).map((t, index) => ({
+        rank: index + 1,
+        teamName: t.teamName,
+        captainName: t.captainName,
+        players: [t.player1, t.player2, t.player3],
+        score: t.score
+      }));
+    } else {
+      const teamsMap = new Map();
+      approvedTeams.forEach(enrollment => {
+        teamsMap.set(enrollment._id.toString(), {
+          id: enrollment._id.toString(),
+          teamName: `Team ${enrollment.captain_name}`,
+          captainName: enrollment.captain_name,
+          players: [enrollment.player1_name, enrollment.player2_name, enrollment.player3_name],
+          score: 0
+        });
+      });
+
+      storedPairings.rounds.forEach(round => {
+        round.pairings.forEach(pairing => {
+          const team1 = teamsMap.get(pairing.team1.id.toString());
+          const team2 = teamsMap.get(pairing.team2.id.toString());
+          if (team1) team1.score = pairing.team1.score;
+          if (team2) team2.score = pairing.team2.score;
+        });
+        if (round.byeTeam) {
+          const byeTeam = teamsMap.get(round.byeTeam.id.toString());
+          if (byeTeam) byeTeam.score = round.byeTeam.score;
+        }
+      });
+
+      rankings = Array.from(teamsMap.values())
+        .sort((a, b) => b.score - a.score)
+        .map((t, index) => ({
+          rank: index + 1,
+          teamName: t.teamName,
+          captainName: t.captainName,
+          players: t.players,
+          score: t.score
+        }));
+    }
+
+    return { rankings, tournamentId, isTeamTournament: true };
+  }
+};
+
+module.exports = PairingsService;

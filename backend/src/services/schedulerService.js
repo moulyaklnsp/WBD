@@ -2,7 +2,8 @@
  * SchedulerService – background jobs for tournament status updates.
  * Called once from app.js after DB is ready.
  */
-const TournamentModel = require('../models/TournamentModel');
+const { getModel } = require('../models');
+const TournamentModel = getModel('tournaments');
 const { connectDB } = require('../config/database');
 
 const SchedulerService = {
