@@ -74,6 +74,15 @@ function PlayerStore() {
   const [purchaseModal, setPurchaseModal] = useState(null); // null | { mode: 'buyNow'|'cart', product?: obj }
   const [purchaseStep, setPurchaseStep] = useState('confirm'); // confirm | processing | success | error
   const [purchaseError, setPurchaseError] = useState('');
+  const [deliveryAddress, setDeliveryAddress] = useState({
+    houseNo: '',
+    streetNo: '',
+    lane: '',
+    city: '',
+    district: '',
+    state: '',
+    pinCode: ''
+  });
 
   // Delivery OTP modal
   const [deliveryOtpModal, setDeliveryOtpModal] = useState({ open: false, orderId: null, otp: '', loading: false, error: '' });
@@ -204,10 +213,35 @@ function PlayerStore() {
     setPurchaseModal(null);
     setPurchaseStep('confirm');
     setPurchaseError('');
+    setDeliveryAddress({
+      houseNo: '',
+      streetNo: '',
+      lane: '',
+      city: '',
+      district: '',
+      state: '',
+      pinCode: ''
+    });
   };
 
   const executePurchase = async () => {
     if (!purchaseModal) return;
+    
+    const { houseNo, city, state, pinCode } = deliveryAddress;
+    if (!houseNo.trim() || !city.trim() || !state.trim() || !pinCode.trim()) {
+      setPurchaseError('Please fill in required fields: House No/Building, City, State, and Pin Code.');
+      return;
+    }
+
+    const fullAddress = [
+      houseNo.trim(),
+      deliveryAddress.streetNo.trim() ? `Street No: ${deliveryAddress.streetNo.trim()}` : null,
+      deliveryAddress.lane.trim() ? `Lane: ${deliveryAddress.lane.trim()}` : null,
+      city.trim(),
+      deliveryAddress.district.trim() ? `District: ${deliveryAddress.district.trim()}` : null,
+      `${state.trim()} - ${pinCode.trim()}`
+    ].filter(Boolean).join(', ');
+
     setPurchaseStep('processing');
     setPurchaseError('');
 
@@ -218,7 +252,7 @@ function PlayerStore() {
         const product = purchaseModal.product;
         const discount = discountPercentage > 0 ? (product.price * discountPercentage) / 100 : 0;
         const finalPrice = Number((product.price - discount).toFixed(2));
-        const res = await safePost('/player/api/buy', { price: finalPrice, buyer: playerName, college: playerCollege, productId: product._id });
+        const res = await safePost('/player/api/buy', { price: finalPrice, buyer: playerName, college: playerCollege, productId: product._id, deliveryAddress: fullAddress });
         const data = await res.json();
         if (data.success && typeof data.walletBalance === 'number') setWalletBalance(Math.min(data.walletBalance, MAX_WALLET_BALANCE));
         if (!res.ok && !data.success) throw new Error(data.message || data.error || 'Purchase failed');
@@ -229,7 +263,7 @@ function PlayerStore() {
         setTimeout(() => { closePurchaseModal(); setView('Delivery'); loadOrders(); }, 1800);
       } else if (purchaseModal.mode === 'cart') {
         if (!cart.length) throw new Error('Cart is empty');
-        const res = await safePost('/player/api/orders', { fromCart: true });
+        const res = await safePost('/player/api/orders', { fromCart: true, deliveryAddress: fullAddress });
         if (res.ok) {
           const data = await res.json();
           setWalletBalance(Math.min(data.walletBalance ?? walletBalance, MAX_WALLET_BALANCE));
@@ -1196,6 +1230,26 @@ function PlayerStore() {
                       </div>
                     )}
 
+                    <div style={{ margin: '1rem 0' }}>
+                      <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 'bold' }}>Delivery Address</label>
+                      <div style={{ display: 'grid', gap: '0.5rem' }}>
+                        <input className="form-input" placeholder="House No / Building *" value={deliveryAddress.houseNo} onChange={(e) => { setDeliveryAddress(prev => ({ ...prev, houseNo: e.target.value })); setPurchaseError(''); }} />
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <input className="form-input" placeholder="Street No" value={deliveryAddress.streetNo} onChange={(e) => { setDeliveryAddress(prev => ({ ...prev, streetNo: e.target.value })); setPurchaseError(''); }} />
+                          <input className="form-input" placeholder="Lane" value={deliveryAddress.lane} onChange={(e) => { setDeliveryAddress(prev => ({ ...prev, lane: e.target.value })); setPurchaseError(''); }} />
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <input className="form-input" placeholder="City *" value={deliveryAddress.city} onChange={(e) => { setDeliveryAddress(prev => ({ ...prev, city: e.target.value })); setPurchaseError(''); }} />
+                          <input className="form-input" placeholder="District" value={deliveryAddress.district} onChange={(e) => { setDeliveryAddress(prev => ({ ...prev, district: e.target.value })); setPurchaseError(''); }} />
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <input className="form-input" placeholder="State *" value={deliveryAddress.state} onChange={(e) => { setDeliveryAddress(prev => ({ ...prev, state: e.target.value })); setPurchaseError(''); }} />
+                          <input className="form-input" placeholder="Pin Code *" value={deliveryAddress.pinCode} onChange={(e) => { setDeliveryAddress(prev => ({ ...prev, pinCode: e.target.value })); setPurchaseError(''); }} />
+                        </div>
+                      </div>
+                      {purchaseError && <div style={{ color: '#e74c3c', fontSize: '0.85rem', marginTop: '0.5rem' }}>{purchaseError}</div>}
+                    </div>
+
                     <div className="purchase-total">
                       <span>Total</span>
                       <span style={{ color: 'var(--sea-green)' }}>₹{getPurchaseTotal().toFixed(2)}</span>
@@ -1268,9 +1322,6 @@ function PlayerStore() {
             </div>
           </div>
         )}
-
-      // Removed gateway step view
-      setPurchaseStep('processing');
 
         {/* ─── Product Reviews Modal ─── */}
         {selectedProductForReviews && (
