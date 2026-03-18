@@ -39,14 +39,40 @@ const UserModel = {
     return cursor.limit(limit).toArray();
   },
 
+  /** Fetch many users with optional projection / sort / limit. */
+  findMany(db, filter = {}, options = {}) {
+    const { projection, sort, limit, skip } = options;
+    let cursor = db.collection('users').find(filter);
+    if (projection) cursor = cursor.project(projection);
+    if (sort) cursor = cursor.sort(sort);
+    if (skip) cursor = cursor.skip(skip);
+    if (limit) cursor = cursor.limit(limit);
+    return cursor.toArray();
+  },
+
   /** Apply an update to a single user matched by filter. */
   updateOne(db, filter, update, options) {
     return db.collection('users').updateOne(filter, update, options);
   },
 
+  /** Apply an update to multiple users matched by filter. */
+  updateMany(db, filter, update, options) {
+    return db.collection('users').updateMany(filter, update, options);
+  },
+
   /** Create a new user document. */
   create(db, data) {
     return db.collection('users').insertOne({ ...data, createdAt: new Date() });
+  },
+
+  /** Run an aggregate pipeline for users. */
+  aggregate(db, pipeline = [], options) {
+    return db.collection('users').aggregate(pipeline, options).toArray();
+  },
+
+  /** Count users matching a filter. */
+  countDocuments(db, filter = {}, options) {
+    return db.collection('users').countDocuments(filter, options);
   },
 
   /**
