@@ -112,6 +112,13 @@ function EventCalendar() {
       showMessage('Date cannot be in the past', 'error');
       return;
     }
+    const maxDate = new Date();
+    maxDate.setHours(0, 0, 0, 0);
+    maxDate.setFullYear(maxDate.getFullYear() + 1);
+    if (eventDate > maxDate) {
+      showMessage('Date must be within 1 year from today', 'error');
+      return;
+    }
     if (!/^\d{2}:\d{2}$/.test(eventForm.time.trim())) {
       showMessage('Invalid time format (use HH:MM)', 'error');
       return;
@@ -236,6 +243,9 @@ function EventCalendar() {
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const todayForInput = new Date();
   const minDateInput = `${todayForInput.getFullYear()}-${String(todayForInput.getMonth() + 1).padStart(2, '0')}-${String(todayForInput.getDate()).padStart(2, '0')}`;
+  const maxDateInputDate = new Date(todayForInput);
+  maxDateInputDate.setFullYear(maxDateInputDate.getFullYear() + 1);
+  const maxDateInput = `${maxDateInputDate.getFullYear()}-${String(maxDateInputDate.getMonth() + 1).padStart(2, '0')}-${String(maxDateInputDate.getDate()).padStart(2, '0')}`;
 
   const getEventClass = (event) => {
     const key = `${event?.type || ''} ${event?.source || ''}`.toLowerCase();
@@ -431,6 +441,7 @@ function EventCalendar() {
                       className="form-input"
                       value={eventForm.date}
                       min={minDateInput}
+                      max={maxDateInput}
                       onChange={(e) => setEventForm({ ...eventForm, date: e.target.value })}
                     />
                   </div>

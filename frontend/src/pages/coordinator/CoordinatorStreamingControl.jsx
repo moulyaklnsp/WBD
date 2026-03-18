@@ -311,7 +311,6 @@ export default function CoordinatorStreamingControl() {
             </motion.h1>
             <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
               <button className="action-btn" onClick={load}><i className="fas fa-sync" /> Refresh</button>
-              <Link className="btn-primary" to="/coordinator/coordinator_dashboard"><i className="fas fa-arrow-left" /> Dashboard</Link>
             </div>
           </div>
 
@@ -438,6 +437,10 @@ export default function CoordinatorStreamingControl() {
             </div>
           </motion.div>
         </div>
+
+        <Link to="/coordinator/coordinator_dashboard" className="back-to-dashboard">
+          <i className="fas fa-arrow-left" /> Back to Dashboard
+        </Link>
       </div>
     </div>
   );

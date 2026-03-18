@@ -141,7 +141,7 @@ function PlayerProfile() {
       const hasPhotoChange = Boolean(photoFile);
 
       if (!hasFieldChanges && !hasPhotoChange) {
-        setMessage({ type: 'success', text: 'No changes to save.' });
+        setMessage({ type: 'success', text: 'No changes made' });
         return;
       }
 

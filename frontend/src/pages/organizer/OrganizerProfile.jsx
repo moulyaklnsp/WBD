@@ -31,6 +31,26 @@ function OrganizerProfile() {
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
 
+  const normalizeFormValues = (values) => ({
+    name: (values?.name || '').toString().trim(),
+    phone: (values?.phone || '').toString().trim(),
+    college: (values?.college || '').toString().trim(),
+    dob: (values?.dob || '').toString(),
+    gender: (values?.gender || '').toString().toLowerCase(),
+    AICF_ID: (values?.AICF_ID || '').toString().trim(),
+    FIDE_ID: (values?.FIDE_ID || '').toString().trim()
+  });
+
+  const buildBaselineForm = (data) => normalizeFormValues({
+    name: data?.name,
+    phone: data?.phone,
+    college: data?.college,
+    dob: data?.dob ? new Date(data.dob).toISOString().split('T')[0] : '',
+    gender: data?.gender,
+    AICF_ID: data?.AICF_ID,
+    FIDE_ID: data?.FIDE_ID
+  });
+
   const showMessage = (text, type = 'success') => {
     setMessage({ type, text });
     setTimeout(() => setMessage(null), 4000);
@@ -45,15 +65,7 @@ function OrganizerProfile() {
       if (!res.ok) throw new Error(data.error || 'Failed to load profile');
 
       setProfile(data);
-      setEditForm({
-        name: data.name || '',
-        phone: data.phone || '',
-        college: data.college || '',
-        dob: data.dob ? new Date(data.dob).toISOString().split('T')[0] : '',
-        gender: (data.gender || '').toLowerCase(),
-        AICF_ID: data.AICF_ID || '',
-        FIDE_ID: data.FIDE_ID || ''
-      });
+      setEditForm(buildBaselineForm(data));
       setErrors({});
       setTouched({});
       if (data.profile_photo_url) setPhotoPreviewUrl(data.profile_photo_url);
@@ -133,6 +145,13 @@ function OrganizerProfile() {
   };
 
   const handleSave = async () => {
+    const baseline = buildBaselineForm(profile);
+    const current = normalizeFormValues(editForm);
+    const hasChanges = Object.keys(baseline).some((key) => current[key] !== baseline[key]);
+    if (!hasChanges) {
+      showMessage('No changes made');
+      return;
+    }
     if (!validateAll()) {
       showMessage('Please correct the highlighted fields before saving.', 'error');
       return;
@@ -142,7 +161,7 @@ function OrganizerProfile() {
       const res = await fetchAsOrganizer('/organizer/api/profile', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editForm)
+        body: JSON.stringify(current)
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to update');

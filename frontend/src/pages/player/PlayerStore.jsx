@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchProducts } from '../../features/products/productsSlice';
 import { fetchAsPlayer, safePost } from '../../utils/fetchWithRole';
@@ -1439,9 +1439,9 @@ function PlayerStore() {
           </div>
         )}
       </div>
-      <button type="button" className="back-to-dashboard" onClick={() => navigate('/player/player_dashboard')}>
+      <Link to="/player/player_dashboard" className="back-to-dashboard">
         <i className="fas fa-arrow-left" /> Back to Dashboard
-      </button>
+      </Link>
       </div>
     </div>
   );

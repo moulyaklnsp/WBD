@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchProducts, addProduct } from '../../features/products/productsSlice';
 import '../../styles/playerNeoNoir.css';
@@ -1242,6 +1242,10 @@ function StoreManagement() {
           </div>
         </div>
       )}
+
+      <Link to="/coordinator/coordinator_dashboard" className="back-to-dashboard">
+        <i className="fas fa-arrow-left" /> Back to Dashboard
+      </Link>
     </div>
   );
 }

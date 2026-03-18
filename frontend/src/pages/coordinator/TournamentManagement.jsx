@@ -31,12 +31,9 @@ function TournamentManagement() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState(null);
   const [page, setPage] = useState(1);
-  const [uploadedFiles, setUploadedFiles] = useState({});
-  const [uploadLoading, setUploadLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [fileDescription, setFileDescription] = useState('');
   const [search, setSearch] = useState({ attr: 'name', q: '' });
-  const [selectedTournament, setSelectedTournament] = useState(null);
 
   // Form state
   const [form, setForm] = useState({
@@ -105,7 +102,7 @@ function TournamentManagement() {
     if (now >= end) phase = 'Completed';
     else if (now >= start && now < end) phase = 'Ongoing';
 
-    const rawStatus = (t.status || '').toString().toLowerCase();
+    const rawStatus = (t.status || '').toString().trim().toLowerCase();
     if (rawStatus === 'completed') {
       status = 'Completed';
       statusClass = 'completed';
@@ -136,19 +133,20 @@ function TournamentManagement() {
 
   // Filter out removed tournaments
   const activeTournaments = useMemo(
-    () => tournaments.filter((t) => t.status !== 'Removed'),
+    () => tournaments.filter((t) => (t.status || '').toString().trim().toLowerCase() !== 'removed'),
     [tournaments]
   );
 
   const filteredTournaments = useMemo(() => {
     if (!search.q) return activeTournaments;
-    const query = search.q.toLowerCase();
+    const query = search.q.toLowerCase().trim();
     return activeTournaments.filter((t) => {
-      const { phase, dateObj } = computeStatus(t);
+      const { status, dateObj } = computeStatus(t);
+      const rawStatus = (t.status || '').toString().trim();
       const name = (t.name || t.tournamentName || '').toString();
       const type = (t.type || '').toString();
       const dateString = dateObj && !Number.isNaN(dateObj.getTime()) ? dateObj.toLocaleDateString() : '';
-      const statusValue = phase;
+      const statusValue = `${status} ${rawStatus}`.trim();
       let value = '';
       switch (search.attr) {
         case 'date':
@@ -351,18 +349,6 @@ function TournamentManagement() {
     }
   };
 
-  const fetchUploadedFiles = async (tournamentId) => {
-    try {
-      const res = await fetchAsCoordinator(`/coordinator/api/tournaments/${tournamentId}/files`);
-      const data = await res.json();
-      if (res.ok) {
-        setUploadedFiles(prev => ({ ...prev, [tournamentId]: data.files || [] }));
-      }
-    } catch (err) {
-      console.error('Error fetching uploaded files:', err);
-    }
-  };
-
   const handleFileUpload = async (tournamentId) => {
     if (!selectedFile) {
       showMessage('Please select a file to upload', 'error');
@@ -373,7 +359,6 @@ function TournamentManagement() {
       return;
     }
 
-    setUploadLoading(true);
     try {
       const formData = new FormData();
       formData.append('file', selectedFile);
@@ -390,32 +375,11 @@ function TournamentManagement() {
       showMessage('File uploaded successfully', 'success');
       setSelectedFile(null);
       setFileDescription('');
-      await fetchUploadedFiles(tournamentId);
     } catch (err) {
       console.error('Upload error:', err);
       showMessage(`Upload failed: ${err.message}`, 'error');
-    } finally {
-      setUploadLoading(false);
     }
   };
-
-  const deleteFile = async (tournamentId, fileId) => {
-    try {
-      const res = await fetchAsCoordinator(`/coordinator/api/tournaments/${tournamentId}/files/${fileId}`, {
-        method: 'DELETE'
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Delete failed');
-
-      showMessage('File deleted successfully', 'success');
-      await fetchUploadedFiles(tournamentId);
-    } catch (err) {
-      console.error('Delete error:', err);
-      showMessage(`Delete failed: ${err.message}`, 'error');
-    }
-  };
-
-  const closeDetails = () => setSelectedTournament(null);
 
   const minDateInput = (() => {
     if (editingId) return '';
@@ -735,7 +699,6 @@ function TournamentManagement() {
                         <th>Type</th>
                         <th>No Of Rounds</th>
                         <th><i className="fas fa-info-circle" /> Status</th>
-                        <th><i className="fas fa-file-upload" /> Files</th>
                         <th><i className="fas fa-cogs" /> Actions</th>
                       </tr>
                     </thead>
@@ -746,18 +709,15 @@ function TournamentManagement() {
                         return (
                           <tr key={t._id || idx}>
                             <td>
-                              <button
-                                type="button"
+                              <Link
+                                to={`/coordinator/tournaments/${t._id}`}
+                                state={{ tournament: t }}
                                 className="link-btn"
-                                onClick={() => {
-                                  setSelectedTournament(t);
-                                  fetchUploadedFiles(t._id);
-                                }}
                                 title="View tournament details"
                               >
                                 <i className="fas fa-info-circle" style={{ marginRight: 6 }} />
                                 {t.name || t.tournamentName || 'Untitled Tournament'}
-                              </button>
+                              </Link>
                             </td>
                             <td>{isNaN(dateObj) ? '' : dateObj.toLocaleDateString()}</td>
                             <td>{t.time}</td>
@@ -766,37 +726,6 @@ function TournamentManagement() {
                             <td>{t.type}</td>
                             <td>{typeof t.no_of_rounds !== 'undefined' ? t.no_of_rounds : t.noOfRounds}</td>
                             <td style={{ fontWeight: 'bold', color: statusClass === 'completed' ? 'var(--sea-green)' : statusClass === 'ongoing' ? 'var(--sky-blue)' : statusClass === 'yet-to-start' ? '#666' : '#c62828' }}><i className="fas fa-circle" /> {status}</td>
-                            <td>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                <button
-                                  className="action-btn"
-                                  onClick={() => fetchUploadedFiles(t._id)}
-                                  style={{ fontSize: '0.8rem', padding: '0.3rem 0.6rem' }}
-                                >
-                                  <i className="fas fa-eye" /> View Files ({uploadedFiles[t._id]?.length || 0})
-                                </button>
-                                {uploadedFiles[t._id] && uploadedFiles[t._id].length > 0 && (
-                                  <div className="file-list">
-                                    {uploadedFiles[t._id].map(file => (
-                                      <div key={file._id} className="file-item">
-                                        <a href={file.url} target="_blank" rel="noopener noreferrer" className="file-link">
-                                          {file.filename}
-                                        </a>
-                                        <button
-                                          onClick={() => deleteFile(t._id, file._id)}
-                                          className="delete-file-btn"
-                                        >
-                                          <i className="fas fa-trash" />
-                                        </button>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                                {uploadedFiles[t._id] && uploadedFiles[t._id].length === 0 && (
-                                  <div style={{ fontSize: '0.8rem', fontStyle: 'italic', opacity: 0.7, padding: '0.2rem' }}>No files uploaded.</div>
-                                )}
-                              </div>
-                            </td>
                             <td>
                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'flex-start' }}>
                                 <button
@@ -808,9 +737,6 @@ function TournamentManagement() {
                                 >
                                   <i className="fas fa-edit" /> Edit
                                 </button>
-                                <Link to={`/coordinator/tournaments/${t._id}`} state={{ tournament: t }} className="action-btn">
-                                  <i className="fas fa-th-large" /> Open Sections
-                                </Link>
                                 <button
                                   className="action-btn remove-btn"
                                   onClick={() => onRemove(t._id)}
@@ -868,108 +794,6 @@ function TournamentManagement() {
             </div>
           </motion.div>
 
-          {selectedTournament && (() => {
-            const { status, phase } = computeStatus(selectedTournament);
-            const detailsFiles = uploadedFiles[selectedTournament._id] || [];
-            const imageFiles = detailsFiles.filter((file) => /\.(jpg|jpeg|png|gif)$/i.test(file.filename || ''));
-            const otherFiles = detailsFiles.filter((file) => !/\.(jpg|jpeg|png|gif)$/i.test(file.filename || ''));
-            const organizerName =
-              selectedTournament.organizerName ||
-              selectedTournament.organizer_name ||
-              selectedTournament.organizer ||
-              'N/A';
-            const approvedBy =
-              selectedTournament.approved_by ||
-              selectedTournament.approvedBy ||
-              'Pending';
-            return (
-              <div className="modal-backdrop" onClick={closeDetails}>
-                <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-                  <div className="modal-header">
-                    <div className="modal-title">
-                      <i className="fas fa-trophy" /> {selectedTournament.name || selectedTournament.tournamentName || 'Tournament'}
-                    </div>
-                    <button className="modal-close" onClick={closeDetails} aria-label="Close">
-                      <i className="fas fa-times" />
-                    </button>
-                  </div>
-
-                  <div className="details-grid">
-                    <div className="detail-item">
-                      <div className="detail-label">Status</div>
-                      <div className="detail-value">{status || phase}</div>
-                    </div>
-                    <div className="detail-item">
-                      <div className="detail-label">Date & Time</div>
-                      <div className="detail-value">
-                        {selectedTournament.date ? new Date(selectedTournament.date).toLocaleDateString() : 'N/A'} {selectedTournament.time || ''}
-                      </div>
-                    </div>
-                    <div className="detail-item">
-                      <div className="detail-label">Venue / Location</div>
-                      <div className="detail-value">{selectedTournament.location || selectedTournament.tournamentLocation || 'N/A'}</div>
-                    </div>
-                    <div className="detail-item">
-                      <div className="detail-label">Organizer Name</div>
-                      <div className="detail-value">{organizerName}</div>
-                    </div>
-                    <div className="detail-item">
-                      <div className="detail-label">Approved By (Coordinator)</div>
-                      <div className="detail-value">{approvedBy}</div>
-                    </div>
-                    <div className="detail-item">
-                      <div className="detail-label">Coordinator</div>
-                      <div className="detail-value">{selectedTournament.coordinator || selectedTournament.added_by || 'N/A'}</div>
-                    </div>
-                    <div className="detail-item">
-                      <div className="detail-label">Type</div>
-                      <div className="detail-value">{selectedTournament.type || 'N/A'}</div>
-                    </div>
-                    <div className="detail-item">
-                      <div className="detail-label">Rounds</div>
-                      <div className="detail-value">{selectedTournament.noOfRounds || selectedTournament.no_of_rounds || 'N/A'}</div>
-                    </div>
-                    <div className="detail-item">
-                      <div className="detail-label">Entry Fee</div>
-                      <div className="detail-value">INR {selectedTournament.entry_fee ?? selectedTournament.entryFee ?? '0'}</div>
-                    </div>
-                    <div className="detail-item" style={{ gridColumn: '1 / -1' }}>
-                      <div className="detail-label">Description</div>
-                      <div className="detail-value">
-                        {selectedTournament.description || selectedTournament.tournamentDescription || 'No description provided.'}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div style={{ marginTop: '1rem' }}>
-                    <div className="detail-label">Images</div>
-                    {imageFiles.length === 0 ? (
-                      <div style={{ opacity: 0.7 }}>No images uploaded.</div>
-                    ) : (
-                      <div className="image-grid">
-                        {imageFiles.map((file) => (
-                          <img key={file._id} src={file.url} alt={file.filename} />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {otherFiles.length > 0 && (
-                    <div style={{ marginTop: '1rem' }}>
-                      <div className="detail-label">Attachments</div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                        {otherFiles.map((file) => (
-                          <a key={file._id} href={file.url} target="_blank" rel="noopener noreferrer" className="file-link">
-                            {file.filename}
-                          </a>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })()}
         </div>
       </div>
     </div>
