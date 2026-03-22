@@ -217,7 +217,7 @@ const GrowthService = {
         const tournamentDate = tournament?.date ? new Date(tournament.date) : new Date();
 
         for (const round of (doc.rounds || [])) {
-          for (const match of (match.matches || [])) {
+          for (const match of (round.matches || round.pairings || [])) {
             for (const pairing of (match.boards || [])) {
               const parsed = parseOutcome(pairing, username);
               if (!parsed) continue;

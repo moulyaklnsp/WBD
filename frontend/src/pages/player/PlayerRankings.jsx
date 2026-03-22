@@ -58,7 +58,7 @@ function PlayerRankings() {
     top3: { fontSize: '1.1rem' },
     score: { fontWeight: 'bold', color: 'var(--sea-green)' },
     nav: { textAlign: 'right' },
-    navLink: { display: 'inline-flex', alignItems: 'center', gap: '0.5rem', background: 'var(--sea-green)', color: 'var(--on-accent)', textDecoration: 'none', padding: '0.8rem 1.5rem', borderRadius: 8, fontFamily: 'Cinzel, serif', fontWeight: 'bold' },
+    navLink: { display: 'inline-flex', alignItems: 'center', gap: '0.5rem', background: 'var(--sea-green)', color: 'var(--on-accent)', textDecoration: 'none', padding: '0.8rem 1.5rem', borderRadius: 8, fontFamily: 'Cinzel, serif', fontWeight: 'bold', marginLeft: '0.5rem' },
   };
 
   return (
@@ -115,7 +115,10 @@ function PlayerRankings() {
           </table>
         </div>
 
-        <div style={styles.nav}>
+        <div style={styles.navWrap}>
+          <Link to={`/player/pairings?tournament_id=${tournamentId}${isTeamTournament ? '&type=team' : ''}`} style={styles.navLink}>
+            <i className="fas fa-chess-board" aria-hidden="true"></i> <span>View Pairings</span>
+          </Link>
           <Link to="/player/player_tournament" style={styles.navLink}>
             <i className="fas fa-users" aria-hidden="true"></i> <span>Back to tournaments</span>
           </Link>

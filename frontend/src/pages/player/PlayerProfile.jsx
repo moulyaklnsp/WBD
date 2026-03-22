@@ -142,6 +142,7 @@ function PlayerProfile() {
 
       if (!hasFieldChanges && !hasPhotoChange) {
         setMessage({ type: 'success', text: 'No changes made' });
+        setEditing(false);
         return;
       }
 

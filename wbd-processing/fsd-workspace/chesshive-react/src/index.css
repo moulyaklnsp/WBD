@@ -1,0 +1,306 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Playfair Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: #071327;
+  color: #FFFDD0;
+  overflow-x: hidden;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+}
+
+:root {
+  --sea-green: #2E8B57;
+  --cream: #FFFDD0;
+  --sky-blue: #87CEEB;
+  --dark-bg: #071327;
+  --darker-bg: #050d1a;
+  --page-bg: var(--dark-bg);
+  --content-bg: rgba(11, 27, 27, 0.8);
+  --text-color: #FFFDD0;
+  --text-muted: rgba(255, 253, 208, 0.7);
+  --border-color: rgba(46, 139, 87, 0.3);
+  --row-hover-bg: rgba(46, 139, 87, 0.1);
+  --on-accent: #ffffff;
+  --sky-blue-hover: #6CB4D4;
+  --glass-bg: rgba(255, 255, 255, 0.1);
+  --glass-border: rgba(255, 255, 255, 0.2);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--darker-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, var(--sea-green), var(--sky-blue));
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, var(--sky-blue), var(--sea-green));
+}
+
+::selection {
+  background: rgba(46, 139, 87, 0.5);
+  color: #fff;
+}
+
+.container { 
+  max-width: 1200px; 
+  margin: 0 auto; 
+  padding: 0 clamp(12px, 2vw, 24px);
+}
+
+.table-responsive { 
+  width: 100%; 
+  overflow-x: auto; 
+  -webkit-overflow-scrolling: touch; 
+}
+
+table { 
+  width: 100%; 
+  border-collapse: collapse; 
+}
+
+table th, table td { 
+  padding: 0.75rem; 
+}
+
+input[type="text"], 
+input[type="email"],
+input[type="password"],
+input[type="number"], 
+input[type="date"], 
+input[type="time"], 
+select, 
+textarea {
+  max-width: 100%;
+  background: var(--glass-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 12px 16px;
+  color: var(--text-color);
+  font-size: 1rem;
+  transition: all 0.3s ease;
+}
+
+/* Player pages: unify dropdown (select) styling */
+.player .player-select,
+.player-neo .player-select {
+  padding: 0.65rem 1rem;
+  border: 2px solid var(--sky-blue);
+  border-radius: 10px;
+  font-size: 0.95rem;
+  background: #03101d;
+  color: var(--text-color);
+  font-family: 'Cinzel', serif;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.player .player-select:focus,
+.player-neo .player-select:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(30, 80, 255, 0.35);
+}
+
+.player .player-select option,
+.player-neo .player-select option {
+  background: #03101d;
+  color: var(--text-color);
+}
+
+input:focus, 
+select:focus, 
+textarea:focus {
+  outline: none;
+  border-color: var(--sea-green);
+  box-shadow: 0 0 20px rgba(46, 139, 87, 0.3);
+}
+
+button, .btn { 
+  cursor: pointer;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 24px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+button:hover, .btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 20px rgba(46, 139, 87, 0.4);
+}
+
+a {
+  color: var(--sea-green);
+  text-decoration: none;
+  transition: color 0.3s ease;
+}
+
+a:hover {
+  color: var(--sky-blue);
+}
+
+.glass-effect {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+}
+
+.gradient-text {
+  background: linear-gradient(135deg, var(--sea-green), var(--sky-blue));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.glow {
+  box-shadow: 0 0 30px rgba(46, 139, 87, 0.4);
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-pulse {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+html { font-size: 16px; }
+@media (max-width: 1200px) { html { font-size: 15px; } }
+@media (max-width: 992px)  { html { font-size: 14px; } }
+@media (max-width: 576px)  { html { font-size: 13px; } }
+
+@media (max-width: 768px) {
+  .animated-sidebar {
+    width: 70px !important;
+    padding-top: 20px !important;
+  }
+  
+  .animated-sidebar .sidebar-header h1,
+  .animated-sidebar nav span {
+    display: none;
+  }
+  
+  .animated-sidebar nav a {
+    justify-content: center;
+    padding: 15px !important;
+  }
+  
+  .animated-sidebar nav a i {
+    margin: 0 !important;
+  }
+  
+  main {
+    margin-left: 70px !important;
+    padding: 20px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .animated-sidebar {
+    width: 60px !important;
+  }
+  
+  main {
+    margin-left: 60px !important;
+    padding: 15px !important;
+  }
+}
+
+.player-dark {
+  /* Palette: Player Dark Mode */
+  --page-bg: #0A0A0A;      /* Background */
+  --content-bg: #1B1B1B;   /* Surface */
+  --sea-green: #B11226;    /* Primary */
+  --sea-green-rgb: 177, 18, 38;
+  --sky-blue: #888888;     /* Accent */
+  --cream: #F5F5F5;        /* Light neutral (used in some Player headings/UI) */
+  --text-color: #F5F5F5;   /* Text */
+
+  /* Derived helpers (keep existing usage working) */
+  --border-color: rgba(177, 18, 38, 0.22);
+  --row-hover-bg: rgba(177, 18, 38, 0.08);
+  --on-accent: #0A0A0A;
+  --sky-blue-hover: rgba(136, 136, 136, 0.85);
+}
+
+.player-dark .page {
+  background-color: var(--page-bg) !important;
+  color: var(--text-color) !important;
+}
+
+.player-dark .content,
+.player-dark .updates-section,
+.player-dark .form-container,
+.player-dark .wallet,
+.player-dark .notifications-content,
+.player-dark .notifications-list li,
+.player-dark .container-player-profile {
+  background: var(--content-bg) !important;
+  color: var(--text-color) !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4) !important;
+}
+
+.player-dark .sidebar { 
+  background: var(--page-bg) !important; 
+}
+
+.player-dark h1, 
+.player-dark h2, 
+.player-dark h3 { 
+  color: var(--sky-blue) !important; 
+}
+
+.player-dark a, 
+.player-dark .back { 
+  color: var(--text-color) !important; 
+}
+
+.player-dark .price-tag { 
+  background: var(--sea-green) !important; 
+  color: var(--on-accent) !important; 
+}
+
+.player-dark .approve-btn { 
+  background-color: var(--sea-green) !important; 
+  color: var(--on-accent) !important; 
+}
+
+.player-dark .logout-box button { 
+  background: var(--sky-blue) !important; 
+  color: var(--content-bg) !important; 
+}

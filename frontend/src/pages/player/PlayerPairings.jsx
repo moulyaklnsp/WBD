@@ -201,7 +201,7 @@ function PlayerPairings() {
     score: { color: 'var(--sea-green)', fontWeight: 600 },
     bye: { color: 'var(--sea-green)', fontStyle: 'italic', fontSize: '.85rem' },
     navWrap: { textAlign: 'right', marginTop: '2.25rem' },
-    navLink: { display: 'inline-flex', alignItems: 'center', gap: '.5rem', background: 'var(--sea-green)', color: 'var(--on-accent)', textDecoration: 'none', padding: '.75rem 1.3rem', borderRadius: 10, fontFamily: 'Cinzel, serif', fontWeight: 600, letterSpacing: '.4px' },
+    navLink: { display: 'inline-flex', alignItems: 'center', gap: '.5rem', background: 'var(--sea-green)', color: 'var(--on-accent)', textDecoration: 'none', padding: '.75rem 1.3rem', borderRadius: 10, fontFamily: 'Cinzel, serif', fontWeight: 600, letterSpacing: '.4px', marginLeft: '.5rem', marginRight: '.5rem' },
     treeContainer: { background: 'var(--card-bg)', borderRadius: 16, padding: '1.75rem', border: '1px solid var(--card-border)', marginTop: '2rem' },
     toggleBtn: { background: 'transparent', border: '2px solid var(--sea-green)', color: 'var(--sea-green)', padding: '8px 14px', borderRadius: 10, cursor: 'pointer', fontFamily: 'Cinzel, serif', fontWeight: 'bold', letterSpacing: '.5px' },
   };
@@ -299,6 +299,9 @@ function PlayerPairings() {
         </div>
 
         <div style={styles.navWrap}>
+          <Link to={`/player/rankings?tournament_id=${tournamentId}${isTeamTournament ? '&type=team' : ''}`} style={styles.navLink} className="mr-2">
+            <i className="fas fa-list-ol" aria-hidden="true"></i> <span>View Live Standings</span>
+          </Link>
           <Link to="/player/player_tournament" style={styles.navLink}>
             <i className="fas fa-arrow-left" aria-hidden="true"></i> <span>Back to Tournaments</span>
           </Link>

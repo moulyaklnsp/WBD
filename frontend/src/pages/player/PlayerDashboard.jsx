@@ -12,6 +12,7 @@ import { getOrCreateSharedSocket } from '../../utils/socket';
 const FEATURE_BG = {
   'Profile': { icon: 'fa-user-circle', color: '#1b5e3f' },
   'Growth Tracking': { icon: 'fa-chart-line', color: '#0e7a4b' },
+  'Wallet': { icon: 'fa-wallet', color: '#1565c0' },
   'Tournaments': { icon: 'fa-trophy', color: '#b8860b' },
   'Watch': { icon: 'fa-play-circle', color: '#1565c0' },
   'Manage Subscription': { icon: 'fa-crown', color: '#c6930a' },
