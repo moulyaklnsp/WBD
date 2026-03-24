@@ -69,8 +69,8 @@ const AdminTournamentDetail = () => {
         * { margin:0; padding:0; box-sizing:border-box; }
         .page { font-family: 'Playfair Display', serif; background-color: var(--page-bg); min-height: 100vh; display:flex; color: var(--text-color); width: 100%; }
         .content { flex-grow:1; margin-left:0; padding:2rem; }
-        .back-link { display:inline-flex; align-items:center; gap:0.5rem; color:var(--sea-green); text-decoration:none; font-family:'Cinzel', serif; font-weight:bold; margin-bottom: 2rem; transition: opacity 0.3s; }
-        .back-link:hover { opacity: 0.8; }
+        .back-link { display:inline-flex; align-items:center; gap:0.5rem; background-color:var(--sea-green); color:var(--on-accent); text-decoration:none; padding:0.8rem 1.5rem; border-radius:8px; transition:all 0.3s ease; font-family:'Cinzel', serif; font-weight:bold; }
+        .back-link:hover { opacity: 0.9; transform: translateY(-2px); }
         .banner { padding:1rem; border-radius:8px; margin-bottom:1rem; text-align:center; font-weight:bold; }
         .banner.error { background:rgba(220,53,69,0.1); color:#dc3545; }
         .header-title { font-family:'Cinzel', serif; color:var(--sea-green); font-size:2.5rem; display:flex; align-items:center; gap:1rem; margin-bottom: 0.5rem; }
@@ -108,10 +108,6 @@ const AdminTournamentDetail = () => {
         </div>
 
         <div className="content">
-          <Link to="/admin/admin_tournament_management" className="back-link">
-            <i className="fas fa-arrow-left" /> Back to Tournaments
-          </Link>
-
           {error && <div className="banner error">{error}</div>}
 
           {loading ? (
@@ -198,6 +194,12 @@ const AdminTournamentDetail = () => {
                   </div>
                 )}
               </motion.div>
+
+              <div style={{ marginTop: '2rem', textAlign: 'right' }}>
+                <Link to="/admin/admin_tournament_management" className="back-link">
+                  <i className="fas fa-arrow-left" /> Back to Tournaments
+                </Link>
+              </div>
 
             </motion.div>
           ) : null}
