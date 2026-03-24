@@ -112,6 +112,23 @@ const AdminOrganizerDetail = () => {
     (meetingsPage - 1) * itemsPerPage,
     meetingsPage * itemsPerPage
   );
+  const tournamentsEvaluated = details?.tournamentsApproved || [];
+  const normalizeStatus = (value) => String(value || '').trim().toLowerCase();
+  const resolveDecision = (tournament) => {
+    if (tournament?.rejected_by) return 'rejected';
+    if (tournament?.approved_by) return 'approved';
+    const status = normalizeStatus(tournament?.status);
+    if (status === 'rejected') return 'rejected';
+    if (status === 'approved') return 'approved';
+    return null;
+  };
+  const tournamentsApprovedCount = tournamentsEvaluated.filter(
+    (t) => resolveDecision(t) === 'approved'
+  ).length;
+  const tournamentsRejectedCount = tournamentsEvaluated.filter(
+    (t) => resolveDecision(t) === 'rejected'
+  ).length;
+  const meetingsCount = details?.meetingsScheduled?.length || 0;
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex' }}>
@@ -210,12 +227,16 @@ const AdminOrganizerDetail = () => {
 
               <motion.div variants={itemVariants} className="stat-grid">
                 <div className="stat-box">
-                  <h4>Tournaments Evaluated</h4>
-                  <p>{details.tournamentsApproved.length}</p>
+                  <h4>Tournaments Approved</h4>
+                  <p>{tournamentsApprovedCount}</p>
                 </div>
                 <div className="stat-box">
-                  <h4>Meetings Involved</h4>
-                  <p>{details.meetingsScheduled.length}</p>
+                  <h4>Tournaments Rejected</h4>
+                  <p>{tournamentsRejectedCount}</p>
+                </div>
+                <div className="stat-box">
+                  <h4>Meetings Scheduled</h4>
+                  <p>{meetingsCount}</p>
                 </div>
               </motion.div>
 
@@ -234,17 +255,23 @@ const AdminOrganizerDetail = () => {
                     </thead>
                     <tbody>
                       {currentTournaments.length === 0 ? (
-                         <tr><td colSpan={5} className="empty">No tournaments approved yet.</td></tr>
+                         <tr><td colSpan={5} className="empty">No tournament decisions yet.</td></tr>
                       ) : (
-                        currentTournaments.map((t, idx) => (
+                        currentTournaments.map((t, idx) => {
+                          const tournamentDate = t.date || t.start_date || t.end_date;
+                          const tournamentFee = t.entry_fee ?? t.base_fee ?? t.fee ?? 0;
+                          const statusLabel = String(t.status || '').trim();
+                          const statusKey = statusLabel.toLowerCase();
+                          return (
                           <tr key={idx}>
                             <td className="td" style={{ fontWeight: 'bold' }}>{t.name || t.title}</td>
                             <td className="td">{t.type}</td>
-                            <td className="td">{t.start_date ? new Date(t.start_date).toLocaleDateString() : 'TBD'}</td>
-                            <td className="td">INR {t.base_fee || 0}</td>
-                            <td className="td"><span className={`status-pill ${t.status?.toLowerCase() === 'rejected' || t.status?.toLowerCase() === 'removed' ? 'status-removed' : 'status-active'}`}>{t.status}</span></td>
+                            <td className="td">{tournamentDate ? new Date(tournamentDate).toLocaleDateString() : 'TBD'}</td>
+                            <td className="td">INR {tournamentFee}</td>
+                            <td className="td"><span className={`status-pill ${statusKey === 'rejected' || statusKey === 'removed' ? 'status-removed' : 'status-active'}`}>{statusLabel || 'Unknown'}</span></td>
                           </tr>
-                        ))
+                          );
+                        })
                       )}
                     </tbody>
                   </table>

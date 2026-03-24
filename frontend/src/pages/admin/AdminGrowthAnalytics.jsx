@@ -97,15 +97,23 @@ export default function AdminGrowthAnalytics() {
           borderWidth: 3,
           pointRadius: 4
         },
-        {
-          label: 'Ongoing',
-          data: tournamentsTimeline.map((row) => Number(row.ongoing || 0)),
-          borderColor: '#F4B942',
-          backgroundColor: 'rgba(244,185,66,0.6)',
-          borderWidth: 2,
-          pointRadius: 3,
-          borderDash: [4, 4]
-        }
+      {
+        label: 'Ongoing',
+        data: tournamentsTimeline.map((row) => Number(row.ongoing || 0)),
+        borderColor: '#F4B942',
+        backgroundColor: 'rgba(244,185,66,0.6)',
+        borderWidth: 2,
+        pointRadius: 3,
+        borderDash: [4, 4]
+      },
+      {
+        label: 'Rejected',
+        data: tournamentsTimeline.map((row) => Number(row.rejected || 0)),
+        borderColor: '#DC2626',
+        backgroundColor: 'rgba(220,38,38,0.6)',
+        borderWidth: 2,
+        pointRadius: 3
+      }
     ]
   }), [tournamentsTimeline]);
 

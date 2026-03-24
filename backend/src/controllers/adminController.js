@@ -3,6 +3,7 @@ const moment = require('moment');
 const helpers = require('../utils/helpers');
 const path = require('path');
 const { sendContactStatusEmail } = require('../services/emailService');
+const { ObjectId } = require('mongodb');
 
 const normalizeEmail = (value) => (value == null ? '' : String(value).trim().toLowerCase());
 const isSelfDeletedUser = (user) => {
@@ -555,7 +556,20 @@ const getOrganizerDetails = async (req, res) => {
         { rejected_by: organizer.email },
         { rejected_by: { $in: identityRegexes } }
       ]
-    }).project({ name: 1, title: 1, type: 1, start_date: 1, end_date: 1, base_fee: 1, location: 1, status: 1 }).sort({ start_date: -1 }).toArray();
+    }).project({
+      name: 1,
+      title: 1,
+      type: 1,
+      date: 1,
+      start_date: 1,
+      end_date: 1,
+      entry_fee: 1,
+      base_fee: 1,
+      location: 1,
+      status: 1,
+      approved_by: 1,
+      rejected_by: 1
+    }).sort({ date: -1, start_date: -1 }).toArray();
 
     // Get meetings scheduled/taken by this organizer
     const meetingsScheduled = await db.collection('meetingsdb').find({
@@ -1064,6 +1078,7 @@ const getGrowthAnalytics = async (req, res) => {
         tournamentsCreated: 0,
         completedTournaments: 0,
         ongoingTournaments: 0,
+        rejectedTournaments: 0,
         revenue: 0,
         transactions: 0
       };
@@ -1084,6 +1099,7 @@ const getGrowthAnalytics = async (req, res) => {
       const status = String(tournament?.status || '').toLowerCase();
       if (status === 'completed') bucketMap[key].completedTournaments += 1;
       if (status === 'ongoing') bucketMap[key].ongoingTournaments += 1;
+      if (status === 'rejected') bucketMap[key].rejectedTournaments += 1;
     });
 
     sales.forEach((sale) => {
@@ -1099,7 +1115,8 @@ const getGrowthAnalytics = async (req, res) => {
       label: bucket.label,
       totalCreated: bucketMap[bucket.key]?.tournamentsCreated || 0,
       completed: bucketMap[bucket.key]?.completedTournaments || 0,
-      ongoing: bucketMap[bucket.key]?.ongoingTournaments || 0
+      ongoing: bucketMap[bucket.key]?.ongoingTournaments || 0,
+      rejected: bucketMap[bucket.key]?.rejectedTournaments || 0
     }));
     const salesTimeline = buckets.map((bucket) => ({
       label: bucket.label,
@@ -1286,13 +1303,53 @@ const getPlayerDetails = async (req, res) => {
     let tournaments = [];
     if(tournamentIds.length > 0) {
       const tData = await db.collection('tournaments').find({ _id: { $in: tournamentIds } }).project({ name: 1, title: 1, type: 1, start_date: 1, date: 1, entry_fee: 1, status: 1 }).toArray();
-      tournaments = tData.map(t => {
+      const resolvePosition = async (tournamentId, pRecord) => {
+        const directPosition = pRecord?.rank ?? pRecord?.position;
+        if (directPosition != null) return directPosition;
+
+        let tid;
+        try { tid = typeof tournamentId === 'string' ? new ObjectId(tournamentId) : tournamentId; }
+        catch (e) { tid = tournamentId; }
+
+        const storedPairings = await db.collection('tournament_pairings').findOne({ tournament_id: tid });
+        if (!storedPairings || !Array.isArray(storedPairings.rounds)) return 'N/A';
+
+        const players = await db.collection('tournament_players')
+          .find({ tournament_id: tid })
+          .project({ _id: 1, username: 1 })
+          .toArray();
+        if (players.length === 0) return 'N/A';
+
+        const playersMap = new Map(players.map((p) => [String(p._id), { id: String(p._id), username: p.username, score: 0 }]));
+        storedPairings.rounds.forEach((round) => {
+          (round?.pairings || []).forEach((pairing) => {
+            const p1 = playersMap.get(String(pairing?.player1?.id));
+            const p2 = playersMap.get(String(pairing?.player2?.id));
+            if (p1) p1.score = Number(pairing?.player1?.score || 0);
+            if (p2) p2.score = Number(pairing?.player2?.score || 0);
+          });
+          if (round?.byePlayer) {
+            const byePlayer = playersMap.get(String(round.byePlayer.id));
+            if (byePlayer) byePlayer.score = Number(round.byePlayer.score || 0);
+          }
+        });
+
+        const rankings = Array.from(playersMap.values())
+          .sort((a, b) => b.score - a.score)
+          .map((p, index) => ({ rank: index + 1, username: p.username }));
+
+        const playerName = String(pRecord?.username || player.name || '').trim().toLowerCase();
+        const rankRow = rankings.find((r) => String(r.username || '').trim().toLowerCase() === playerName);
+        return rankRow ? rankRow.rank : 'N/A';
+      };
+
+      tournaments = await Promise.all(tData.map(async (t) => {
         const pRecord = ptournaments.find(pt => String(pt.tournament_id) === String(t._id));
         return {
           ...t,
-          position: pRecord ? (pRecord.rank || pRecord.position || pRecord.status || 'N/A') : 'N/A'
+          position: await resolvePosition(t._id, pRecord)
         };
-      });
+      }));
     }
 
     // Subscriptions
@@ -1343,6 +1400,7 @@ const getPlayerDetails = async (req, res) => {
         name: player.name,
         email: player.email,
         college: player.college,
+        dob: player.dob,
         isDeleted: player.isDeleted,
         status: status
       },
