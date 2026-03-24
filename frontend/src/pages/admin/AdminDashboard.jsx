@@ -34,6 +34,8 @@ const AdminDashboard = () => {
   const [savingMessageId, setSavingMessageId] = useState('');
   const [messageEdits, setMessageEdits] = useState({});
   const [messageSaveUi, setMessageSaveUi] = useState({});
+  const [pinnedMessageId, setPinnedMessageId] = useState('');
+  const [hoveredMessageId, setHoveredMessageId] = useState('');
   const [dashboardData, setDashboardData] = useState({
     adminName: 'Admin',
     stats: { players: 0, organizers: 0, coordinators: 0, tournaments: 0, revenue: 0 },
@@ -96,6 +98,10 @@ const AdminDashboard = () => {
     internal_note: msg?.internal_note || ''
   });
   const getMessageEdit = (msg) => messageEdits[msg?._id] || ensureMessageState(msg);
+  const truncateMessage = (text) => {
+    const value = String(text || '');
+    return value.length > 50 ? `${value.slice(0, 50)}…` : value;
+  };
 
   const handleMessageEdit = (msg, key, value) => {
     if (!msg?._id) return;
@@ -240,6 +246,7 @@ const AdminDashboard = () => {
           padding: 1.5rem;
           min-width: 320px;
           max-width: 350px;
+          height: 340px;
           transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
           position: relative;
           margin-left: -300px;
@@ -308,10 +315,22 @@ const AdminDashboard = () => {
           color: var(--sea-green);
           font-weight: bold;
         }
+        .message-email {
+          display: block;
+          font-weight: 600;
+          font-size: 0.82rem;
+          opacity: 0.75;
+          margin-top: 0.15rem;
+        }
         .message-body {
           color: #475569;
           line-height: 1.5;
           opacity: 0.9;
+          flex: 1;
+          overflow: hidden;
+        }
+        .message-body.expanded {
+          overflow-y: auto;
         }
         .message-date {
           font-size: 0.8rem;
@@ -485,6 +504,9 @@ const AdminDashboard = () => {
                     animate="visible"
                     className="message-card"
                     style={{ zIndex: visibleMessages.length - idx }}
+                    onMouseEnter={() => setHoveredMessageId(msg?._id || '')}
+                    onMouseLeave={() => setHoveredMessageId((prev) => (prev === msg?._id ? '' : prev))}
+                    onClick={() => setPinnedMessageId((prev) => (prev === msg?._id ? '' : msg?._id || ''))}
                   >
                     {(() => {
                       const edit = getMessageEdit(msg);
@@ -492,17 +514,22 @@ const AdminDashboard = () => {
                       const saveState = messageSaveUi[msg?._id]?.state || 'idle';
                       const saveError = messageSaveUi[msg?._id]?.error || '';
                       const isSaving = savingMessageId === msg._id || saveState === 'saving';
+                      const isExpanded = pinnedMessageId === msg?._id || hoveredMessageId === msg?._id;
+                      const messageText = isExpanded ? msg.message : truncateMessage(msg.message);
                       return (
                         <>
                     <div className="message-header">
-                      <span>{msg.name} ({msg.email})</span>
+                      <span>
+                        <span>{msg.name}</span>
+                        <span className="message-email">{msg.email}</span>
+                      </span>
                       <span style={{ display: 'inline-flex', gap: '0.5rem', alignItems: 'center' }}>
                         <span className={`status-pill ${statusClass(edit.status)}`}>{edit.status.replace('_', ' ')}</span>
                         {new Date(msg.submission_date).toLocaleDateString()}
                       </span>
                     </div>
-                    <div className="message-body">
-                      {msg.message}
+                    <div className={`message-body ${isExpanded ? 'expanded' : ''}`}>
+                      {messageText}
                     </div>
                     <div style={{ marginTop: '0.75rem', display: 'grid', gap: '0.55rem' }}>
                       <select
