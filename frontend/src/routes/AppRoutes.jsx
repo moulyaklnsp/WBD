@@ -73,9 +73,13 @@ import StoreMonitoring from '../pages/organizer/StoreMonitoring';
 // ─── Admin Pages ─────────────────────────────────────────────────
 import AdminDashboard from '../pages/admin/AdminDashboard';
 import AdminTournamentManagement from '../pages/admin/AdminTournamentManagement';
+import AdminTournamentDetail from '../pages/admin/AdminTournamentDetail';
 import AdminCoordinatorManagement from '../pages/admin/AdminCoordinatorManagement';
+import AdminCoordinatorDetail from '../pages/admin/AdminCoordinatorDetail';
 import AdminOrganizerManagement from '../pages/admin/AdminOrganizerManagement';
+import AdminOrganizerDetail from '../pages/admin/AdminOrganizerDetail';
 import AdminPlayerManagement from '../pages/admin/AdminPlayerManagement';
+import AdminPlayerDetail from '../pages/admin/AdminPlayerDetail';
 import AdminPayments from '../pages/admin/AdminPayments';
 import AdminOrganizerAnalytics from '../pages/admin/AdminOrganizerAnalytics';
 import AdminGrowthAnalytics from '../pages/admin/AdminGrowthAnalytics';
@@ -170,12 +174,16 @@ export default function AppRoutes() {
       {/* ═══ Admin Routes ═══ */}
       <Route path="/admin/admin_dashboard" element={<AnimatedPageLayout><AdminDashboard /></AnimatedPageLayout>} />
       <Route path="/admin/admin_tournament_management" element={<AnimatedPageLayout><AdminTournamentManagement /></AnimatedPageLayout>} />
+      <Route path="/admin/tournament/:id" element={<AnimatedPageLayout><AdminTournamentDetail /></AnimatedPageLayout>} />
       <Route path="/admin/coordinator_management" element={<AnimatedPageLayout><AdminCoordinatorManagement /></AnimatedPageLayout>} />
+      <Route path="/admin/coordinator/:email" element={<AnimatedPageLayout><AdminCoordinatorDetail /></AnimatedPageLayout>} />
       <Route path="/admin/organizer_management" element={<AnimatedPageLayout><AdminOrganizerManagement /></AnimatedPageLayout>} />
+      <Route path="/admin/organizer/:email" element={<AnimatedPageLayout><AdminOrganizerDetail /></AnimatedPageLayout>} />
       <Route path="/admin/player_management" element={<AnimatedPageLayout><AdminPlayerManagement /></AnimatedPageLayout>} />
+      <Route path="/admin/player/:email" element={<AnimatedPageLayout><AdminPlayerDetail /></AnimatedPageLayout>} />
       <Route path="/admin/payments" element={<AnimatedPageLayout><AdminPayments /></AnimatedPageLayout>} />
       <Route path="/admin/growth_analytics" element={<AnimatedPageLayout><AdminGrowthAnalytics /></AnimatedPageLayout>} />
-      <Route path="/admin/organizer_analytics" element={<AnimatedPageLayout><AdminOrganizerAnalytics /></AnimatedPageLayout>} />
+
 
       {/* ═══ Catch-all 404 ═══ */}
       <Route

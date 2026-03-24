@@ -17,6 +17,11 @@ const AdminOrganizerAnalytics = () => {
     meetingsScheduled: 0
   });
   const [organizers, setOrganizers] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const itemsPerPage = 5;
+  const totalPages = Math.ceil(organizers.length / itemsPerPage);
+  const shownOrganizers = organizers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const fetchAnalytics = useCallback(async () => {
     setLoading(true);
@@ -43,7 +48,7 @@ const AdminOrganizerAnalytics = () => {
     { path: '/admin/admin_tournament_management', label: 'Tournament Approvals', icon: 'fas fa-trophy' },
     { path: '/admin/payments', label: 'Payments & Subscriptions', icon: 'fas fa-money-bill-wave' },
     { path: '/admin/growth_analytics', label: 'Growth Analytics', icon: 'fas fa-chart-area' },
-    { path: '/admin/organizer_analytics', label: 'Organizer Analytics', icon: 'fas fa-chart-line' }
+
   ];
 
   return (
@@ -66,6 +71,10 @@ const AdminOrganizerAnalytics = () => {
         .banner.error { background:rgba(220,53,69,0.1); color:#dc3545; }
         .back-link { display:inline-flex; align-items:center; gap:0.5rem; background-color:var(--sea-green); color:var(--on-accent); text-decoration:none; padding:0.8rem 1.5rem; border-radius:8px; font-family:'Cinzel', serif; font-weight:bold; }
         .empty { text-align:center; padding:1.5rem; color:var(--sea-green); font-style:italic; }
+        .pagination { display:flex; justify-content:center; align-items:center; gap:1rem; margin-top:1rem; }
+        .page-btn { background-color:var(--sea-green); color:var(--on-accent); border:none; padding:0.6rem 1.2rem; border-radius:8px; cursor:pointer; font-family:'Cinzel', serif; font-weight:bold; transition:all 0.3s ease; }
+        .page-btn:disabled { opacity:0.5; cursor:not-allowed; }
+        .page-info { font-family:'Cinzel', serif; font-weight:bold; color:var(--sea-green); }
       `}</style>
 
       <div className="page player-neo">
@@ -146,7 +155,7 @@ const AdminOrganizerAnalytics = () => {
                 ) : organizers.length === 0 ? (
                   <tr><td colSpan={9} className="empty">No organizers found.</td></tr>
                 ) : (
-                  organizers.map((row, idx) => (
+                  shownOrganizers.map((row, idx) => (
                     <tr key={`${row.email || row.name}-${idx}`}>
                       <td className="td">{row.rank}</td>
                       <td className="td">{row.name}</td>
@@ -162,11 +171,34 @@ const AdminOrganizerAnalytics = () => {
                 )}
               </tbody>
             </table>
+
+            {totalPages > 1 && (
+              <div className="pagination">
+                <button 
+                  className="page-btn" 
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))} 
+                  disabled={currentPage === 1}
+                >
+                  <i className="fas fa-chevron-left" /> Prev
+                </button>
+                <span className="page-info">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <button 
+                  className="page-btn" 
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} 
+                  disabled={currentPage === totalPages}
+                >
+                  Next <i className="fas fa-chevron-right" />
+                </button>
+              </div>
+            )}
+
             <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'space-between' }}>
               <button type="button" className="back-link" onClick={fetchAnalytics}>
                 <i className="fas fa-sync-alt" /> Refresh
               </button>
-              <Link to="/admin/admin_dashboard" className="back-to-dashboard">
+              <Link to="/admin/admin_dashboard" className="back-link">
                 <i className="fas fa-arrow-left" /> Back to Dashboard
               </Link>
             </div>

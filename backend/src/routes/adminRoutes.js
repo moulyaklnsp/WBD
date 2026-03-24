@@ -88,6 +88,7 @@ router.patch('/api/contact/:id/status', adminController.updateContactMessageStat
  *         description: Tournament list
  */
 router.get('/api/tournaments', adminController.getTournaments);
+router.get('/api/tournaments/:id/details', adminController.getTournamentDetails);
 
 /**
  * @swagger
@@ -162,6 +163,9 @@ router.delete('/api/coordinators/:email', adminController.removeCoordinator);
  */
 router.patch('/api/coordinators/restore/:email', adminController.restoreCoordinator);
 
+// Get Coordinator Details 
+router.get('/api/coordinators/:email/details', adminController.getCoordinatorDetails);
+
 // ─── Organizer management ─────────────────────────────────────────────────────
 
 /**
@@ -177,6 +181,8 @@ router.patch('/api/coordinators/restore/:email', adminController.restoreCoordina
  *         description: Organizer list
  */
 router.get('/api/organizers', adminController.getOrganizers);
+
+router.get('/api/organizers/:email/details', adminController.getOrganizerDetails);
 
 /**
  * @swagger
@@ -269,6 +275,12 @@ router.delete('/api/players/:email', adminController.removePlayer);
  *         description: Player restored
  */
 router.patch('/api/players/restore/:email', adminController.restorePlayer);
+
+// Get player details profile
+router.get('/api/players/:email/details', adminController.getPlayerDetails);
+
+// Get player stats details specifically for graphs
+router.get('/api/players/:playerId/stats', adminController.getPlayerStatsVisualDetails);
 
 // ─── Payments & Analytics ─────────────────────────────────────────────────────
 

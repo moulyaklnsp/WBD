@@ -26,7 +26,8 @@ const AdminOrganizerManagement = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  const [visible, setVisible] = useState(5);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
   const [attr, setAttr] = useState('name');
   const [query, setQuery] = useState('');
 
@@ -38,7 +39,7 @@ const AdminOrganizerManagement = () => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setOrganizers(Array.isArray(data) ? data : (Array.isArray(data?.organizers) ? data.organizers : []));
-      setVisible(5);
+      setCurrentPage(1);
     } catch (e) {
       setError('Failed to load organizers.');
     } finally {
@@ -63,9 +64,10 @@ const AdminOrganizerManagement = () => {
     return organizers.filter((o) => (getVal(o) || '').toString().toLowerCase().includes(q));
   }, [organizers, query, attr]);
 
-  const shown = filtered.slice(0, visible);
-  const canMore = filtered.length > visible;
-  const canHide = visible > 5;
+  const totalPages = Math.ceil(filtered.length / itemsPerPage) || 1;
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const shown = filtered.slice(startIndex, startIndex + itemsPerPage);
+
   const isSelfDeleted = (user) => {
     const email = String(user?.email || '').trim().toLowerCase();
     const deletedBy = String(user?.deleted_by || '').trim().toLowerCase();
@@ -109,7 +111,7 @@ const AdminOrganizerManagement = () => {
     { path: '/admin/admin_tournament_management', label: 'Tournament Approvals', icon: 'fas fa-trophy' },
     { path: '/admin/payments', label: 'Payments & Subscriptions', icon: 'fas fa-money-bill-wave' },
     { path: '/admin/growth_analytics', label: 'Growth Analytics', icon: 'fas fa-chart-area' },
-    { path: '/admin/organizer_analytics', label: 'Organizer Analytics', icon: 'fas fa-chart-line' }
+
   ];
 
   return (
@@ -128,7 +130,11 @@ const AdminOrganizerManagement = () => {
         .action-btn { background-color:#ff6b6b; color:#fff; border:none; padding:0.6rem 1rem; border-radius:5px; cursor:pointer; transition:all 0.3s ease; font-family:'Cinzel', serif; font-weight:bold; display:inline-flex; align-items:center; gap:0.5rem; }
         .restore-btn { background-color:var(--sea-green); color:var(--on-accent); }
         .locked-tag { color:#c62828; font-weight:bold; font-family:'Cinzel', serif; display:inline-flex; align-items:center; gap:0.4rem; }
-        .more-btn { display:inline-flex; align-items:center; gap:0.5rem; background-color:var(--sea-green); color:var(--on-accent); text-decoration:none; padding:0.8rem 1.5rem; border-radius:8px; transition:all 0.3s ease; font-family:'Cinzel', serif; font-weight:bold; cursor:pointer; border:none; }
+        .pagination { display: flex; align-items: center; justify-content: flex-end; gap: 1rem; margin-top: 1.5rem; }
+        .page-btn { background-color: var(--sea-green); color: var(--on-accent); border: none; padding: 0.6rem 1.2rem; border-radius: 5px; cursor: pointer; font-family: 'Cinzel', serif; font-weight: bold; transition: all 0.3s ease; display: inline-flex; align-items: center; gap: 0.5rem; opacity: 0.9; }
+        .page-btn:hover:not(:disabled) { transform: translateY(-2px); opacity: 1; box-shadow: 0 4px 12px rgba(var(--sea-green-rgb, 27, 94, 63), 0.3); }
+        .page-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .page-info { font-family: 'Cinzel', serif; font-weight: bold; color: var(--sea-green); font-size: 1.1rem; }
         .row-counter { text-align:center; margin-bottom:1rem; font-family:'Cinzel', serif; font-size:1.2rem; color:var(--sea-green); background-color:rgba(var(--sea-green-rgb, 27, 94, 63), 0.1); padding:0.5rem 1rem; border-radius:8px; display:inline-block; }
         .empty { text-align:center; padding:2rem; color:var(--sea-green); font-style:italic; }
         .search-bar { display:flex; align-items:center; gap:10px; padding:12px; background:var(--card-bg); border-radius:10px; box-shadow:0 2px 6px rgba(0,0,0,0.1); width:min(100%, 860px); max-width:860px; margin:20px auto; border:1px solid var(--card-border); }
@@ -202,21 +208,21 @@ const AdminOrganizerManagement = () => {
             animate="visible"
           >
             <div style={{ textAlign: 'center' }}>
-              <span className="row-counter">{`${Math.min(visible, filtered.length)} / ${filtered.length}`}</span>
+              <span className="row-counter">{`${filtered.length > 0 ? startIndex + 1 : 0} - ${Math.min(startIndex + itemsPerPage, filtered.length)} of ${filtered.length}`}</span>
             </div>
 
             <div className="search-bar">
-              <select aria-label="Attribute" value={attr} onChange={(e) => { setAttr(e.target.value); setVisible(5); }} className="select">
+              <select aria-label="Attribute" value={attr} onChange={(e) => { setAttr(e.target.value); setCurrentPage(1); }} className="select">
                 <option value="name">Name</option>
                 <option value="email">Email</option>
                 <option value="college">College</option>
                 <option value="status">Status</option>
               </select>
-              <input aria-label="Search" placeholder="Search…" value={query} onChange={(e) => { setQuery(e.target.value); setVisible(5); }} className="input" />
+              <input aria-label="Search" placeholder="Search…" value={query} onChange={(e) => { setQuery(e.target.value); setCurrentPage(1); }} className="input" />
             </div>
 
             {loading ? (
-              <table className="table"><tbody><tr><td colSpan={4} className="empty"><i className="fas fa-info-circle" /> Loading organizers…</td></tr></tbody></table>
+              <table className="table"><tbody><tr><td colSpan={9} className="empty"><i className="fas fa-info-circle" /> Loading organizers…</td></tr></tbody></table>
             ) : (
               <>
                 <table className="table">
@@ -224,59 +230,79 @@ const AdminOrganizerManagement = () => {
                     <tr>
                       <th className="th"><i className="fas fa-user" /> Name</th>
                       <th className="th"><i className="fas fa-envelope" /> Email</th>
+                      <th className="th"><i className="fas fa-phone" /> Phone</th>
                       <th className="th"><i className="fas fa-university" /> College</th>
+                      <th className="th"><i className="fas fa-trophy" /> Tournaments (Appr.)</th>
+                      <th className="th"><i className="fas fa-ban" /> Tournaments (Rej.)</th>
+                      <th className="th"><i className="fas fa-video" /> Meetings</th>
+                      <th className="th"><i className="fas fa-info-circle" /> Status</th>
                       <th className="th"><i className="fas fa-cog" /> Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {shown.length === 0 ? (
-                      <tr><td colSpan={4} className="empty"><i className="fas fa-info-circle" /> No organizers available.</td></tr>
+                      <tr><td colSpan={9} className="empty"><i className="fas fa-info-circle" /> No organizers available.</td></tr>
                     ) : (
-                      shown.map((o, idx) => (
+                      shown.map((o, idx) => {
+                        const selfDeleted = isSelfDeleted(o);
+                        const isRemoved = o.isDeleted && !selfDeleted;
+                        return (
                         <tr key={`${o.email}-${idx}`}>
-                          <td className="td">{o.name}</td>
-                          <td className="td">{o.email}</td>
-                          <td className="td">{o.college}</td>
                           <td className="td">
-                            {o.isDeleted ? (
-                              isSelfDeleted(o) ? (
-                                <span className="locked-tag">
-                                  <i className="fas fa-lock" /> Self deleted
-                                </span>
-                              ) : (
+                            <Link to={`/admin/organizer/${encodeURIComponent(o.email)}`} style={{ color: 'inherit', fontWeight: 'bold', textDecoration: 'none' }}>
+                               {o.name} <i className="fas fa-external-link-alt" style={{ fontSize: '0.8rem', opacity: 0.6, marginLeft: '4px' }} />
+                            </Link>
+                          </td>
+                          <td className="td">{o.email}</td>
+                          <td className="td">{o.phone || 'N/A'}</td>
+                          <td className="td">{o.college}</td>
+                          <td className="td">{o.tournamentsApproved || 0}</td>
+                          <td className="td">{o.tournamentsRejected || 0}</td>
+                          <td className="td">{o.meetingsScheduled || 0}</td>
+                          <td className="td">
+                            {selfDeleted ? (
+                               <span style={{color: '#d97706', fontWeight: 'bold'}}><i className="fas fa-door-open" /> Left Platform</span>
+                            ) : isRemoved ? (
+                               <span style={{color: '#dc2626', fontWeight: 'bold'}}><i className="fas fa-ban" /> Removed</span>
+                            ) : (
+                               <span style={{color: '#16a34a', fontWeight: 'bold'}}><i className="fas fa-check-circle" /> Active</span>
+                            )}
+                          </td>
+                          <td className="td">
+                            {!selfDeleted && (
+                              isRemoved ? (
                                 <button type="button" className="action-btn restore-btn" onClick={() => handleRestore(o.email)}>
-                                  <i className="fas fa-user-plus" /> Restore
+                                  <i className="fas fa-undo" /> Restore
+                                </button>
+                              ) : (
+                                <button type="button" className="action-btn" onClick={() => handleRemove(o.email)}>
+                                  <i className="fas fa-trash" /> Remove
                                 </button>
                               )
-                            ) : (
-                              <button type="button" className="action-btn" onClick={() => handleRemove(o.email)}>
-                                <i className="fas fa-user-minus" /> Remove
-                              </button>
                             )}
                           </td>
                         </tr>
-                      ))
+                      )})
                     )}
                   </tbody>
                 </table>
 
-                <div style={{ textAlign: 'center', margin: '1rem 0', display: 'flex', justifyContent: 'center', gap: '1rem' }}>
-                  {canMore && (
-                    <button type="button" className="more-btn" onClick={() => setVisible((v) => Math.min(v + 5, filtered.length))}>
-                      <i className="fas fa-chevron-down" /> More
-                    </button>
-                  )}
-                  {canHide && (
-                    <button type="button" className="more-btn" onClick={() => setVisible(5)}>
-                      <i className="fas fa-chevron-up" /> Hide
-                    </button>
-                  )}
+                <div className="pagination">
+                  <button type="button" className="page-btn" disabled={currentPage === 1} onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}>
+                    <i className="fas fa-chevron-left" /> Previous
+                  </button>
+                  <span className="page-info">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <button type="button" className="page-btn" disabled={currentPage === totalPages} onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}>
+                    Next <i className="fas fa-chevron-right" />
+                  </button>
                 </div>
               </>
             )}
 
             <div style={{ marginTop: '2rem', textAlign: 'right' }}>
-              <Link to="/admin/admin_dashboard" className="back-to-dashboard">
+              <Link to="/admin/admin_dashboard" className="back-link">
                 <i className="fas fa-arrow-left" /> Back to Dashboard
               </Link>
             </div>

@@ -26,7 +26,8 @@ const AdminCoordinatorManagement = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  const [visible, setVisible] = useState(5);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
   const [attr, setAttr] = useState('name');
   const [query, setQuery] = useState('');
 
@@ -39,7 +40,7 @@ const AdminCoordinatorManagement = () => {
       const data = await res.json();
       // Legacy returned array directly; safeguard if API later wraps
       setCoordinators(Array.isArray(data) ? data : (Array.isArray(data?.coordinators) ? data.coordinators : []));
-      setVisible(5);
+      setCurrentPage(1);
     } catch (e) {
       setError('Failed to load coordinators.');
     } finally {
@@ -64,9 +65,10 @@ const AdminCoordinatorManagement = () => {
     return coordinators.filter((c) => (getVal(c) || '').toString().toLowerCase().includes(q));
   }, [coordinators, query, attr]);
 
-  const shown = filtered.slice(0, visible);
-  const canMore = filtered.length > visible;
-  const canHide = visible > 5;
+  const totalPages = Math.ceil(filtered.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const shown = filtered.slice(startIndex, startIndex + itemsPerPage);
+
   const isSelfDeleted = (user) => {
     const email = String(user?.email || '').trim().toLowerCase();
     const deletedBy = String(user?.deleted_by || '').trim().toLowerCase();
@@ -109,7 +111,7 @@ const AdminCoordinatorManagement = () => {
     { path: '/admin/admin_tournament_management', label: 'Tournament Approvals', icon: 'fas fa-trophy' },
     { path: '/admin/payments', label: 'Payments & Subscriptions', icon: 'fas fa-money-bill-wave' },
     { path: '/admin/growth_analytics', label: 'Growth Analytics', icon: 'fas fa-chart-area' },
-    { path: '/admin/organizer_analytics', label: 'Organizer Analytics', icon: 'fas fa-chart-line' }
+
   ];
 
   return (
@@ -142,6 +144,10 @@ const AdminCoordinatorManagement = () => {
         .banner.error { background:rgba(220,53,69,0.1); color:#dc3545; }
         .banner.ok { background:rgba(var(--sea-green-rgb, 27, 94, 63), 0.1); color:var(--sea-green); }
         .back-link { display:inline-flex; align-items:center; gap:0.5rem; background-color:var(--sea-green); color:var(--on-accent); text-decoration:none; padding:0.8rem 1.5rem; border-radius:8px; transition:all 0.3s ease; font-family:'Cinzel', serif; font-weight:bold; }
+        .pagination { display:flex; justify-content:center; align-items:center; gap:1rem; margin-top:1rem; }
+        .page-btn { background-color:var(--sea-green); color:var(--on-accent); border:none; padding:0.6rem 1.2rem; border-radius:8px; cursor:pointer; font-family:'Cinzel', serif; font-weight:bold; transition:all 0.3s ease; }
+        .page-btn:disabled { opacity:0.5; cursor:not-allowed; }
+        .page-info { font-family:'Cinzel', serif; font-weight:bold; color:var(--sea-green); }
       `}</style>
 
       <div className="page player-neo">
@@ -202,21 +208,21 @@ const AdminCoordinatorManagement = () => {
             animate="visible"
           >
             <div style={{ textAlign: 'center' }}>
-              <span className="row-counter">{`${Math.min(visible, filtered.length)} / ${filtered.length}`}</span>
+              <span className="row-counter">{`${Math.min(currentPage * itemsPerPage, filtered.length)} / ${filtered.length}`}</span>
             </div>
 
             <div className="search-bar">
-              <select aria-label="Attribute" value={attr} onChange={(e) => { setAttr(e.target.value); setVisible(5); }} className="select">
+              <select aria-label="Attribute" value={attr} onChange={(e) => { setAttr(e.target.value); setCurrentPage(1); }} className="select">
                 <option value="name">Name</option>
                 <option value="email">Email</option>
                 <option value="college">Assigned College</option>
                 <option value="status">Status</option>
               </select>
-              <input aria-label="Search" placeholder="Search…" value={query} onChange={(e) => { setQuery(e.target.value); setVisible(5); }} className="input" />
+              <input aria-label="Search" placeholder="Search…" value={query} onChange={(e) => { setQuery(e.target.value); setCurrentPage(1); }} className="input" />
             </div>
 
             {loading ? (
-              <table className="table"><tbody><tr><td colSpan={4} className="empty"><i className="fas fa-info-circle" /> Loading coordinators…</td></tr></tbody></table>
+              <table className="table"><tbody><tr><td colSpan={7} className="empty"><i className="fas fa-info-circle" /> Loading coordinators…</td></tr></tbody></table>
             ) : (
               <>
                 <table className="table">
@@ -225,58 +231,68 @@ const AdminCoordinatorManagement = () => {
                       <th className="th"><i className="fas fa-user" /> Name</th>
                       <th className="th"><i className="fas fa-envelope" /> Email</th>
                       <th className="th"><i className="fas fa-university" /> Assigned College</th>
-                      <th className="th"><i className="fas fa-cog" /> Actions</th>
+                      <th className="th"><i className="fas fa-trophy" /> Tournaments (Cond.)</th>
+                      <th className="th"><i className="fas fa-ban" /> Tournaments (Rej.)</th>
+                      <th className="th"><i className="fas fa-info-circle" /> Status</th>
                     </tr>
                   </thead>
                   <tbody>
                     {shown.length === 0 ? (
-                      <tr><td colSpan={4} className="empty"><i className="fas fa-info-circle" /> No coordinators available.</td></tr>
+                      <tr><td colSpan={7} className="empty"><i className="fas fa-info-circle" /> No coordinators available.</td></tr>
                     ) : (
-                      shown.map((c, idx) => (
+                      shown.map((c, idx) => {
+                        const selfDeleted = isSelfDeleted(c);
+                        const isRemoved = c.isDeleted && !selfDeleted;
+                        return (
                         <tr key={`${c.email}-${idx}`}>
-                          <td className="td">{c.name}</td>
+                          <td className="td">
+                            <Link to={`/admin/coordinator/${encodeURIComponent(c.email)}`} style={{ color: 'inherit', fontWeight: 'bold', textDecoration: 'none' }}>
+                               {c.name} <i className="fas fa-external-link-alt" style={{ fontSize: '0.8rem', opacity: 0.6, marginLeft: '4px' }} />
+                            </Link>
+                          </td>
                           <td className="td">{c.email}</td>
                           <td className="td">{c.college}</td>
+                          <td className="td">{c.tournamentsConducted || 0}</td>
+                          <td className="td">{c.tournamentsRejected || 0}</td>
                           <td className="td">
-                            {c.isDeleted ? (
-                              isSelfDeleted(c) ? (
-                                <span className="locked-tag">
-                                  <i className="fas fa-lock" /> Self deleted
-                                </span>
-                              ) : (
-                                <button type="button" className="action-btn restore-btn" onClick={() => handleRestore(c.email)}>
-                                  <i className="fas fa-user-plus" /> Restore
-                                </button>
-                              )
+                            {selfDeleted ? (
+                               <span style={{color: '#d97706', fontWeight: 'bold'}}><i className="fas fa-door-open" /> Left Platform</span>
+                            ) : isRemoved ? (
+                               <span style={{color: '#dc2626', fontWeight: 'bold'}}><i className="fas fa-ban" /> Removed</span>
                             ) : (
-                              <button type="button" className="action-btn" onClick={() => handleRemove(c.email)}>
-                                <i className="fas fa-user-minus" /> Remove
-                              </button>
+                               <span style={{color: '#16a34a', fontWeight: 'bold'}}><i className="fas fa-check-circle" /> Active</span>
                             )}
                           </td>
                         </tr>
-                      ))
+                      )})
                     )}
                   </tbody>
                 </table>
 
-                <div style={{ textAlign: 'center', margin: '1rem 0', display: 'flex', justifyContent: 'center', gap: '1rem' }}>
-                  {canMore && (
-                    <button type="button" className="more-btn" onClick={() => setVisible((v) => Math.min(v + 5, filtered.length))}>
-                      <i className="fas fa-chevron-down" /> More
+                {totalPages > 1 && (
+                  <div className="pagination">
+                    <button 
+                      className="page-btn" 
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                    >
+                      <i className="fas fa-chevron-left" /> Previous
                     </button>
-                  )}
-                  {canHide && (
-                    <button type="button" className="more-btn" onClick={() => setVisible(5)}>
-                      <i className="fas fa-chevron-up" /> Hide
+                    <span className="page-info">Page {currentPage} of {totalPages}</span>
+                    <button 
+                      className="page-btn" 
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                    >
+                      Next <i className="fas fa-chevron-right" />
                     </button>
-                  )}
-                </div>
+                  </div>
+                )}
               </>
             )}
 
             <div style={{ marginTop: '2rem', textAlign: 'right' }}>
-              <Link to="/admin/admin_dashboard" className="back-to-dashboard">
+              <Link to="/admin/admin_dashboard" className="back-link">
                 <i className="fas fa-arrow-left" /> Back to Dashboard
               </Link>
             </div>
