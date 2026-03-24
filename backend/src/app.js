@@ -26,6 +26,7 @@ const methodOverride = require('method-override');
 const morgan         = require('morgan');
 const rfs            = require('rotating-file-stream');
 const swaggerUi      = require('swagger-ui-express');
+const { graphqlHTTP } = require('express-graphql');
 
 // Suppress dotenv tip messages
 const originalLog = console.log;
@@ -36,6 +37,7 @@ console.log = originalLog;
 // ─── Internal modules ─────────────────────────────────────────────────────────
 const { connectDB }          = require('./config/database');
 const swaggerSpec            = require('./config/swagger');
+const { schema: authSchema, rootValue: authRootValue, buildContext: buildGraphQLContext } = require('./graphql/authSchema');
 const { initSocketHandlers } = require('./services/socketService');
 const SchedulerService       = require('./services/schedulerService');
 const LogsController         = require('./controllers/logsController');
@@ -164,6 +166,23 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
 }));
 app.get('/api-docs.json', (_req, res) => res.json(swaggerSpec));
 
+// â”€â”€â”€ GraphQL (Auth only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Allow GraphiQL to run by relaxing CSP for this route only.
+app.use('/graphql', (_req, res, next) => {
+  res.removeHeader('Content-Security-Policy');
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'"
+  );
+  next();
+});
+app.use('/graphql', graphqlHTTP((req, res) => ({
+  schema: authSchema,
+  rootValue: authRootValue,
+  context: buildGraphQLContext(req, res),
+  graphiql: (process.env.NODE_ENV || 'development') !== 'production'
+})));
+
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use(authRoutes);                                    // /api/login, /api/signup, etc.
 app.use(chatRoutes);                                    // /api/chat/*
@@ -222,5 +241,7 @@ SchedulerService.startTournamentScheduler();
 // ─── Start server ─────────────────────────────────────────────────────────────
 connectDB().catch(err => console.error('Database connection failed:', err));
 server.listen(PORT, () =>
-  console.log(`ChessHive server running on port ${PORT} | Swagger UI: http://localhost:${PORT}/api-docs`)
+  console.log(
+    `ChessHive server running on port ${PORT} | Swagger UI: http://localhost:${PORT}/api-docs | GraphQL: http://localhost:${PORT}/graphql`
+  )
 );

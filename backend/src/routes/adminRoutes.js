@@ -88,6 +88,26 @@ router.patch('/api/contact/:id/status', adminController.updateContactMessageStat
  *         description: Tournament list
  */
 router.get('/api/tournaments', adminController.getTournaments);
+
+/**
+ * @swagger
+ * /admin/api/tournaments/{id}/details:
+ *   get:
+ *     summary: Get tournament details
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Tournament details
+ *       404:
+ *         description: Tournament not found
+ */
 router.get('/api/tournaments/:id/details', adminController.getTournamentDetails);
 
 /**
@@ -163,7 +183,26 @@ router.delete('/api/coordinators/:email', adminController.removeCoordinator);
  */
 router.patch('/api/coordinators/restore/:email', adminController.restoreCoordinator);
 
-// Get Coordinator Details 
+// Get Coordinator Details
+/**
+ * @swagger
+ * /admin/api/coordinators/{email}/details:
+ *   get:
+ *     summary: Get coordinator details
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: email
+ *         required: true
+ *         schema: { type: string, format: email }
+ *     responses:
+ *       200:
+ *         description: Coordinator details
+ *       404:
+ *         description: Coordinator not found
+ */
 router.get('/api/coordinators/:email/details', adminController.getCoordinatorDetails);
 
 // ─── Organizer management ─────────────────────────────────────────────────────
@@ -182,6 +221,25 @@ router.get('/api/coordinators/:email/details', adminController.getCoordinatorDet
  */
 router.get('/api/organizers', adminController.getOrganizers);
 
+/**
+ * @swagger
+ * /admin/api/organizers/{email}/details:
+ *   get:
+ *     summary: Get organizer details
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: email
+ *         required: true
+ *         schema: { type: string, format: email }
+ *     responses:
+ *       200:
+ *         description: Organizer details
+ *       404:
+ *         description: Organizer not found
+ */
 router.get('/api/organizers/:email/details', adminController.getOrganizerDetails);
 
 /**
@@ -277,9 +335,47 @@ router.delete('/api/players/:email', adminController.removePlayer);
 router.patch('/api/players/restore/:email', adminController.restorePlayer);
 
 // Get player details profile
+/**
+ * @swagger
+ * /admin/api/players/{email}/details:
+ *   get:
+ *     summary: Get player profile details
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: email
+ *         required: true
+ *         schema: { type: string, format: email }
+ *     responses:
+ *       200:
+ *         description: Player details
+ *       404:
+ *         description: Player not found
+ */
 router.get('/api/players/:email/details', adminController.getPlayerDetails);
 
 // Get player stats details specifically for graphs
+/**
+ * @swagger
+ * /admin/api/players/{playerId}/stats:
+ *   get:
+ *     summary: Get player stats for graphs
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: playerId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Player stats data
+ *       404:
+ *         description: Player not found
+ */
 router.get('/api/players/:playerId/stats', adminController.getPlayerStatsVisualDetails);
 
 // ─── Payments & Analytics ─────────────────────────────────────────────────────

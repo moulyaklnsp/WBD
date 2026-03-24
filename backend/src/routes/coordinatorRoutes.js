@@ -124,6 +124,19 @@ router.get('/api/dashboard', coordinatorController.getDashboard);
  *         description: Notifications list
  */
 router.get('/api/notifications', coordinatorController.getNotifications);
+
+/**
+ * @swagger
+ * /coordinator/api/notifications/mark-read:
+ *   post:
+ *     summary: Mark coordinator notifications as read
+ *     tags: [Coordinator]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Notifications marked as read
+ */
 router.post('/api/notifications/mark-read', coordinatorController.markNotificationsRead);
 
 /**
@@ -156,6 +169,26 @@ router.post('/api/notifications/mark-read', coordinatorController.markNotificati
  */
 router.get('/api/profile', coordinatorController.getProfile);
 router.put('/api/profile', coordinatorController.updateProfile);
+
+/**
+ * @swagger
+ * /coordinator/api/upload-photo:
+ *   post:
+ *     summary: Upload coordinator profile photo
+ *     tags: [Coordinator]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               photo: { type: string, format: binary }
+ *     responses:
+ *       200:
+ *         description: Photo uploaded
+ */
 router.post('/api/upload-photo', coordinatorController.uploadPhoto);
 router.delete('/api/profile', coordinatorController.deleteProfile);
 
@@ -197,12 +230,121 @@ router.delete('/api/profile', coordinatorController.deleteProfile);
  *         description: Tournament created
  */
 router.get('/api/tournaments', coordinatorController.getTournaments);
+
+/**
+ * @swagger
+ * /coordinator/api/tournaments/{id}:
+ *   get:
+ *     summary: Get tournament details
+ *     tags: [Coordinator]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Tournament details
+ *   put:
+ *     summary: Update a tournament
+ *     tags: [Coordinator]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Tournament updated
+ *   delete:
+ *     summary: Delete a tournament
+ *     tags: [Coordinator]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Tournament deleted
+ */
 router.get('/api/tournaments/:id', coordinatorController.getTournamentById);
 router.post('/api/tournaments', coordinatorController.createTournament);
 router.put('/api/tournaments/:id', coordinatorController.updateTournament);
 router.delete('/api/tournaments/:id', coordinatorController.deleteTournament);
+
+/**
+ * @swagger
+ * /coordinator/api/tournaments/{id}/upload:
+ *   post:
+ *     summary: Upload tournament file (pairings, results, etc.)
+ *     tags: [Coordinator]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               file: { type: string, format: binary }
+ *     responses:
+ *       200:
+ *         description: File uploaded
+ */
 router.post('/api/tournaments/:id/upload', coordinatorController.uploadTournamentFileMiddleware, coordinatorController.uploadTournamentFile);
+
+/**
+ * @swagger
+ * /coordinator/api/tournaments/{id}/files:
+ *   get:
+ *     summary: List tournament files
+ *     tags: [Coordinator]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Tournament files
+ */
 router.get('/api/tournaments/:id/files', coordinatorController.getTournamentFiles);
+
+/**
+ * @swagger
+ * /coordinator/api/tournaments/{tournamentId}/files/{fileId}:
+ *   delete:
+ *     summary: Delete a tournament file
+ *     tags: [Coordinator]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: tournamentId
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: fileId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: File deleted
+ */
 router.delete('/api/tournaments/:tournamentId/files/:fileId', coordinatorController.deleteTournamentFile);
 
 // ─── Calendar ─────────────────────────────────────────────────────────────────
@@ -229,8 +371,47 @@ router.delete('/api/tournaments/:tournamentId/files/:fileId', coordinatorControl
  */
 router.get('/api/calendar', coordinatorController.getCalendarEvents);
 router.post('/api/calendar', coordinatorController.createCalendarEvent);
+
+/**
+ * @swagger
+ * /coordinator/api/calendar/check-conflict:
+ *   get:
+ *     summary: Check calendar conflicts for a date
+ *     tags: [Coordinator]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Conflict check result
+ *   post:
+ *     summary: Check calendar conflicts for a date
+ *     tags: [Coordinator]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Conflict check result
+ */
 router.get('/api/calendar/check-conflict', coordinatorController.checkDateConflict);
 router.post('/api/calendar/check-conflict', coordinatorController.checkDateConflict);
+
+/**
+ * @swagger
+ * /coordinator/api/calendar/{id}:
+ *   delete:
+ *     summary: Delete a calendar event
+ *     tags: [Coordinator]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Event deleted
+ */
 router.delete('/api/calendar/:id', coordinatorController.deleteCalendarEvent);
 
 // ─── Complaints ───────────────────────────────────────────────────────────────
@@ -248,8 +429,57 @@ router.delete('/api/calendar/:id', coordinatorController.deleteCalendarEvent);
  *         description: Complaints list
  */
 router.get('/api/complaints', coordinatorController.getComplaints);
+
+/**
+ * @swagger
+ * /coordinator/api/complaints/{id}/resolve:
+ *   patch:
+ *     summary: Resolve a complaint
+ *     tags: [Coordinator]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Complaint resolved
+ *   post:
+ *     summary: Resolve a complaint (legacy method)
+ *     tags: [Coordinator]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Complaint resolved
+ */
 router.patch('/api/complaints/:id/resolve', coordinatorController.resolveComplaint);
 router.post('/api/complaints/:id/resolve', coordinatorController.resolveComplaint);
+
+/**
+ * @swagger
+ * /coordinator/api/complaints/{id}/respond:
+ *   post:
+ *     summary: Respond to a complaint
+ *     tags: [Coordinator]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Response sent
+ */
 router.post('/api/complaints/:id/respond', coordinatorController.respondComplaint);
 
 // ─── Store / Products ─────────────────────────────────────────────────────────
@@ -267,9 +497,71 @@ router.post('/api/complaints/:id/respond', coordinatorController.respondComplain
  *         description: Product list
  */
 router.get('/api/store/products', coordinatorController.getProducts);
+
+/**
+ * @swagger
+ * /coordinator/api/store/addproducts:
+ *   post:
+ *     summary: Add a product to the store
+ *     tags: [Coordinator]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       201:
+ *         description: Product added
+ */
 router.post('/api/store/addproducts', coordinatorController.addProduct);
+
+/**
+ * @swagger
+ * /coordinator/api/store/products/{id}:
+ *   put:
+ *     summary: Update a product
+ *     tags: [Coordinator]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Product updated
+ *   delete:
+ *     summary: Delete a product
+ *     tags: [Coordinator]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Product deleted
+ */
 router.put('/api/store/products/:id', coordinatorController.updateProduct);
 router.delete('/api/store/products/:id', coordinatorController.deleteProduct);
+
+/**
+ * @swagger
+ * /coordinator/api/store/products/{id}/toggle-comments:
+ *   patch:
+ *     summary: Enable or disable product comments
+ *     tags: [Coordinator]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Comment settings updated
+ */
 router.patch('/api/store/products/:id/toggle-comments', coordinatorController.toggleComments);
 
 // ─── Store / Orders & Analytics ───────────────────────────────────────────────
@@ -287,12 +579,123 @@ router.patch('/api/store/products/:id/toggle-comments', coordinatorController.to
  *         description: Orders list
  */
 router.get('/api/store/orders', coordinatorController.getOrders);
+
+/**
+ * @swagger
+ * /coordinator/api/store/orders/{id}/send-delivery-otp:
+ *   post:
+ *     summary: Send delivery OTP for an order
+ *     tags: [Coordinator]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: OTP sent
+ */
 router.post('/api/store/orders/:id/send-delivery-otp', coordinatorController.sendDeliveryOtp);
+
+/**
+ * @swagger
+ * /coordinator/api/store/orders/{id}/status:
+ *   patch:
+ *     summary: Update an order status
+ *     tags: [Coordinator]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Order status updated
+ */
 router.patch('/api/store/orders/:id/status', coordinatorController.updateOrderStatus);
+
+/**
+ * @swagger
+ * /coordinator/api/store/analytics:
+ *   get:
+ *     summary: Get store order analytics
+ *     tags: [Coordinator]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Store analytics
+ */
 router.get('/api/store/analytics', coordinatorController.getOrderAnalytics);
+
+/**
+ * @swagger
+ * /coordinator/api/store/analytics/products/{productId}:
+ *   get:
+ *     summary: Get analytics for a product
+ *     tags: [Coordinator]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: productId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Product analytics
+ */
 router.get('/api/store/analytics/products/:productId', coordinatorController.getProductAnalyticsDetails);
+
+/**
+ * @swagger
+ * /coordinator/api/store/reviews:
+ *   get:
+ *     summary: Get product reviews
+ *     tags: [Coordinator]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Product reviews
+ */
 router.get('/api/store/reviews', coordinatorController.getProductReviews);
+
+/**
+ * @swagger
+ * /coordinator/api/store/complaints:
+ *   get:
+ *     summary: Get store order complaints
+ *     tags: [Coordinator]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Order complaints
+ */
 router.get('/api/store/complaints', coordinatorController.getOrderComplaints);
+
+/**
+ * @swagger
+ * /coordinator/api/store/complaints/{complaintId}/resolve:
+ *   patch:
+ *     summary: Resolve a store complaint
+ *     tags: [Coordinator]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: complaintId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Complaint resolved
+ */
 router.patch('/api/store/complaints/:complaintId/resolve', coordinatorController.resolveOrderComplaint);
 
 // ─── Blogs ────────────────────────────────────────────────────────────────────
@@ -317,10 +720,84 @@ router.patch('/api/store/complaints/:complaintId/resolve', coordinatorController
  *       201:
  *         description: Blog created
  */
+/**
+ * @swagger
+ * /coordinator/api/blogs/public:
+ *   get:
+ *     summary: List published blogs (public)
+ *     tags: [Coordinator]
+ *     responses:
+ *       200:
+ *         description: Published blogs
+ */
 router.get('/api/blogs/public', coordinatorController.getPublishedBlogsPublic);
 router.get('/api/blogs', coordinatorController.getBlogs);
 router.post('/api/blogs', coordinatorController.createBlog);
+
+/**
+ * @swagger
+ * /coordinator/api/blogs/upload-images:
+ *   post:
+ *     summary: Upload images for a blog post
+ *     tags: [Coordinator]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               images: { type: array, items: { type: string, format: binary } }
+ *     responses:
+ *       200:
+ *         description: Images uploaded
+ */
 router.post('/api/blogs/upload-images', coordinatorController.uploadBlogImagesMiddleware, coordinatorController.uploadBlogImages);
+
+/**
+ * @swagger
+ * /coordinator/api/blogs/{id}:
+ *   get:
+ *     summary: Get a blog post
+ *     tags: [Coordinator]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Blog post
+ *   put:
+ *     summary: Update a blog post
+ *     tags: [Coordinator]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Blog updated
+ *   delete:
+ *     summary: Delete a blog post
+ *     tags: [Coordinator]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Blog deleted
+ */
 router.get('/api/blogs/:id', coordinatorController.getBlogById);
 router.put('/api/blogs/:id', coordinatorController.updateBlog);
 router.delete('/api/blogs/:id', coordinatorController.deleteBlog);
@@ -340,8 +817,47 @@ router.delete('/api/blogs/:id', coordinatorController.deleteBlog);
  *         description: Meeting scheduled
  */
 router.post('/api/meetings', coordinatorController.scheduleMeeting);
+
+/**
+ * @swagger
+ * /coordinator/api/meetings/organized:
+ *   get:
+ *     summary: Get meetings organized by the coordinator
+ *     tags: [Coordinator]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Organized meetings
+ */
 router.get('/api/meetings/organized', coordinatorController.getOrganizedMeetings);
+
+/**
+ * @swagger
+ * /coordinator/api/meetings/upcoming:
+ *   get:
+ *     summary: Get upcoming meetings
+ *     tags: [Coordinator]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Upcoming meetings
+ */
 router.get('/api/meetings/upcoming', coordinatorController.getUpcomingMeetings);
+
+/**
+ * @swagger
+ * /coordinator/api/meetings/received:
+ *   get:
+ *     summary: Get received meeting requests
+ *     tags: [Coordinator]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Received meetings
+ */
 router.get('/api/meetings/received', coordinatorController.getReceivedMeetings);
 
 // ─── Announcements ────────────────────────────────────────────────────────────
@@ -386,6 +902,24 @@ router.post('/api/announcements', coordinatorController.postAnnouncement);
  *         description: Player stats
  */
 router.get('/api/player-stats', coordinatorController.getPlayerStats);
+
+/**
+ * @swagger
+ * /coordinator/api/player-stats/{playerId}/details:
+ *   get:
+ *     summary: Get detailed stats for a player
+ *     tags: [Coordinator]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: playerId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Player stats details
+ */
 router.get('/api/player-stats/:playerId/details', coordinatorController.getPlayerStatsDetails);
 
 /**
@@ -417,8 +951,47 @@ router.get('/api/enrolled-players', coordinatorController.getEnrolledPlayers);
  *         description: Pairings data
  */
 router.get('/api/pairings', coordinatorController.getPairings);
+
+/**
+ * @swagger
+ * /coordinator/api/rankings:
+ *   get:
+ *     summary: Get individual rankings
+ *     tags: [Coordinator]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Rankings data
+ */
 router.get('/api/rankings', coordinatorController.getRankings);
+
+/**
+ * @swagger
+ * /coordinator/api/team-pairings:
+ *   get:
+ *     summary: Get team pairings
+ *     tags: [Coordinator]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Team pairings data
+ */
 router.get('/api/team-pairings', coordinatorController.getTeamPairings);
+
+/**
+ * @swagger
+ * /coordinator/api/team-rankings:
+ *   get:
+ *     summary: Get team rankings
+ *     tags: [Coordinator]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Team rankings data
+ */
 router.get('/api/team-rankings', coordinatorController.getTeamRankings);
 
 // ─── Feedback ─────────────────────────────────────────────────────────────────
@@ -455,6 +1028,18 @@ router.post('/api/tournaments/:id/request-feedback', coordinatorController.reque
  *         description: Feedback list
  */
 router.get('/api/feedbacks', coordinatorController.getFeedbacks);
+
+/**
+ * @swagger
+ * /coordinator/feedback_view:
+ *   get:
+ *     summary: Legacy feedback view page
+ *     tags: [Coordinator]
+ *     deprecated: true
+ *     responses:
+ *       200:
+ *         description: Feedback view page
+ */
 router.get('/feedback_view', coordinatorController.getFeedbackView);
 
 // ─── Chess Events (Upcoming Events for Player Dashboard) ──────────────────────

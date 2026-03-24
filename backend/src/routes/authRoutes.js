@@ -401,19 +401,173 @@ router.get('/api/theme', authController.getTheme);
 router.post('/api/theme', authController.setTheme);
 
 // ─── Legacy EJS routes (backward-compatibility) ───────────────────────────────
+/**
+ * @swagger
+ * /signup:
+ *   post:
+ *     summary: Legacy signup (EJS)
+ *     tags: [Auth]
+ *     deprecated: true
+ *     responses:
+ *       200:
+ *         description: Legacy flow response
+ */
 router.post('/signup', authController.signup);
+/**
+ * @swagger
+ * /contactus:
+ *   post:
+ *     summary: Legacy contact form (EJS)
+ *     tags: [Auth]
+ *     deprecated: true
+ *     responses:
+ *       200:
+ *         description: Legacy flow response
+ */
 router.post('/contactus', authController.contactus);
+/**
+ * @swagger
+ * /player/add-funds:
+ *   post:
+ *     summary: Legacy add funds (EJS)
+ *     tags: [Auth]
+ *     deprecated: true
+ *     responses:
+ *       200:
+ *         description: Legacy flow response
+ */
 router.post('/player/add-funds', authController.addFunds);
+/**
+ * @swagger
+ * /player/subscribe:
+ *   post:
+ *     summary: Legacy subscribe (EJS)
+ *     tags: [Auth]
+ *     deprecated: true
+ *     responses:
+ *       200:
+ *         description: Legacy flow response
+ */
 router.post('/player/subscribe', authController.subscribe);
+/**
+ * @swagger
+ * /tournament_management:
+ *   post:
+ *     summary: Legacy tournament management (EJS)
+ *     tags: [Auth]
+ *     deprecated: true
+ *     responses:
+ *       200:
+ *         description: Legacy flow response
+ */
 router.post('/tournament_management', authController.tournamentManagement);
+/**
+ * @swagger
+ * /organizer/approve-tournament:
+ *   post:
+ *     summary: Legacy organizer approval (EJS)
+ *     tags: [Auth]
+ *     deprecated: true
+ *     responses:
+ *       200:
+ *         description: Legacy flow response
+ */
 router.post('/organizer/approve-tournament', authController.approveTournament);
+/**
+ * @swagger
+ * /organizer/reject-tournament:
+ *   post:
+ *     summary: Legacy organizer rejection (EJS)
+ *     tags: [Auth]
+ *     deprecated: true
+ *     responses:
+ *       200:
+ *         description: Legacy flow response
+ */
 router.post('/organizer/reject-tournament', authController.rejectTournament);
+/**
+ * @swagger
+ * /player/join-tournament:
+ *   post:
+ *     summary: Legacy join tournament (EJS)
+ *     tags: [Auth]
+ *     deprecated: true
+ *     responses:
+ *       200:
+ *         description: Legacy flow response
+ */
 router.post('/player/join-tournament', authController.joinTournament);
+/**
+ * @swagger
+ * /player/approve-team-request:
+ *   post:
+ *     summary: Legacy approve team request (EJS)
+ *     tags: [Auth]
+ *     deprecated: true
+ *     responses:
+ *       200:
+ *         description: Legacy flow response
+ */
 router.post('/player/approve-team-request', authController.approveTeamRequest);
+/**
+ * @swagger
+ * /coordinator/add-product:
+ *   post:
+ *     summary: Legacy coordinator add product (EJS)
+ *     tags: [Auth]
+ *     deprecated: true
+ *     responses:
+ *       200:
+ *         description: Legacy flow response
+ */
 router.post('/coordinator/add-product', authController.addProduct);
+/**
+ * @swagger
+ * /buy:
+ *   post:
+ *     summary: Legacy buy product (EJS)
+ *     tags: [Auth]
+ *     deprecated: true
+ *     responses:
+ *       200:
+ *         description: Legacy flow response
+ */
 router.post('/buy', authController.buyProduct);
+/**
+ * @swagger
+ * /coordinator/coordinator_meetings/schedule:
+ *   post:
+ *     summary: Legacy coordinator meeting schedule (EJS)
+ *     tags: [Auth]
+ *     deprecated: true
+ *     responses:
+ *       200:
+ *         description: Legacy flow response
+ */
 router.post('/coordinator/coordinator_meetings/schedule', authController.scheduleMeetingCoordinator);
+/**
+ * @swagger
+ * /meetings/schedule:
+ *   post:
+ *     summary: Legacy organizer meeting schedule (EJS)
+ *     tags: [Auth]
+ *     deprecated: true
+ *     responses:
+ *       200:
+ *         description: Legacy flow response
+ */
 router.post('/meetings/schedule', authController.scheduleMeetingOrganizer);
+/**
+ * @swagger
+ * /admin_meetings/schedule:
+ *   post:
+ *     summary: Legacy admin meeting schedule (EJS)
+ *     tags: [Auth]
+ *     deprecated: true
+ *     responses:
+ *       200:
+ *         description: Legacy flow response
+ */
 router.post('/admin_meetings/schedule', authController.scheduleMeetingAdmin);
 
 module.exports = router;
