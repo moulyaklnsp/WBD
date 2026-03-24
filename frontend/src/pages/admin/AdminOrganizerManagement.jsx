@@ -222,7 +222,7 @@ const AdminOrganizerManagement = () => {
             </div>
 
             {loading ? (
-              <table className="table"><tbody><tr><td colSpan={9} className="empty"><i className="fas fa-info-circle" /> Loading organizers…</td></tr></tbody></table>
+              <table className="table"><tbody><tr><td colSpan={6} className="empty"><i className="fas fa-info-circle" /> Loading organizers…</td></tr></tbody></table>
             ) : (
               <>
                 <table className="table">
@@ -232,16 +232,13 @@ const AdminOrganizerManagement = () => {
                       <th className="th"><i className="fas fa-envelope" /> Email</th>
                       <th className="th"><i className="fas fa-phone" /> Phone</th>
                       <th className="th"><i className="fas fa-university" /> College</th>
-                      <th className="th"><i className="fas fa-trophy" /> Tournaments (Appr.)</th>
-                      <th className="th"><i className="fas fa-ban" /> Tournaments (Rej.)</th>
-                      <th className="th"><i className="fas fa-video" /> Meetings</th>
                       <th className="th"><i className="fas fa-info-circle" /> Status</th>
                       <th className="th"><i className="fas fa-cog" /> Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {shown.length === 0 ? (
-                      <tr><td colSpan={9} className="empty"><i className="fas fa-info-circle" /> No organizers available.</td></tr>
+                      <tr><td colSpan={6} className="empty"><i className="fas fa-info-circle" /> No organizers available.</td></tr>
                     ) : (
                       shown.map((o, idx) => {
                         const selfDeleted = isSelfDeleted(o);
@@ -256,9 +253,6 @@ const AdminOrganizerManagement = () => {
                           <td className="td">{o.email}</td>
                           <td className="td">{o.phone || 'N/A'}</td>
                           <td className="td">{o.college}</td>
-                          <td className="td">{o.tournamentsApproved || 0}</td>
-                          <td className="td">{o.tournamentsRejected || 0}</td>
-                          <td className="td">{o.meetingsScheduled || 0}</td>
                           <td className="td">
                             {selfDeleted ? (
                                <span style={{color: '#d97706', fontWeight: 'bold'}}><i className="fas fa-door-open" /> Left Platform</span>
@@ -314,3 +308,4 @@ const AdminOrganizerManagement = () => {
 };
 
 export default AdminOrganizerManagement;
+

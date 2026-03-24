@@ -108,6 +108,7 @@ const AdminPlayerDetail = () => {
       winRate
     };
   }, [playerStatsInfo]);
+  const ratingDisplay = detailSummary.rating > 0 ? detailSummary.rating : 'N/A';
 
   const ratingChartData = useMemo(() => {
     const points = Array.isArray(playerStatsInfo?.ratingProgression) ? playerStatsInfo.ratingProgression : [];
@@ -319,6 +320,8 @@ const AdminPlayerDetail = () => {
                   <div><strong>Wallet Balance:</strong> ₹{details.stats?.walletBalance || 0}</div>
                   <div><strong>FIDE ID:</strong> {details.stats?.fideId || 'N/A'}</div>
                   <div><strong>AICF ID:</strong> {details.stats?.aicfId || 'N/A'}</div>
+                  <div><strong>DOB:</strong> {details.player?.dob ? new Date(details.player.dob).toLocaleDateString() : 'N/A'}</div>
+                  <div><strong>Rating:</strong> {ratingDisplay}</div>
                 </div>
               </motion.div>
 
@@ -461,22 +464,28 @@ const AdminPlayerDetail = () => {
                         <th className="th">Type</th>
                         <th className="th">Date</th>
                         <th className="th">Fee</th>
-                        <th className="th">Position/Status</th>
+                        <th className="th">Position</th>
+                        <th className="th">Status</th>
                       </tr>
                     </thead>
                     <tbody>
                       {!details.tournaments || details.tournaments.length === 0 ? (
-                         <tr><td colSpan={5} className="empty">No tournaments participated.</td></tr>
+                         <tr><td colSpan={6} className="empty">No tournaments participated.</td></tr>
                       ) : (
-                        details.tournaments.slice((pageTournaments - 1) * itemsPerPage, pageTournaments * itemsPerPage).map((t, idx) => (
+                        details.tournaments.slice((pageTournaments - 1) * itemsPerPage, pageTournaments * itemsPerPage).map((t, idx) => {
+                          const statusLabel = String(t.status || '').trim();
+                          const statusKey = statusLabel.toLowerCase();
+                          return (
                           <tr key={idx}>
                             <td className="td" style={{ fontWeight: 'bold' }}>{t.name || t.title}</td>
                             <td className="td">{t.type}</td>
                             <td className="td">{t.date ? new Date(t.date).toLocaleDateString() : (t.start_date ? new Date(t.start_date).toLocaleDateString() : 'TBD')}</td>
                             <td className="td">₹{t.entry_fee || 0}</td>
-                            <td className="td"><span className="status-pill status-active">{t.position || t.status || 'N/A'}</span></td>
+                            <td className="td">{t.position || 'N/A'}</td>
+                            <td className="td"><span className={`status-pill ${statusKey === 'rejected' || statusKey === 'removed' ? 'status-removed' : 'status-active'}`}>{statusLabel || 'N/A'}</span></td>
                           </tr>
-                        ))
+                          );
+                        })
                       )}
                     </tbody>
                   </table>
@@ -510,3 +519,4 @@ const AdminPlayerDetail = () => {
 };
 
 export default AdminPlayerDetail;
+

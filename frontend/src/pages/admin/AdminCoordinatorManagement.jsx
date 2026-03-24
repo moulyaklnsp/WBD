@@ -222,7 +222,7 @@ const AdminCoordinatorManagement = () => {
             </div>
 
             {loading ? (
-              <table className="table"><tbody><tr><td colSpan={7} className="empty"><i className="fas fa-info-circle" /> Loading coordinators…</td></tr></tbody></table>
+              <table className="table"><tbody><tr><td colSpan={4} className="empty"><i className="fas fa-info-circle" /> Loading coordinators…</td></tr></tbody></table>
             ) : (
               <>
                 <table className="table">
@@ -231,14 +231,12 @@ const AdminCoordinatorManagement = () => {
                       <th className="th"><i className="fas fa-user" /> Name</th>
                       <th className="th"><i className="fas fa-envelope" /> Email</th>
                       <th className="th"><i className="fas fa-university" /> Assigned College</th>
-                      <th className="th"><i className="fas fa-trophy" /> Tournaments (Cond.)</th>
-                      <th className="th"><i className="fas fa-ban" /> Tournaments (Rej.)</th>
                       <th className="th"><i className="fas fa-info-circle" /> Status</th>
                     </tr>
                   </thead>
                   <tbody>
                     {shown.length === 0 ? (
-                      <tr><td colSpan={7} className="empty"><i className="fas fa-info-circle" /> No coordinators available.</td></tr>
+                      <tr><td colSpan={4} className="empty"><i className="fas fa-info-circle" /> No coordinators available.</td></tr>
                     ) : (
                       shown.map((c, idx) => {
                         const selfDeleted = isSelfDeleted(c);
@@ -252,8 +250,6 @@ const AdminCoordinatorManagement = () => {
                           </td>
                           <td className="td">{c.email}</td>
                           <td className="td">{c.college}</td>
-                          <td className="td">{c.tournamentsConducted || 0}</td>
-                          <td className="td">{c.tournamentsRejected || 0}</td>
                           <td className="td">
                             {selfDeleted ? (
                                <span style={{color: '#d97706', fontWeight: 'bold'}}><i className="fas fa-door-open" /> Left Platform</span>
@@ -304,3 +300,4 @@ const AdminCoordinatorManagement = () => {
 };
 
 export default AdminCoordinatorManagement;
+

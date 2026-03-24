@@ -114,6 +114,13 @@ const AdminCoordinatorDetail = () => {
 
   const totalMeetingsPages = Math.ceil((details.meetings?.length || 0) / itemsPerPage);
   const currentMeetings = details.meetings?.slice((meetingsPage - 1) * itemsPerPage, meetingsPage * itemsPerPage) || [];
+  const normalizeStatus = (value) => String(value || '').trim().toLowerCase();
+  const tournamentsConductedCount = (details.tournaments || []).filter(
+    (t) => normalizeStatus(t?.status) !== 'rejected'
+  ).length;
+  const tournamentsRejectedCount = (details.tournaments || []).filter(
+    (t) => normalizeStatus(t?.status) === 'rejected'
+  ).length;
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex' }}>
@@ -217,10 +224,14 @@ const AdminCoordinatorDetail = () => {
                 </div>
                 <div className="stat-box">
                   <h4>Tournaments Conducted</h4>
-                  <p>{details.tournaments?.length || 0}</p>
+                  <p>{tournamentsConductedCount}</p>
                 </div>
                 <div className="stat-box">
-                  <h4>Total Earnings</h4>
+                  <h4>Tournaments that got  Rejected</h4>
+                  <p>{tournamentsRejectedCount}</p>
+                </div>
+                <div className="stat-box">
+                  <h4>Total Earnings from store</h4>
                   <p>INR {details.productsStats?.totalEarnings || 0}</p>
                 </div>
               </motion.div>
