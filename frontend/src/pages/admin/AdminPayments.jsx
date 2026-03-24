@@ -6,6 +6,158 @@ import { motion } from 'framer-motion';
 import usePlayerTheme from '../../hooks/usePlayerTheme';
 import AnimatedSidebar from '../../components/AnimatedSidebar';
 
+
+const StoreAnalyticsModal = ({ store, selectedProduct, onClose }) => {
+  const now = Date.now();
+  const DAY = 24 * 60 * 60 * 1000;
+  
+  let prodBuyers = {};
+  let prodTotalCount = 0;
+  let prodTotalRevenue = 0;
+  let rev30 = 0, rev60 = 0, rev120 = 0, rev180 = 0, rev365 = 0;
+
+  let allProducts = {};
+  let allBuyers = {};
+
+  store.forEach(s => {
+    const price = Number(s.amount) || Number(s.price) || 0;
+    const item = s.item || 'Unknown';
+    const buyer = s.boughtBy || s.buyer || s.user || 'Unknown';
+    const seller = s.soldBy || 'Admin';
+    const pDate = new Date(s.date || s.purchase_date || s.createdAt || Date.now()).getTime();
+
+    if (!allProducts[item]) allProducts[item] = { name: item, seller, count: 0, rev: 0 };
+    allProducts[item].count += 1;
+    allProducts[item].rev += price;
+
+    if (!allBuyers[buyer]) allBuyers[buyer] = { name: buyer, count: 0, spent: 0 };
+    allBuyers[buyer].count += 1;
+    allBuyers[buyer].spent += price;
+
+    if (item === selectedProduct) {
+      prodTotalCount += 1;
+      prodTotalRevenue += price;
+
+      if (!prodBuyers[buyer]) prodBuyers[buyer] = { name: buyer, count: 0, spent: 0 };
+      prodBuyers[buyer].count += 1;
+      prodBuyers[buyer].spent += price;
+
+      const diff = now - pDate;
+      if (diff <= 30 * DAY) rev30 += price;
+      if (diff <= 60 * DAY) rev60 += price;
+      if (diff <= 120 * DAY) rev120 += price;
+      if (diff <= 180 * DAY) rev180 += price;
+      if (diff <= 365 * DAY) rev365 += price;
+    }
+  });
+
+  const topPurchasers = Object.values(prodBuyers).sort((a,b) => b.count - a.count);
+  const topProducts = Object.values(allProducts).sort((a,b) => b.count - a.count).slice(0, 3);
+  const topGlobalBuyers = Object.values(allBuyers).sort((a,b) => b.spent - a.spent).slice(0, 3);
+
+  return (
+    <div style={{
+      position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+      background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+      display: 'flex', justifyContent: 'center', alignItems: 'center',
+      zIndex: 9999, padding: '2rem'
+    }} onClick={onClose}>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9, y: 30 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: 'var(--page-bg, #1a1a1a)', border: '1px solid var(--card-border, #333)',
+          borderRadius: '16px', padding: '2rem', width: '100%', maxWidth: '800px',
+          maxHeight: '90vh', overflowY: 'auto', position: 'relative',
+          boxShadow: '0 20px 40px rgba(0,0,0,0.5)', color: 'var(--text-color, #fff)'
+        }}
+      >
+        <button onClick={onClose} style={{
+          position: 'absolute', top: '1.5rem', right: '1.5rem', background: 'transparent',
+          border: 'none', color: 'var(--text-color, #fff)', fontSize: '1.5rem', cursor: 'pointer'
+        }}><i className="fas fa-times" />×</button>
+
+        <h2 style={{ fontFamily: 'Cinzel, serif', color: 'var(--sea-green, #20c997)', marginBottom: '1.5rem' }}>
+          <i className="fas fa-chart-pie" /> {selectedProduct} Analytics
+        </h2>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem', marginBottom: '2rem' }}>
+          
+          <div style={{ background: 'var(--card-bg, #2a2a2a)', padding: '1.2rem', borderRadius: '12px', border: '1px solid var(--card-border, #444)' }}>
+            <h4 style={{ color: 'var(--text-color, #fff)', marginBottom: '1rem', borderBottom: '1px solid var(--card-border, #444)', paddingBottom: '0.5rem' }}>Revenue Timeline</h4>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}><span>Past 30 Days:</span> <strong>₹{rev30.toFixed(2)}</strong></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}><span>Past 2 Months:</span> <strong>₹{rev60.toFixed(2)}</strong></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}><span>Past 4 Months:</span> <strong>₹{rev120.toFixed(2)}</strong></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}><span>Past 6 Months:</span> <strong>₹{rev180.toFixed(2)}</strong></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}><span>Past 1 Year:</span> <strong>₹{rev365.toFixed(2)}</strong></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1rem', paddingTop: '0.5rem', borderTop: '2px dashed var(--sea-green, #20c997)' }}>
+              <span style={{ color: 'var(--sea-green, #20c997)' }}>Total All Time:</span> <strong style={{ color: 'var(--sea-green, #20c997)' }}>₹{prodTotalRevenue.toFixed(2)}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem' }}>
+              <span>Total Units Sold:</span> <strong>{prodTotalCount}</strong>
+            </div>
+          </div>
+
+          <div style={{ background: 'var(--card-bg, #2a2a2a)', padding: '1.2rem', borderRadius: '12px', border: '1px solid var(--card-border, #444)', maxHeight: '320px', overflowY: 'auto' }}>
+            <h4 style={{ color: 'var(--text-color, #fff)', marginBottom: '1rem', borderBottom: '1px solid var(--card-border, #444)', paddingBottom: '0.5rem' }}>Purchased By</h4>
+            <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', fontSize: '0.95rem' }}>
+              <thead><tr><th style={{ paddingBottom: '0.5rem' }}>Buyer</th><th style={{ paddingBottom: '0.5rem' }}>Times</th><th style={{ paddingBottom: '0.5rem', textAlign: 'right' }}>Spent</th></tr></thead>
+              <tbody>
+                {topPurchasers.length === 0 && <tr><td colSpan={3} style={{ opacity: 0.6, paddingTop: '1rem', textAlign: 'center' }}>No purchasers found</td></tr>}
+                {topPurchasers.map((b, i) => (
+                  <tr key={i} style={{ borderBottom: i === topPurchasers.length - 1 ? 'none' : '1px solid var(--card-border, #444)' }}>
+                    <td style={{ padding: '0.6rem 0' }}>{b.name}</td>
+                    <td>{b.count}</td>
+                    <td style={{ textAlign: 'right' }}>₹{b.spent.toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+        </div>
+
+        <h3 style={{ fontFamily: 'Cinzel, serif', color: 'var(--sea-green, #20c997)', margin: '2rem 0 1rem 0', paddingBottom: '0.5rem', borderBottom: '1px solid var(--card-border, #444)' }}>
+           Global Top 3 (All Products)
+        </h3>
+        
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
+          <div style={{ background: 'var(--card-bg, #2a2a2a)', padding: '1.2rem', borderRadius: '12px', border: '1px solid var(--card-border, #444)' }}>
+            <h4 style={{ color: '#f39c12', marginBottom: '1rem' }}><i className="fas fa-medal" /> Top Sold Products</h4>
+            {topProducts.map((p, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.8rem', paddingBottom: '0.5rem', borderBottom: i === topProducts.length - 1 ? 'none' : '1px solid var(--card-border, #444)' }}>
+                <div>
+                  <strong>{p.name}</strong>
+                  <div style={{ fontSize: '0.8rem', opacity: 0.7 }}>Sold by: {p.seller}</div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ color: 'var(--sea-green, #20c997)', fontWeight: 'bold' }}>{p.count} units</div>
+                  <div style={{ fontSize: '0.85rem' }}>₹{p.rev.toFixed(2)}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ background: 'var(--card-bg, #2a2a2a)', padding: '1.2rem', borderRadius: '12px', border: '1px solid var(--card-border, #444)' }}>
+            <h4 style={{ color: '#3498db', marginBottom: '1rem' }}><i className="fas fa-crown" /> Top Buyers</h4>
+            {topGlobalBuyers.map((b, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.8rem', paddingBottom: '0.5rem', borderBottom: i === topGlobalBuyers.length - 1 ? 'none' : '1px solid var(--card-border, #444)' }}>
+                <strong>{b.name}</strong>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ color: 'var(--sea-green, #20c997)', fontWeight: 'bold' }}>₹{b.spent.toFixed(2)}</div>
+                  <div style={{ fontSize: '0.85rem', opacity: 0.8 }}>{b.count} orders</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+      </motion.div>
+    </div>
+  );
+};
+
 const AdminPayments = () => {
   const [isDark, toggleTheme] = usePlayerTheme();
   const [loading, setLoading] = useState(true);
@@ -13,8 +165,10 @@ const AdminPayments = () => {
   
   const [walletRecharges, setWalletRecharges] = useState([]);
   const [subscriptions, setSubscriptions] = useState([]);
-  const [tournaments, setTournaments] = useState([]);
+    const [tournamentsList, setTournamentsList] = useState([]);
+  
   const [store, setStore] = useState([]);
+  const [selectedProduct, setSelectedProduct] = useState(null);
 
   // Filters
   const [filters, setFilters] = useState({
@@ -27,7 +181,7 @@ const AdminPayments = () => {
   // Pagination
   const [pageWallet, setPageWallet] = useState(1);
   const [pageSubs, setPageSubs] = useState(1);
-  const [pageTour, setPageTour] = useState(1);
+  
   const [pageStore, setPageStore] = useState(1);
   const itemsPerPage = 5;
 
@@ -50,10 +204,11 @@ const AdminPayments = () => {
       
       setWalletRecharges(Array.isArray(payload.walletRecharges) ? payload.walletRecharges : []);
       setSubscriptions(Array.isArray(payload.subscriptions) ? payload.subscriptions : []);
-      setTournaments(Array.isArray(payload.tournaments) ? payload.tournaments : []);
+        setTournamentsList(Array.isArray(payload.tournaments) ? payload.tournaments : []);
+      
       setStore(Array.isArray(payload.store) ? payload.store : []);
       
-      setPageWallet(1); setPageSubs(1); setPageTour(1); setPageStore(1);
+      setPageWallet(1); setPageSubs(1);  setPageStore(1);
     } catch (e) {
       setError('Failed to load payments data.');
     } finally {
@@ -75,13 +230,20 @@ const AdminPayments = () => {
 
   const totalPageWallet = Math.ceil(walletRecharges.length / itemsPerPage) || 1;
   const totalPageSubs = Math.ceil(subscriptions.length / itemsPerPage) || 1;
-  const totalPageTour = Math.ceil(tournaments.length / itemsPerPage) || 1;
+  
   const totalPageStore = Math.ceil(store.length / itemsPerPage) || 1;
 
   const walletShown = walletRecharges.slice((pageWallet - 1) * itemsPerPage, pageWallet * itemsPerPage);
   const subsShown = subscriptions.slice((pageSubs - 1) * itemsPerPage, pageSubs * itemsPerPage);
-  const tourShown = tournaments.slice((pageTour - 1) * itemsPerPage, pageTour * itemsPerPage);
+  
   const storeShown = store.slice((pageStore - 1) * itemsPerPage, pageStore * itemsPerPage);
+
+  
+  const totalWallet = walletRecharges.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  const totalSubs = subscriptions.reduce((sum, item) => sum + (Number(item.price) || Number(item.amount) || 0), 0);
+  const totalStore = store.reduce((sum, item) => sum + (Number(item.price) || Number(item.amount) || 0), 0);
+  const totalTournaments = tournamentsList.reduce((sum, item) => sum + (Number(item.totalRevenue) || 0), 0);
+  const grandTotal = totalWallet + totalSubs + totalStore + totalTournaments;
 
   return (
     <div style={{ minHeight: '100vh' }}>
@@ -135,7 +297,8 @@ const AdminPayments = () => {
             whileHover={{ scale: 1.08 }}
             whileTap={{ scale: 0.94 }}
             style={{
-              background: 'var(--card-bg)', border: '1px solid var(--card-border)',
+                        cursor: 'pointer',
+                        background: 'var(--card-bg)', border: '1px solid var(--card-border)',
               color: 'var(--text-color)', width: 40, height: 40, borderRadius: 10,
               display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '1.1rem'
             }}
@@ -151,7 +314,32 @@ const AdminPayments = () => {
             <i className="fas fa-money-bill-wave" /> Payments & Transactions
           </motion.h2>
 
+          
           {error && <div className="banner error">{error}</div>}
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem', marginBottom: '2rem' }}>
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} style={{ background: 'var(--card-bg)', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--card-border)', textAlign: 'center' }}>
+              <div style={{ color: 'var(--sea-green)', fontSize: '1.1rem', marginBottom: '0.5rem', fontFamily: 'Cinzel, serif' }}><i className="fas fa-wallet" /> Wallet</div>
+              <div style={{ fontSize: '1.8rem', fontWeight: 'bold' }}>₹{totalWallet.toFixed(2)}</div>
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} style={{ background: 'var(--card-bg)', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--card-border)', textAlign: 'center' }}>
+              <div style={{ color: 'var(--sky-blue)', fontSize: '1.1rem', marginBottom: '0.5rem', fontFamily: 'Cinzel, serif' }}><i className="fas fa-trophy" /> Tournaments</div>
+              <div style={{ fontSize: '1.8rem', fontWeight: 'bold' }}>₹{totalTournaments.toFixed(2)}</div>
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} style={{ background: 'var(--card-bg)', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--card-border)', textAlign: 'center' }}>
+              <div style={{ color: 'var(--orange)', fontSize: '1.1rem', marginBottom: '0.5rem', fontFamily: 'Cinzel, serif' }}><i className="fas fa-crown" /> Subscriptions</div>
+              <div style={{ fontSize: '1.8rem', fontWeight: 'bold' }}>₹{totalSubs.toFixed(2)}</div>
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} style={{ background: 'var(--card-bg)', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--card-border)', textAlign: 'center' }}>
+              <div style={{ color: '#e74c3c', fontSize: '1.1rem', marginBottom: '0.5rem', fontFamily: 'Cinzel, serif' }}><i className="fas fa-shopping-cart" /> Store</div>
+              <div style={{ fontSize: '1.8rem', fontWeight: 'bold' }}>₹{totalStore.toFixed(2)}</div>
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} style={{ background: 'var(--sea-green)', color: 'var(--on-accent)', padding: '1.5rem', borderRadius: '12px', textAlign: 'center', gridColumn: '1 / -1' }}>
+              <div style={{ fontSize: '1.1rem', marginBottom: '0.5rem', fontFamily: 'Cinzel, serif' }}><i className="fas fa-chart-line" /> Total Platform Revenue</div>
+              <div style={{ fontSize: '2.2rem', fontWeight: 'bold' }}>₹{grandTotal.toFixed(2)}</div>
+            </motion.div>
+          </div>
+
 
           <motion.div
             className="updates-section"
@@ -270,58 +458,6 @@ const AdminPayments = () => {
             </div>
           </motion.div>
 
-          {/* 3. Tournaments */}
-          <motion.div
-            className="updates-section"
-            initial={{ opacity: 0, y: 28, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ delay: 0.3, duration: 0.55 }}
-          >
-            <h4 style={{ color: 'var(--sea-green)', fontSize: '1.2rem', marginBottom: '1.5rem', fontFamily: 'Cinzel, serif' }}>
-              <i className="fas fa-trophy" /> Tournaments
-            </h4>
-            <div style={{ textAlign: 'center' }}>
-              <span className="row-counter">Total Records: {tournaments.length}</span>
-            </div>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th className="th">Conducted By</th>
-                  <th className="th">Name</th>
-                  <th className="th">Entry Fee</th>
-                  <th className="th">Type</th>
-                  <th className="th">Total Enrollments</th>
-                  <th className="th">Total Revenue</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <tr><td colSpan={6} className="empty"><i className="fas fa-info-circle" /> Loading tournaments...</td></tr>
-                ) : tourShown.length === 0 ? (
-                  <tr><td colSpan={6} className="empty"><i className="fas fa-info-circle" /> No tournaments found.</td></tr>
-                ) : (
-                  tourShown.map((t, idx) => (
-                    <tr key={`tour-${idx}`}>
-                      <td className="td">{t.conductedBy || 'N/A'}</td>
-                      <td className="td">{t.name || 'N/A'}</td>
-                      <td className="td">₹{t.entry_fee || 0}</td>
-                      <td className="td">{t.type || 'N/A'}</td>
-                      <td className="td">{t.total_enrollments || 0}</td>
-                      <td className="td" style={{color: 'var(--sea-green)', fontWeight: 'bold'}}>₹{t.totalRevenue || 0}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-            <div className="pagination">
-              <button className="page-btn" disabled={pageTour === 1} onClick={() => setPageTour(p => p - 1)}>
-                <i className="fas fa-chevron-left" /> Previous
-              </button>
-              <span className="page-info">Page {pageTour} of {totalPageTour}</span>
-              <button className="page-btn" disabled={pageTour === totalPageTour} onClick={() => setPageTour(p => p + 1)}>
-                Next <i className="fas fa-chevron-right" />
-              </button>
-            </div>
-          </motion.div>
-
           {/* 4. Store */}
           <motion.div
             className="updates-section"
@@ -349,9 +485,12 @@ const AdminPayments = () => {
             ) : (
               <div className="product-grid">
                 {storeShown.map((s, idx) => (
-                  <motion.div 
-                    key={`store-${idx}`} 
-                    whileHover={{ translateY: -5 }}
+                  <motion.div
+                      key={`store-${idx}`}
+                      onClick={() => setSelectedProduct(s.item)}
+                      whileHover={{ translateY: -5 }}
+                      role="button"
+                      tabIndex={0}
                     style={{ 
                       background: 'var(--card-bg)', 
                       border: '1px solid var(--card-border)', 
@@ -425,7 +564,8 @@ const AdminPayments = () => {
               <i className="fas fa-arrow-left" /> Back to Dashboard
             </Link>
           </div>
-        </div>
+                </div>
+        {selectedProduct && <StoreAnalyticsModal store={store} selectedProduct={selectedProduct} onClose={() => setSelectedProduct(null)} />}
       </div>
     </div>
   );

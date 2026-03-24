@@ -91,16 +91,21 @@ export default function AdminGrowthAnalytics() {
       },
       {
         label: 'Completed',
-        data: tournamentsTimeline.map((row) => Number(row.completed || 0)),
-        borderColor: '#2B8DAB',
-        backgroundColor: 'rgba(43,141,171,0.6)'
-      },
-      {
-        label: 'Ongoing',
-        data: tournamentsTimeline.map((row) => Number(row.ongoing || 0)),
-        borderColor: '#F4B942',
-        backgroundColor: 'rgba(244,185,66,0.6)'
-      }
+          data: tournamentsTimeline.map((row) => Number(row.completed || 0)),
+          borderColor: '#2B8DAB',
+          backgroundColor: 'rgba(43,141,171,0.6)',
+          borderWidth: 3,
+          pointRadius: 4
+        },
+        {
+          label: 'Ongoing',
+          data: tournamentsTimeline.map((row) => Number(row.ongoing || 0)),
+          borderColor: '#F4B942',
+          backgroundColor: 'rgba(244,185,66,0.6)',
+          borderWidth: 2,
+          pointRadius: 3,
+          borderDash: [4, 4]
+        }
     ]
   }), [tournamentsTimeline]);
 
