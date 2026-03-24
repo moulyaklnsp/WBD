@@ -20,6 +20,13 @@ const sectionVariants = {
   })
 };
 
+const formatDate = (value) => {
+  if (!value) return 'TBD';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  return d.toLocaleDateString('en-GB');
+};
+
 const AdminTournamentManagement = () => {
   const [isDark, toggleTheme] = usePlayerTheme();
   const [tournaments, setTournaments] = useState([]);
@@ -294,7 +301,7 @@ const AdminTournamentManagement = () => {
                                 {t.name} <i className="fas fa-external-link-alt" style={{ fontSize: '0.8rem', opacity: 0.6, marginLeft: '4px' }} />
                              </Link>
                           </td>
-                          <td className="td">{t.date}</td>
+                          <td className="td">{formatDate(t.date)}</td>
                           <td className="td">{t.location}</td>
                           <td className="td">₹{t.entry_fee}</td>
                           <td className="td">{t.type}</td>

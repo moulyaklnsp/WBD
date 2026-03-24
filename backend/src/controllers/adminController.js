@@ -1334,8 +1334,12 @@ const getPlayerDetails = async (req, res) => {
       ? (player.deleted_by && player.deleted_by.toLowerCase() === player.email.toLowerCase() ? 'Left Platform' : 'Removed')
       : 'Active';
 
+    const playerId = String(player._id);
+
     res.json({
       player: {
+        _id: playerId,
+        playerId,
         name: player.name,
         email: player.email,
         college: player.college,

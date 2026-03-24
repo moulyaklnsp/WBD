@@ -352,6 +352,37 @@ const AdminDashboard = () => {
         .status-pill.in-progress { background: rgba(245,158,11,0.2); color: #fcd34d; }
         .status-pill.resolved { background: rgba(34,197,94,0.2); color: #86efac; }
         .status-pill.spam { background: rgba(239,68,68,0.2); color: #fca5a5; }
+
+        /* Dark mode overrides for cards & messages */
+        body.player-dark .stat-card-neo {
+          background: var(--card-bg);
+          border-color: var(--card-border);
+          box-shadow: var(--card-shadow);
+        }
+        body.player-dark .stats-card {
+          background: var(--card-bg);
+          border-color: var(--card-border);
+          box-shadow: var(--card-shadow);
+        }
+        body.player-dark .stats-card h4 { color: var(--text-secondary); }
+        body.player-dark .message-card {
+          background: var(--card-bg);
+          border-color: var(--card-border);
+          color: var(--text-color);
+          box-shadow: var(--card-shadow);
+        }
+        body.player-dark .message-card:hover {
+          background: var(--card-bg-hover);
+          border-color: var(--border-hover);
+          box-shadow: var(--card-shadow-hover);
+        }
+        body.player-dark .message-body { color: var(--text-color); }
+        body.player-dark .message-date { color: var(--text-secondary); }
+        body.player-dark .input {
+          background: var(--input-bg);
+          border-color: var(--input-border);
+          color: var(--text-color);
+        }
       `}</style>
       
       <motion.div className="chess-knight-float" initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 0.14, scale: 1 }} transition={{ delay: 0.9, duration: 0.6 }} style={{ position: 'fixed', bottom: 20, right: 20, zIndex: 0, fontSize: '2.5rem', color: 'var(--sea-green)' }}>

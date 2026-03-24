@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchAsAdmin } from '../../utils/fetchWithRole';
 import '../../styles/playerNeoNoir.css';
@@ -7,53 +7,9 @@ import usePlayerTheme from '../../hooks/usePlayerTheme';
 import AnimatedSidebar from '../../components/AnimatedSidebar';
 
 
-const StoreAnalyticsModal = ({ store, selectedProduct, onClose }) => {
-  const now = Date.now();
-  const DAY = 24 * 60 * 60 * 1000;
-  
-  let prodBuyers = {};
-  let prodTotalCount = 0;
-  let prodTotalRevenue = 0;
-  let rev30 = 0, rev60 = 0, rev120 = 0, rev180 = 0, rev365 = 0;
-
-  let allProducts = {};
-  let allBuyers = {};
-
-  store.forEach(s => {
-    const price = Number(s.amount) || Number(s.price) || 0;
-    const item = s.item || 'Unknown';
-    const buyer = s.boughtBy || s.buyer || s.user || 'Unknown';
-    const seller = s.soldBy || 'Admin';
-    const pDate = new Date(s.date || s.purchase_date || s.createdAt || Date.now()).getTime();
-
-    if (!allProducts[item]) allProducts[item] = { name: item, seller, count: 0, rev: 0 };
-    allProducts[item].count += 1;
-    allProducts[item].rev += price;
-
-    if (!allBuyers[buyer]) allBuyers[buyer] = { name: buyer, count: 0, spent: 0 };
-    allBuyers[buyer].count += 1;
-    allBuyers[buyer].spent += price;
-
-    if (item === selectedProduct) {
-      prodTotalCount += 1;
-      prodTotalRevenue += price;
-
-      if (!prodBuyers[buyer]) prodBuyers[buyer] = { name: buyer, count: 0, spent: 0 };
-      prodBuyers[buyer].count += 1;
-      prodBuyers[buyer].spent += price;
-
-      const diff = now - pDate;
-      if (diff <= 30 * DAY) rev30 += price;
-      if (diff <= 60 * DAY) rev60 += price;
-      if (diff <= 120 * DAY) rev120 += price;
-      if (diff <= 180 * DAY) rev180 += price;
-      if (diff <= 365 * DAY) rev365 += price;
-    }
-  });
-
-  const topPurchasers = Object.values(prodBuyers).sort((a,b) => b.count - a.count);
-  const topProducts = Object.values(allProducts).sort((a,b) => b.count - a.count).slice(0, 3);
-  const topGlobalBuyers = Object.values(allBuyers).sort((a,b) => b.spent - a.spent).slice(0, 3);
+const StoreAnalyticsModal = ({ selectedProduct, onClose }) => {
+  if (!selectedProduct) return null;
+  const buyers = Array.isArray(selectedProduct.buyers) ? selectedProduct.buyers : [];
 
   return (
     <div style={{
@@ -76,81 +32,52 @@ const StoreAnalyticsModal = ({ store, selectedProduct, onClose }) => {
         <button onClick={onClose} style={{
           position: 'absolute', top: '1.5rem', right: '1.5rem', background: 'transparent',
           border: 'none', color: 'var(--text-color, #fff)', fontSize: '1.5rem', cursor: 'pointer'
-        }}><i className="fas fa-times" />×</button>
+        }}><i className="fas fa-times" /></button>
 
         <h2 style={{ fontFamily: 'Cinzel, serif', color: 'var(--sea-green, #20c997)', marginBottom: '1.5rem' }}>
-          <i className="fas fa-chart-pie" /> {selectedProduct} Analytics
+          <i className="fas fa-chart-pie" /> {selectedProduct.name} Details
         </h2>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem', marginBottom: '2rem' }}>
-          
-          <div style={{ background: 'var(--card-bg, #2a2a2a)', padding: '1.2rem', borderRadius: '12px', border: '1px solid var(--card-border, #444)' }}>
-            <h4 style={{ color: 'var(--text-color, #fff)', marginBottom: '1rem', borderBottom: '1px solid var(--card-border, #444)', paddingBottom: '0.5rem' }}>Revenue Timeline</h4>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}><span>Past 30 Days:</span> <strong>₹{rev30.toFixed(2)}</strong></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}><span>Past 2 Months:</span> <strong>₹{rev60.toFixed(2)}</strong></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}><span>Past 4 Months:</span> <strong>₹{rev120.toFixed(2)}</strong></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}><span>Past 6 Months:</span> <strong>₹{rev180.toFixed(2)}</strong></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}><span>Past 1 Year:</span> <strong>₹{rev365.toFixed(2)}</strong></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1rem', paddingTop: '0.5rem', borderTop: '2px dashed var(--sea-green, #20c997)' }}>
-              <span style={{ color: 'var(--sea-green, #20c997)' }}>Total All Time:</span> <strong style={{ color: 'var(--sea-green, #20c997)' }}>₹{prodTotalRevenue.toFixed(2)}</strong>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem' }}>
-              <span>Total Units Sold:</span> <strong>{prodTotalCount}</strong>
-            </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+          <div style={{ background: 'var(--card-bg, #2a2a2a)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--card-border, #444)' }}>
+            <div style={{ fontSize: '0.8rem', opacity: 0.75, textTransform: 'uppercase', letterSpacing: '1px' }}>Added By</div>
+            <div style={{ fontWeight: 'bold', marginTop: '0.4rem' }}>{selectedProduct.sellerLabel || 'N/A'}</div>
           </div>
-
-          <div style={{ background: 'var(--card-bg, #2a2a2a)', padding: '1.2rem', borderRadius: '12px', border: '1px solid var(--card-border, #444)', maxHeight: '320px', overflowY: 'auto' }}>
-            <h4 style={{ color: 'var(--text-color, #fff)', marginBottom: '1rem', borderBottom: '1px solid var(--card-border, #444)', paddingBottom: '0.5rem' }}>Purchased By</h4>
-            <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', fontSize: '0.95rem' }}>
-              <thead><tr><th style={{ paddingBottom: '0.5rem' }}>Buyer</th><th style={{ paddingBottom: '0.5rem' }}>Times</th><th style={{ paddingBottom: '0.5rem', textAlign: 'right' }}>Spent</th></tr></thead>
-              <tbody>
-                {topPurchasers.length === 0 && <tr><td colSpan={3} style={{ opacity: 0.6, paddingTop: '1rem', textAlign: 'center' }}>No purchasers found</td></tr>}
-                {topPurchasers.map((b, i) => (
-                  <tr key={i} style={{ borderBottom: i === topPurchasers.length - 1 ? 'none' : '1px solid var(--card-border, #444)' }}>
-                    <td style={{ padding: '0.6rem 0' }}>{b.name}</td>
-                    <td>{b.count}</td>
-                    <td style={{ textAlign: 'right' }}>₹{b.spent.toFixed(2)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div style={{ background: 'var(--card-bg, #2a2a2a)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--card-border, #444)' }}>
+            <div style={{ fontSize: '0.8rem', opacity: 0.75, textTransform: 'uppercase', letterSpacing: '1px' }}>Total Orders</div>
+            <div style={{ fontWeight: 'bold', marginTop: '0.4rem' }}>{selectedProduct.totalOrders || 0}</div>
           </div>
-
+          <div style={{ background: 'var(--card-bg, #2a2a2a)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--card-border, #444)' }}>
+            <div style={{ fontSize: '0.8rem', opacity: 0.75, textTransform: 'uppercase', letterSpacing: '1px' }}>Total Revenue</div>
+            <div style={{ fontWeight: 'bold', marginTop: '0.4rem' }}>₹{Number(selectedProduct.totalRevenue || 0).toFixed(2)}</div>
+          </div>
+          <div style={{ background: 'var(--card-bg, #2a2a2a)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--card-border, #444)' }}>
+            <div style={{ fontSize: '0.8rem', opacity: 0.75, textTransform: 'uppercase', letterSpacing: '1px' }}>Unique Buyers</div>
+            <div style={{ fontWeight: 'bold', marginTop: '0.4rem' }}>{buyers.length}</div>
+          </div>
         </div>
 
-        <h3 style={{ fontFamily: 'Cinzel, serif', color: 'var(--sea-green, #20c997)', margin: '2rem 0 1rem 0', paddingBottom: '0.5rem', borderBottom: '1px solid var(--card-border, #444)' }}>
-           Global Top 3 (All Products)
-        </h3>
-        
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
-          <div style={{ background: 'var(--card-bg, #2a2a2a)', padding: '1.2rem', borderRadius: '12px', border: '1px solid var(--card-border, #444)' }}>
-            <h4 style={{ color: '#f39c12', marginBottom: '1rem' }}><i className="fas fa-medal" /> Top Sold Products</h4>
-            {topProducts.map((p, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.8rem', paddingBottom: '0.5rem', borderBottom: i === topProducts.length - 1 ? 'none' : '1px solid var(--card-border, #444)' }}>
-                <div>
-                  <strong>{p.name}</strong>
-                  <div style={{ fontSize: '0.8rem', opacity: 0.7 }}>Sold by: {p.seller}</div>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ color: 'var(--sea-green, #20c997)', fontWeight: 'bold' }}>{p.count} units</div>
-                  <div style={{ fontSize: '0.85rem' }}>₹{p.rev.toFixed(2)}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ background: 'var(--card-bg, #2a2a2a)', padding: '1.2rem', borderRadius: '12px', border: '1px solid var(--card-border, #444)' }}>
-            <h4 style={{ color: '#3498db', marginBottom: '1rem' }}><i className="fas fa-crown" /> Top Buyers</h4>
-            {topGlobalBuyers.map((b, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.8rem', paddingBottom: '0.5rem', borderBottom: i === topGlobalBuyers.length - 1 ? 'none' : '1px solid var(--card-border, #444)' }}>
-                <strong>{b.name}</strong>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ color: 'var(--sea-green, #20c997)', fontWeight: 'bold' }}>₹{b.spent.toFixed(2)}</div>
-                  <div style={{ fontSize: '0.85rem', opacity: 0.8 }}>{b.count} orders</div>
-                </div>
-              </div>
-            ))}
-          </div>
+        <div style={{ background: 'var(--card-bg, #2a2a2a)', padding: '1.2rem', borderRadius: '12px', border: '1px solid var(--card-border, #444)', maxHeight: '360px', overflowY: 'auto' }}>
+          <h4 style={{ color: 'var(--text-color, #fff)', marginBottom: '1rem', borderBottom: '1px solid var(--card-border, #444)', paddingBottom: '0.5rem' }}>Purchased By</h4>
+          <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', fontSize: '0.95rem' }}>
+            <thead>
+              <tr>
+                <th style={{ paddingBottom: '0.5rem' }}>Buyer</th>
+                <th style={{ paddingBottom: '0.5rem' }}>Times</th>
+                <th style={{ paddingBottom: '0.5rem', textAlign: 'right' }}>Spent</th>
+              </tr>
+            </thead>
+            <tbody>
+              {buyers.length === 0 && <tr><td colSpan={3} style={{ opacity: 0.6, paddingTop: '1rem', textAlign: 'center' }}>No purchasers found</td></tr>}
+              {buyers.map((b, i) => (
+                <tr key={i} style={{ borderBottom: i === buyers.length - 1 ? 'none' : '1px solid var(--card-border, #444)' }}>
+                  <td style={{ padding: '0.6rem 0' }}>{b.name}</td>
+                  <td>{b.orders}</td>
+                  <td style={{ textAlign: 'right' }}>₹{Number(b.spent || 0).toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
 
       </motion.div>
@@ -207,6 +134,7 @@ const AdminPayments = () => {
         setTournamentsList(Array.isArray(payload.tournaments) ? payload.tournaments : []);
       
       setStore(Array.isArray(payload.store) ? payload.store : []);
+      setSelectedProduct(null);
       
       setPageWallet(1); setPageSubs(1);  setPageStore(1);
     } catch (e) {
@@ -230,13 +158,70 @@ const AdminPayments = () => {
 
   const totalPageWallet = Math.ceil(walletRecharges.length / itemsPerPage) || 1;
   const totalPageSubs = Math.ceil(subscriptions.length / itemsPerPage) || 1;
-  
-  const totalPageStore = Math.ceil(store.length / itemsPerPage) || 1;
+ 
+  const storeStats = useMemo(() => {
+    const productMap = new Map();
+    const buyerMap = new Map();
+
+    store.forEach((s) => {
+      const name = String(s.item || 'Unknown Item');
+      const seller = String(s.soldBy || 'Admin');
+      const buyer = String(s.boughtBy || s.buyer || s.user || 'Unknown');
+      const price = Number(s.amount) || Number(s.price) || 0;
+
+      let product = productMap.get(name);
+      if (!product) {
+        product = {
+          name,
+          sellerSet: new Set(),
+          totalOrders: 0,
+          totalRevenue: 0,
+          buyers: new Map()
+        };
+        productMap.set(name, product);
+      }
+
+      product.sellerSet.add(seller);
+      product.totalOrders += 1;
+      product.totalRevenue += price;
+
+      let buyerRow = product.buyers.get(buyer);
+      if (!buyerRow) buyerRow = { name: buyer, orders: 0, spent: 0 };
+      buyerRow.orders += 1;
+      buyerRow.spent += price;
+      product.buyers.set(buyer, buyerRow);
+
+      let globalBuyer = buyerMap.get(buyer);
+      if (!globalBuyer) globalBuyer = { name: buyer, orders: 0, spent: 0 };
+      globalBuyer.orders += 1;
+      globalBuyer.spent += price;
+      buyerMap.set(buyer, globalBuyer);
+    });
+
+    const products = Array.from(productMap.values()).map((p) => {
+      const sellers = Array.from(p.sellerSet.values()).filter(Boolean);
+      const sellerLabel = sellers.length === 0 ? 'N/A' : (sellers.length === 1 ? sellers[0] : 'Multiple');
+      const buyers = Array.from(p.buyers.values()).sort((a, b) => b.orders - a.orders || b.spent - a.spent);
+      return {
+        name: p.name,
+        sellerLabel,
+        totalOrders: p.totalOrders,
+        totalRevenue: p.totalRevenue,
+        buyers
+      };
+    }).sort((a, b) => b.totalOrders - a.totalOrders || b.totalRevenue - a.totalRevenue || a.name.localeCompare(b.name));
+
+    const topProducts = [...products].sort((a, b) => b.totalOrders - a.totalOrders || b.totalRevenue - a.totalRevenue).slice(0, 3);
+    const topBuyers = Array.from(buyerMap.values()).sort((a, b) => b.spent - a.spent || b.orders - a.orders).slice(0, 3);
+
+    return { products, topProducts, topBuyers };
+  }, [store]);
+
+  const totalPageStore = Math.ceil(storeStats.products.length / itemsPerPage) || 1;
 
   const walletShown = walletRecharges.slice((pageWallet - 1) * itemsPerPage, pageWallet * itemsPerPage);
   const subsShown = subscriptions.slice((pageSubs - 1) * itemsPerPage, pageSubs * itemsPerPage);
-  
-  const storeShown = store.slice((pageStore - 1) * itemsPerPage, pageStore * itemsPerPage);
+  const storeShown = storeStats.products.slice((pageStore - 1) * itemsPerPage, pageStore * itemsPerPage);
 
   
   const totalWallet = walletRecharges.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
@@ -261,6 +246,8 @@ const AdminPayments = () => {
         .td { padding:1rem; border-bottom:1px solid rgba(var(--sea-green-rgb, 27, 94, 63), 0.2); }
         .status-badge { padding:0.5rem 1rem; border-radius:20px; font-size:0.9rem; font-weight:bold; display:inline-block; text-align:center; background-color:var(--sky-blue); color:var(--sea-green); }
         .more-btn { display:inline-flex; align-items:center; gap:0.5rem; background-color:var(--sea-green); color:var(--on-accent); text-decoration:none; padding:0.8rem 1.5rem; border-radius:8px; transition:all 0.3s ease; font-family:'Cinzel', serif; font-weight:bold; cursor:pointer; border:none; }
+        .back-link { display:inline-flex; align-items:center; gap:0.5rem; background-color:var(--sea-green); color:var(--on-accent); text-decoration:none; padding:0.8rem 1.5rem; border-radius:8px; transition:all 0.3s ease; font-family:'Cinzel', serif; font-weight:bold; cursor:pointer; border:none; }
+        .back-link:hover { opacity: 0.9; transform: translateY(-2px); }
         .row-counter { text-align:center; margin-bottom:1rem; font-family:'Cinzel', serif; font-size:1.2rem; color:var(--sea-green); background-color:rgba(var(--sea-green-rgb, 27, 94, 63), 0.1); padding:0.5rem 1rem; border-radius:8px; display:inline-block; }
         .empty { text-align:center; padding:2rem; color:var(--sea-green); font-style:italic; }
         .banner { padding:1rem; border-radius:8px; margin-bottom:1rem; text-align:center; font-weight:bold; }
@@ -475,19 +462,19 @@ const AdminPayments = () => {
             </div>
 
             <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-              <span className="row-counter">Total Records: {store.length}</span>
+              <span className="row-counter">Total Products: {storeStats.products.length}</span>
             </div>
 
             {loading ? (
               <div className="empty"><i className="fas fa-info-circle" /> Loading store...</div>
             ) : storeShown.length === 0 ? (
-              <div className="empty"><i className="fas fa-info-circle" /> No store transactions found.</div>
+              <div className="empty"><i className="fas fa-info-circle" /> No products found.</div>
             ) : (
               <div className="product-grid">
                 {storeShown.map((s, idx) => (
                   <motion.div
                       key={`store-${idx}`}
-                      onClick={() => setSelectedProduct(s.item)}
+                      onClick={() => setSelectedProduct(s)}
                       whileHover={{ translateY: -5 }}
                       role="button"
                       tabIndex={0}
@@ -504,11 +491,11 @@ const AdminPayments = () => {
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div style={{ flex: 1 }}>
-                        <h3 style={{ fontSize: '1.2rem', color: 'var(--sea-green)', margin: '0 0 0.25rem 0', fontFamily: 'Cinzel, serif' }}>{s.item || 'N/A'}</h3>
-                        <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: 'var(--text-color)' }}>₹{s.price || 0}</div>
+                        <h3 style={{ fontSize: '1.2rem', color: 'var(--sea-green)', margin: '0 0 0.25rem 0', fontFamily: 'Cinzel, serif' }}>{s.name || 'N/A'}</h3>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--text-color)' }}>₹{Number(s.totalRevenue || 0).toFixed(2)}</div>
                       </div>
                       <div style={{ background: 'var(--sea-green)', color: 'var(--on-accent)', padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 'bold', fontFamily: 'Cinzel, serif' }}>
-                        PURCHASED
+                        VIEW BUYERS
                       </div>
                     </div>
                     
@@ -517,7 +504,7 @@ const AdminPayments = () => {
                         <i className="fas fa-user-tag" style={{ color: 'var(--sea-green)', width: '20px', textAlign: 'center' }} />
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
                           <span style={{ fontSize: '0.75rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '1px' }}>Added By (Coordinator)</span>
-                          <span style={{ fontWeight: 'bold' }}>{s.soldBy || 'N/A'}</span>
+                          <span style={{ fontWeight: 'bold' }}>{s.sellerLabel || 'N/A'}</span>
                         </div>
                       </div>
                       
@@ -526,23 +513,11 @@ const AdminPayments = () => {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
                         <i className="fas fa-shopping-bag" style={{ color: 'var(--sky-blue)', width: '20px', textAlign: 'center' }} />
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
-                          <span style={{ fontSize: '0.75rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '1px' }}>Bought By</span>
-                          <span style={{ fontWeight: 'bold', color: 'var(--sky-blue)' }}>{s.boughtBy || 'N/A'}</span>
+                          <span style={{ fontSize: '0.75rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '1px' }}>Total Orders</span>
+                          <span style={{ fontWeight: 'bold', color: 'var(--sky-blue)' }}>{s.totalOrders || 0}</span>
                         </div>
                       </div>
 
-                      {s.purchase_date && (
-                        <>
-                          <div style={{ width: '100%', height: '1px', background: 'var(--card-border)' }} />
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
-                            <i className="fas fa-calendar-alt" style={{ color: 'gray', width: '20px', textAlign: 'center' }} />
-                            <div style={{ display: 'flex', flexDirection: 'column' }}>
-                              <span style={{ fontSize: '0.75rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '1px' }}>Date</span>
-                              <span style={{ fontSize: '0.9rem' }}>{new Date(s.purchase_date).toLocaleDateString()}</span>
-                            </div>
-                          </div>
-                        </>
-                      )}
                     </div>
                   </motion.div>
                 ))}
@@ -558,6 +533,48 @@ const AdminPayments = () => {
                 Next <i className="fas fa-chevron-right" />
               </button>
             </div>
+
+            {!loading && storeStats.products.length > 0 && (
+              <div style={{ marginTop: '2rem' }}>
+                <h4 style={{ color: 'var(--sea-green)', fontSize: '1.2rem', fontFamily: 'Cinzel, serif', marginBottom: '1rem' }}>
+                  <i className="fas fa-medal" /> Global Highlights
+                </h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
+                  <div style={{ background: 'var(--card-bg, #2a2a2a)', padding: '1.2rem', borderRadius: '12px', border: '1px solid var(--card-border, #444)' }}>
+                    <h4 style={{ color: '#f39c12', marginBottom: '1rem' }}><i className="fas fa-medal" /> Top 3 Products</h4>
+                    {storeStats.topProducts.length === 0 ? (
+                      <div style={{ opacity: 0.7 }}>No data available.</div>
+                    ) : storeStats.topProducts.map((p, i) => (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.8rem', paddingBottom: '0.5rem', borderBottom: i === storeStats.topProducts.length - 1 ? 'none' : '1px solid var(--card-border, #444)' }}>
+                        <div>
+                          <strong>{p.name}</strong>
+                          <div style={{ fontSize: '0.8rem', opacity: 0.7 }}>Sold by: {p.sellerLabel}</div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ color: 'var(--sea-green, #20c997)', fontWeight: 'bold' }}>{p.totalOrders} orders</div>
+                          <div style={{ fontSize: '0.85rem' }}>â‚¹{Number(p.totalRevenue || 0).toFixed(2)}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ background: 'var(--card-bg, #2a2a2a)', padding: '1.2rem', borderRadius: '12px', border: '1px solid var(--card-border, #444)' }}>
+                    <h4 style={{ color: '#3498db', marginBottom: '1rem' }}><i className="fas fa-crown" /> Top Buyers</h4>
+                    {storeStats.topBuyers.length === 0 ? (
+                      <div style={{ opacity: 0.7 }}>No data available.</div>
+                    ) : storeStats.topBuyers.map((b, i) => (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.8rem', paddingBottom: '0.5rem', borderBottom: i === storeStats.topBuyers.length - 1 ? 'none' : '1px solid var(--card-border, #444)' }}>
+                        <strong>{b.name}</strong>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ color: 'var(--sea-green, #20c997)', fontWeight: 'bold' }}>â‚¹{Number(b.spent || 0).toFixed(2)}</div>
+                          <div style={{ fontSize: '0.85rem', opacity: 0.8 }}>{b.orders} orders</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </motion.div>
           <div style={{ marginTop: '2rem', textAlign: 'right' }}>
             <Link to="/admin/admin_dashboard" className="back-link">
@@ -565,7 +582,7 @@ const AdminPayments = () => {
             </Link>
           </div>
                 </div>
-        {selectedProduct && <StoreAnalyticsModal store={store} selectedProduct={selectedProduct} onClose={() => setSelectedProduct(null)} />}
+        {selectedProduct && <StoreAnalyticsModal selectedProduct={selectedProduct} onClose={() => setSelectedProduct(null)} />}
       </div>
     </div>
   );
