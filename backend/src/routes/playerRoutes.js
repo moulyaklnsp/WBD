@@ -137,6 +137,19 @@ router.get('/api/subscription', playerController.getSubscription);
  *         description: Growth data
  */
 router.get('/api/growth', playerController.getGrowth);
+
+/**
+ * @swagger
+ * /player/api/growth_analytics:
+ *   get:
+ *     summary: Get detailed growth analytics
+ *     tags: [Player]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Growth analytics data
+ */
 router.get('/api/growth_analytics', playerController.getGrowthAnalytics);
 
 // ─── Profile ──────────────────────────────────────────────────────────────────
@@ -162,6 +175,26 @@ router.get('/api/growth_analytics', playerController.getGrowthAnalytics);
  *         description: Profile updated
  */
 router.get('/api/profile', playerController.getProfile);
+
+/**
+ * @swagger
+ * /player/api/profile/photo:
+ *   post:
+ *     summary: Upload player profile photo
+ *     tags: [Player]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               photo: { type: string, format: binary }
+ *     responses:
+ *       200:
+ *         description: Photo uploaded
+ */
 router.post('/api/profile/photo', playerController.uploadPhotoMiddleware, playerController.uploadPhoto);
 router.put('/api/profile', playerController.updateProfile);
 
@@ -178,6 +211,23 @@ router.put('/api/profile', playerController.updateProfile);
  *         description: Account deleted
  */
 router.delete('/api/deleteAccount', playerController.deleteAccount);
+
+/**
+ * @swagger
+ * /player/players/restore/{id}:
+ *   post:
+ *     summary: Legacy player restore (EJS)
+ *     tags: [Player]
+ *     deprecated: true
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Account restored
+ */
 router.post('/players/restore/:id', playerController.restorePlayer);
 
 // ─── Compare ──────────────────────────────────────────────────────────────────
@@ -240,7 +290,32 @@ router.post('/api/add-funds', playerController.addFunds);
  */
 router.get('/api/wallet-transactions', playerController.getWalletTransactions);
 // Razorpay endpoints (create order, verify payment)
+/**
+ * @swagger
+ * /player/api/razorpay/create-order:
+ *   post:
+ *     summary: Create a Razorpay order
+ *     tags: [Player]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Razorpay order created
+ */
 router.post('/api/razorpay/create-order', paymentController.createRazorpayOrder);
+
+/**
+ * @swagger
+ * /player/api/razorpay/verify:
+ *   post:
+ *     summary: Verify a Razorpay payment
+ *     tags: [Player]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Payment verified
+ */
 router.post('/api/razorpay/verify', paymentController.verifyRazorpayPayment);
 
 // ─── Pairings & Rankings ──────────────────────────────────────────────────────
@@ -258,8 +333,47 @@ router.post('/api/razorpay/verify', paymentController.verifyRazorpayPayment);
  *         description: Pairings data
  */
 router.get('/api/pairings', playerController.getPairings);
+
+/**
+ * @swagger
+ * /player/api/rankings:
+ *   get:
+ *     summary: Get individual rankings
+ *     tags: [Player]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Rankings data
+ */
 router.get('/api/rankings', playerController.getRankings);
+
+/**
+ * @swagger
+ * /player/api/team-pairings:
+ *   get:
+ *     summary: Get team pairings
+ *     tags: [Player]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Team pairings data
+ */
 router.get('/api/team-pairings', playerController.getTeamPairings);
+
+/**
+ * @swagger
+ * /player/api/team-rankings:
+ *   get:
+ *     summary: Get team rankings
+ *     tags: [Player]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Team rankings data
+ */
 router.get('/api/team-rankings', playerController.getTeamRankings);
 
 // ─── Team approval ────────────────────────────────────────────────────────────
@@ -341,6 +455,19 @@ router.post('/api/subscribe', playerController.subscribePlan);
  *         description: Notifications list
  */
 router.get('/api/notifications', playerController.getNotifications);
+
+/**
+ * @swagger
+ * /player/api/mark-notification-read:
+ *   post:
+ *     summary: Mark a notification as read
+ *     tags: [Player]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Notification marked as read
+ */
 router.post('/api/mark-notification-read', playerController.markNotificationRead);
 
 // ─── Feedback ─────────────────────────────────────────────────────────────────
@@ -456,8 +583,47 @@ router.post('/api/subscription/change', playerController.changeSubscriptionPlan)
  *         description: Cart items
  */
 router.get('/api/cart', playerController.getCart);
+
+/**
+ * @swagger
+ * /player/api/cart/add:
+ *   post:
+ *     summary: Add an item to the cart
+ *     tags: [Player]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Item added to cart
+ */
 router.post('/api/cart/add', playerController.addToCart);
+
+/**
+ * @swagger
+ * /player/api/cart/remove:
+ *   delete:
+ *     summary: Remove an item from the cart
+ *     tags: [Player]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Item removed from cart
+ */
 router.delete('/api/cart/remove', playerController.removeFromCart);
+
+/**
+ * @swagger
+ * /player/api/cart/clear:
+ *   delete:
+ *     summary: Clear the cart
+ *     tags: [Player]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Cart cleared
+ */
 router.delete('/api/cart/clear', playerController.clearCart);
 
 // ─── Orders ───────────────────────────────────────────────────────────────────
@@ -484,8 +650,57 @@ router.delete('/api/cart/clear', playerController.clearCart);
  */
 router.get('/api/orders', playerController.getOrders);
 router.post('/api/orders', playerController.createOrder);
+
+/**
+ * @swagger
+ * /player/api/orders/{orderId}/cancel:
+ *   post:
+ *     summary: Cancel an order
+ *     tags: [Player]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orderId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Order cancelled
+ */
 router.post('/api/orders/:orderId/cancel', playerController.cancelOrder);
+
+/**
+ * @swagger
+ * /player/api/orders/{orderId}/tracking:
+ *   get:
+ *     summary: Get order tracking details
+ *     tags: [Player]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orderId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Order tracking details
+ */
 router.get('/api/orders/:orderId/tracking', playerController.getOrderTracking);
+
+/**
+ * @swagger
+ * /player/api/verify-delivery-otp:
+ *   post:
+ *     summary: Verify delivery OTP
+ *     tags: [Player]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Delivery verified
+ */
 router.post('/api/verify-delivery-otp', playerController.verifyDeliveryOtp);
 
 // ─── Store suggestions ────────────────────────────────────────────────────────
@@ -528,6 +743,26 @@ router.get('/api/store/suggestions', playerController.getStoreSuggestions);
  */
 router.get('/api/settings', playerController.getSettings);
 router.put('/api/settings', playerController.updateSettings);
+
+/**
+ * @swagger
+ * /player/api/settings/wallpaper:
+ *   post:
+ *     summary: Upload a wallpaper image
+ *     tags: [Player]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               wallpaper: { type: string, format: binary }
+ *     responses:
+ *       200:
+ *         description: Wallpaper uploaded
+ */
 router.post('/api/settings/wallpaper', playerController.uploadWallpaperMiddleware, playerController.uploadWallpaper);
 
 // ─── Account ──────────────────────────────────────────────────────────────────
@@ -597,6 +832,24 @@ router.get('/api/complaints', playerController.getMyComplaints);
  *         description: Review submitted
  */
 router.post('/api/reviews', playerController.submitReview);
+
+/**
+ * @swagger
+ * /player/api/reviews/{productId}:
+ *   get:
+ *     summary: Get reviews for a product
+ *     tags: [Player]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: productId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Product reviews
+ */
 router.get('/api/reviews/:productId', playerController.getProductReviews);
 
 // ─── Announcements ────────────────────────────────────────────────────────────

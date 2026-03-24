@@ -4,90 +4,26 @@ const { swissPairing } = require('../utils/swissPairing');
 const Player = require('../models/Player');
 const { uploadImageBuffer } = require('../utils/cloudinary');
 const bcrypt = require('bcryptjs');
-const { sendOtpEmail, sendForgotPasswordOtp } = require('../services/emailService');
-const { generateTokenPair } = require('../utils/jwt');
+const AuthApiService = require('../services/authApiService');
 
 let multer;
 try { multer = require('multer'); } catch (e) { multer = null; }
 
 const BCRYPT_ROUNDS = 12;
-const isBcryptHash = (value) => typeof value === 'string' && /^\$2[aby]\$/.test(value);
 
 module.exports = {
   // ===================== API SIGNUP =====================
   apiSignup: async (req, res) => {
-    const { name, dob, gender, college, email, phone, password, role, aicf_id, fide_id } = req.body || {};
-    let errors = {};
-
-    if (!name || !/^[A-Za-z]+(?: [A-Za-z]+)*$/.test(name)) errors.name = "Valid full name is required (letters only)";
-    if (!dob) errors.dob = "Date of Birth is required";
-    else {
-      const birthDate = new Date(dob);
-      const age = Math.floor((Date.now() - birthDate) / (365.25 * 24 * 60 * 60 * 1000));
-      if (age < 16) errors.dob = "You must be at least 16 years old";
-    }
-    if (!gender || !['male', 'female', 'other'].includes(gender)) errors.gender = "Gender is required";
-    if (!college || !/^[A-Za-z\s']+$/.test((college || '').trim())) errors.college = "College name must contain only letters, spaces, or apostrophes";
-    if (!email || !/^\S+@\S+\.\S+$/.test(email)) errors.email = "Valid email is required";
-    else if (/[A-Z]/.test(email)) errors.email = "Email should only contain lowercase letters";
-    if (!phone || !/^[0-9]{10}$/.test(phone)) errors.phone = "Valid 10-digit phone number is required";
-    if (!password || password.length < 8) errors.password = "Password must be at least 8 characters";
-    if (!role || !['admin', 'organizer', 'coordinator', 'player'].includes(role)) errors.role = "Valid role is required";
-
-    if (Object.keys(errors).length > 0) {
-      console.log('Signup validation errors (API):', errors);
-      return res.status(400).json({ success: false, message: 'Validation failed', errors });
-    }
-
     try {
       const db = await connectDB();
-      const existingUser = await db.collection('users').findOne({ email });
-      if (existingUser) {
-        console.log('Signup failed (API): Email already exists:', email);
-        return res.status(409).json({ success: false, message: 'Email already registered' });
-      }
-
-      const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
-      // Store signup data temporarily
-      const signupData = {
-        name,
-        dob: new Date(dob),
-        gender,
-        college,
-        email,
-        phone,
-        password: hashedPassword,
-        role,
-        aicf_id: aicf_id || '',
-        fide_id: fide_id || ''
-      };
-      await db.collection('signup_otps').insertOne({
-        email,
-        data: signupData,
-        created_at: new Date()
-      });
-
-      // Generate OTP
-      const otp = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
-      const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
-
-      // Store OTP in database
-      await db.collection('otps').insertOne({
-        email,
-        otp,
-        type: 'signup',
-        expires_at: expiresAt,
-        used: false
-      });
-
-      // Send OTP via email
-      console.log(`Generated OTP for ${email}: ${otp}`);
-      await sendOtpEmail(email, otp);
-
-      return res.json({ success: true, message: 'OTP sent to your email for verification' });
+      const result = await AuthApiService.apiSignup(db, req.body || {});
+      return res.json({ success: true, message: result.message });
     } catch (err) {
       console.error('Signup API error:', err);
-      return res.status(500).json({ success: false, message: 'Unexpected server error' });
+      const status = err.statusCode || 500;
+      const body = { success: false, message: err.message || 'Unexpected server error' };
+      if (err.errors) body.errors = err.errors;
+      return res.status(status).json(body);
     }
   },
 
@@ -95,90 +31,20 @@ module.exports = {
   verifySignupOtp: async (req, res) => {
     const { email, otp } = req.body || {};
     try {
-      if (!email || !otp) return res.status(400).json({ success: false, message: 'Email and OTP required' });
-
       const db = await connectDB();
-      const otpRecord = await db.collection('otps').findOne({ email, otp, type: 'signup', used: false });
-      if (!otpRecord) return res.status(400).json({ success: false, message: 'Invalid OTP' });
-      if (new Date() > otpRecord.expires_at) return res.status(400).json({ success: false, message: 'OTP expired' });
-
-      // Mark OTP as used
-      await db.collection('otps').updateOne({ _id: otpRecord._id }, { $set: { used: true } });
-
-      // Get signup data
-      const signupRecord = await db.collection('signup_otps').findOne({ email });
-      if (!signupRecord) return res.status(400).json({ success: false, message: 'Signup data not found' });
-
-      // Create user
-      const storedPassword = signupRecord?.data?.password || '';
-      const passwordToStore = isBcryptHash(storedPassword)
-        ? storedPassword
-        : await bcrypt.hash(storedPassword, BCRYPT_ROUNDS);
-      const user = {
-        ...signupRecord.data,
-        password: passwordToStore,
-        isDeleted: 0,
-        AICF_ID: signupRecord.data.aicf_id || '',
-        FIDE_ID: signupRecord.data.fide_id || ''
-      };
-      const result = await db.collection('users').insertOne(user);
-      const userId = result.insertedId;
-
-      // Clean up
-      await db.collection('signup_otps').deleteOne({ _id: signupRecord._id });
-
-      if (user.role === "player") {
-        await db.collection('user_balances').insertOne({ user_id: userId, wallet_balance: 0 });
-      }
-
-      // Establish session
-      req.session.userID = userId;
-      req.session.userEmail = user.email;
-      req.session.userRole = user.role;
-      req.session.username = user.name;
-      req.session.playerName = user.name;
-      req.session.userCollege = user.college;
-      req.session.collegeName = user.college;
-
-      // Generate JWT token pair
-      const userWithId = { ...user, _id: userId };
-      const tokens = generateTokenPair(userWithId);
-
-      // Store refresh token in database
-      await db.collection('refresh_tokens').insertOne({
-        userId: userId,
-        email: user.email,
-        token: tokens.refreshToken,
-        createdAt: new Date(),
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        revoked: false
-      });
-
-      let redirectUrl = '';
-      switch (user.role) {
-        case 'admin': redirectUrl = '/admin/admin_dashboard'; break;
-        case 'organizer': redirectUrl = '/organizer/organizer_dashboard'; break;
-        case 'coordinator': redirectUrl = '/coordinator/coordinator_dashboard'; break;
-        case 'player': redirectUrl = '/player/player_dashboard?success-message=Player Signup Successful'; break;
-        default: return res.status(400).json({ success: false, message: 'Invalid Role' });
-      }
-      res.json({
+      const result = await AuthApiService.verifySignupOtp(db, { email, otp }, req.session);
+      return res.json({
         success: true,
-        redirectUrl,
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-        expiresIn: tokens.expiresIn,
-        user: {
-          id: userId.toString(),
-          email: user.email,
-          role: user.role,
-          username: user.name,
-          college: user.college
-        }
+        redirectUrl: result.redirectUrl,
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
+        expiresIn: result.expiresIn,
+        user: result.user
       });
     } catch (err) {
       console.error('Signup OTP verify error:', err);
-      res.status(500).json({ success: false, message: 'Unexpected server error' });
+      const status = err.statusCode || 500;
+      return res.status(status).json({ success: false, message: err.message || 'Unexpected server error' });
     }
   },
 
@@ -307,63 +173,28 @@ module.exports = {
   // ===================== CONTACT US (API / JSON) =====================
   apiContactus: async (req, res) => {
     try {
-      const { name, email, message } = req.body || {};
-      let errors = {};
-      if (!name || !/^[A-Za-z]+(?: [A-Za-z]+)*$/.test(name)) {
-        errors.name = 'Name should only contain letters';
-      }
-      if (!email || !/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email)) {
-        errors.email = 'Please enter a valid email address';
-      }
-      if (!message || message.trim() === '') {
-        errors.message = 'Message cannot be empty';
-      } else {
-        const wordCount = message.trim().split(/\s+/).length;
-        if (wordCount > 200) errors.message = 'Message cannot exceed 200 words';
-      }
-      if (Object.keys(errors).length > 0) {
-        return res.status(400).json({ success: false, message: 'Validation failed', errors });
-      }
       const db = await connectDB();
-      const sessionEmail = String(req.session?.userEmail || '').trim().toLowerCase();
-      await db.collection('contact').insertOne({
-        name,
-        email,
-        message,
-        submission_date: new Date(),
-        status: 'pending',
-        submitted_by: sessionEmail || String(email || '').trim().toLowerCase()
-      });
-      return res.json({ success: true, message: 'Message sent successfully!' });
+      const result = await AuthApiService.apiContactus(db, req.body || {}, req.session);
+      return res.json({ success: true, message: result.message });
     } catch (e) {
       console.error('API /api/contactus error:', e);
-      return res.status(500).json({ success: false, message: 'Failed to send message.' });
+      const status = e.statusCode || 500;
+      const body = { success: false, message: e.message || 'Failed to send message.' };
+      if (e.errors) body.errors = e.errors;
+      return res.status(status).json(body);
     }
   },
 
   // ===================== CONTACT US STATUS (API / JSON) =====================
   getMyContactQueries: async (req, res) => {
     try {
-      const userEmail = String(req.session?.userEmail || '').trim().toLowerCase();
-      if (!userEmail) {
-        return res.status(401).json({ success: false, message: 'Please log in to view your queries.' });
-      }
       const db = await connectDB();
-      const queries = await db.collection('contact')
-        .find({
-          $or: [
-            { submitted_by: userEmail },
-            { email: userEmail }
-          ]
-        })
-        .sort({ submission_date: -1 })
-        .project({ name: 1, email: 1, message: 1, submission_date: 1, status: 1, internal_note: 1, status_updated_at: 1 })
-        .toArray();
-
-      return res.json({ success: true, queries });
+      const result = await AuthApiService.getMyContactQueries(db, req.session);
+      return res.json({ success: true, queries: result.queries });
     } catch (e) {
       console.error('API /api/contactus/my error:', e);
-      return res.status(500).json({ success: false, message: 'Failed to fetch your contact queries.' });
+      const status = e.statusCode || 500;
+      return res.status(status).json({ success: false, message: e.message || 'Failed to fetch your contact queries.' });
     }
   },
 
@@ -959,168 +790,46 @@ module.exports = {
   // ===================== FORGOT PASSWORD =====================
   forgotPassword: async (req, res) => {
     const { email } = req.body || {};
-
-    if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
-      return res.status(400).json({ success: false, message: 'Valid email is required' });
-    }
-
     try {
       const db = await connectDB();
-
-      // Check if user exists
-      const user = await db.collection('users').findOne({ email: email.toLowerCase(), isDeleted: { $ne: 1 } });
-      if (!user) {
-        return res.status(404).json({ success: false, message: 'No account found with this email address' });
-      }
-
-      // Generate OTP
-      const otp = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
-      const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes expiry
-
-      // Remove any existing OTPs for this email and type
-      await db.collection('otps').deleteMany({ email: email.toLowerCase(), type: 'forgot-password' });
-
-      // Store OTP in database
-      await db.collection('otps').insertOne({
-        email: email.toLowerCase(),
-        otp,
-        type: 'forgot-password',
-        expires_at: expiresAt,
-        used: false,
-        created_at: new Date()
-      });
-
-      // Send OTP via email
-      console.log(`Generated Forgot Password OTP for ${email}: ${otp}`);
-      await sendForgotPasswordOtp(email.toLowerCase(), otp);
-
-      return res.json({ success: true, message: 'OTP sent to your email address' });
+      const result = await AuthApiService.forgotPassword(db, { email });
+      return res.json({ success: true, message: result.message });
     } catch (err) {
       console.error('Forgot password error:', err);
-      return res.status(500).json({ success: false, message: 'Server error. Please try again.' });
+      const status = err.statusCode || 500;
+      return res.status(status).json({ success: false, message: err.message || 'Server error. Please try again.' });
     }
   },
 
   // ===================== VERIFY FORGOT PASSWORD OTP =====================
   verifyForgotPasswordOtp: async (req, res) => {
     const { email, otp } = req.body || {};
-
-    if (!email || !otp) {
-      return res.status(400).json({ success: false, message: 'Email and OTP are required' });
-    }
-
     try {
       const db = await connectDB();
-
-      const otpRecord = await db.collection('otps').findOne({
-        email: email.toLowerCase(),
-        otp,
-        type: 'forgot-password',
-        used: false
-      });
-
-      if (!otpRecord) {
-        return res.status(400).json({ success: false, message: 'Invalid OTP' });
-      }
-
-      if (new Date() > otpRecord.expires_at) {
-        return res.status(400).json({ success: false, message: 'OTP has expired. Please request a new one.' });
-      }
-
-      // Generate a reset token for the next step
-      const resetToken = require('crypto').randomBytes(32).toString('hex');
-      const resetTokenExpiry = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
-
-      // Update OTP record with reset token (allows password reset without re-verifying)
-      await db.collection('otps').updateOne(
-        { _id: otpRecord._id },
-        { 
-          $set: { 
-            used: true,
-            resetToken,
-            resetTokenExpiry
-          } 
-        }
-      );
-
-      return res.json({ 
-        success: true, 
-        message: 'OTP verified successfully. You can now reset your password.',
-        resetToken
+      const result = await AuthApiService.verifyForgotPasswordOtp(db, { email, otp });
+      return res.json({
+        success: true,
+        message: result.message,
+        resetToken: result.resetToken
       });
     } catch (err) {
       console.error('Verify forgot password OTP error:', err);
-      return res.status(500).json({ success: false, message: 'Server error. Please try again.' });
+      const status = err.statusCode || 500;
+      return res.status(status).json({ success: false, message: err.message || 'Server error. Please try again.' });
     }
   },
 
   // ===================== RESET PASSWORD =====================
   resetPassword: async (req, res) => {
     const { email, resetToken, newPassword, confirmPassword } = req.body || {};
-
-    // Validate inputs
-    if (!email || !resetToken || !newPassword || !confirmPassword) {
-      return res.status(400).json({ success: false, message: 'All fields are required' });
-    }
-
-    if (newPassword !== confirmPassword) {
-      return res.status(400).json({ success: false, message: 'Passwords do not match' });
-    }
-
-    // Password validation
-    if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*[!@#$%^&*])[A-Za-z\d!@#$%^&*]{8,}$/.test(newPassword)) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Password must be at least 8 characters with one uppercase, one lowercase, and one special character' 
-      });
-    }
-
     try {
       const db = await connectDB();
-
-      // Verify reset token
-      const otpRecord = await db.collection('otps').findOne({
-        email: email.toLowerCase(),
-        type: 'forgot-password',
-        resetToken,
-        used: true
-      });
-
-      if (!otpRecord) {
-        return res.status(400).json({ success: false, message: 'Invalid or expired reset token. Please start over.' });
-      }
-
-      if (new Date() > otpRecord.resetTokenExpiry) {
-        return res.status(400).json({ success: false, message: 'Reset token has expired. Please start over.' });
-      }
-
-      // Check if user exists
-      const user = await db.collection('users').findOne({ email: email.toLowerCase(), isDeleted: { $ne: 1 } });
-      if (!user) {
-        return res.status(404).json({ success: false, message: 'User not found' });
-      }
-
-      // Hash new password
-      const hashedPassword = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
-
-      // Update user's password
-      await db.collection('users').updateOne(
-        { _id: user._id },
-        { $set: { password: hashedPassword } }
-      );
-
-      // Delete the OTP record
-      await db.collection('otps').deleteOne({ _id: otpRecord._id });
-
-      console.log(`Password reset successful for user: ${email}`);
-
-      return res.json({
-        success: true,
-        message: 'Password reset successful! You can now login with your new password.'
-      });
+      const result = await AuthApiService.resetPassword(db, { email, resetToken, newPassword, confirmPassword });
+      return res.json({ success: true, message: result.message });
     } catch (err) {
       console.error('Reset password error:', err);
-      return res.status(500).json({ success: false, message: 'Server error. Please try again.' });
+      const status = err.statusCode || 500;
+      return res.status(status).json({ success: false, message: err.message || 'Server error. Please try again.' });
     }
   },
 
@@ -1233,23 +942,24 @@ module.exports = {
 
   /** POST /api/verify-reactivation-otp – deprecated */
   verifyReactivationOtp(_req, res) {
-    return res.status(410).json({
-      success: false,
-      message: 'Reactivation OTP flow has been removed. Please use Restore Account.'
-    });
+    try {
+      AuthApiService.verifyReactivationOtp();
+      return res.json({ success: true });
+    } catch (err) {
+      const status = err.statusCode || 410;
+      return res.status(status).json({
+        success: false,
+        message: err.message || 'Reactivation OTP flow has been removed. Please use Restore Account.'
+      });
+    }
   },
 
   /** GET /api/theme */
   async getTheme(req, res) {
     try {
-      if (!req.session?.userEmail) return res.json({ success: true, theme: null });
       const db = await connectDB();
-      const user = await db.collection('users').findOne(
-        { email: req.session.userEmail },
-        { projection: { theme: 1 } }
-      );
-      const theme = (user && user.theme === 'dark') ? 'dark' : 'light';
-      return res.json({ success: true, theme });
+      const result = await AuthApiService.getTheme(db, req.session);
+      return res.json({ success: true, theme: result.theme });
     } catch (e) {
       console.error('GET /api/theme error:', e);
       return res.status(500).json({ success: false, message: 'Failed to load theme' });
@@ -1259,15 +969,13 @@ module.exports = {
   /** POST /api/theme */
   async setTheme(req, res) {
     try {
-      const { theme } = req.body || {};
-      if (!req.session?.userEmail) return res.status(401).json({ success: false, message: 'Not logged in' });
-      if (!['dark', 'light'].includes(theme)) return res.status(400).json({ success: false, message: 'Invalid theme value' });
       const db = await connectDB();
-      await db.collection('users').updateOne({ email: req.session.userEmail }, { $set: { theme } });
-      return res.json({ success: true });
+      const result = await AuthApiService.setTheme(db, req.body || {}, req.session);
+      return res.json({ success: true, message: result.message || 'Theme saved' });
     } catch (e) {
       console.error('POST /api/theme error:', e);
-      return res.status(500).json({ success: false, message: 'Failed to save theme' });
+      const status = e.statusCode || 500;
+      return res.status(status).json({ success: false, message: e.message || 'Failed to save theme' });
     }
   }
 };

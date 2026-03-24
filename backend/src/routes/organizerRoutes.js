@@ -241,7 +241,33 @@ router.get('/api/store', organizerController.getStore);
  *         description: Meeting scheduled
  */
 router.post('/api/meetings', organizerController.scheduleMeeting);
+
+/**
+ * @swagger
+ * /organizer/api/meetings/organized:
+ *   get:
+ *     summary: Get meetings organized by the organizer
+ *     tags: [Organizer]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Organized meetings
+ */
 router.get('/api/meetings/organized', organizerController.getOrganizedMeetings);
+
+/**
+ * @swagger
+ * /organizer/api/meetings/upcoming:
+ *   get:
+ *     summary: Get upcoming meetings
+ *     tags: [Organizer]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Upcoming meetings
+ */
 router.get('/api/meetings/upcoming', organizerController.getUpcomingMeetings);
 
 // ─── Self-management ──────────────────────────────────────────────────────────
