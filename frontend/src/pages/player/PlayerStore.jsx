@@ -689,8 +689,8 @@ function PlayerStore() {
               </div>
             )}
 
-            {/* Most Ordered */}
-            {suggestions.mostOrdered.length > 0 && (
+            {/* Suggestions & Most Ordered (Hidden when filtering) */}
+            {!filter.search && !filter.category && suggestions.mostOrdered.length > 0 && (
               <>
                 <h3 className="section-title"><i className="fas fa-fire" style={{ color: '#e74c3c' }} /> Most Ordered</h3>
                 <div className="suggestion-row">
@@ -705,8 +705,7 @@ function PlayerStore() {
               </>
             )}
 
-            {/* Suggestions for You */}
-            {suggestions.suggested.length > 0 && (
+            {!filter.search && !filter.category && suggestions.suggested.length > 0 && (
               <>
                 <h3 className="section-title"><i className="fas fa-lightbulb" style={{ color: '#f39c12' }} /> Suggestions For You</h3>
                 <div className="suggestion-row">
@@ -722,6 +721,23 @@ function PlayerStore() {
             )}
 
             <SearchFilter search={filter.search} category={filter.category} categories={[...new Set(productsList.map(p => p.category).filter(Boolean))]} onChange={setFilter} />
+
+            {(filter.search || filter.category) && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+                <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>
+                  Showing results for: <span style={{ color: 'var(--sea-green)' }}>{filter.search || filter.category}</span>
+                </div>
+                <button 
+                  onClick={() => setFilter({ search: '', category: '' })} 
+                  style={{
+                    background: 'var(--card-bg)', color: 'var(--text-color)', border: '1px solid var(--card-border)',
+                    padding: '0.5rem 1rem', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem'
+                  }}
+                >
+                  <i className="fas fa-times" /> Clear Results
+                </button>
+              </div>
+            )}
 
             {loading ? <p style={{ textAlign: 'center' }}>Loading products...</p> : (
               <div className="products-grid">

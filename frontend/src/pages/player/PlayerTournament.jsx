@@ -257,11 +257,14 @@ function PlayerTournament() {
         if (typeof data.walletBalance !== 'undefined') setWalletBalance(Math.min(data.walletBalance, MAX_WALLET_BALANCE));
         setOpenJoinFormId(null);
         await loadTournaments();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       } else {
         setMessage({ text: data.error || 'Failed to join team tournament', isError: true });
+        alert(data.error || 'Failed to join team tournament'); // Ensure user sees it if scrolled down
       }
     } catch (err) {
       setMessage({ text: 'Error joining team tournament.', isError: true });
+      alert('Error joining team tournament.');
     } finally {
       setLoading(false);
     }
@@ -836,8 +839,10 @@ function PlayerTournament() {
                             ) : (
                               <div className="enrolled-actions">
                                 <span className="status-pill enrolled">ENROLLED</span>
-                                <a href={`/player/pairings?tournament_id=${t._id}&rounds=5`} className="btn small"><i className="fas fa fa-chess-board" /> Pairings</a>
-                                <a href={`/player/rankings?tournament_id=${t._id}`} className="btn small"><i className="fas fa-medal" /> Results</a>
+                                <>
+                                  <a href={`/player/pairings?tournament_id=${t._id}&rounds=${Math.ceil((t.no_of_rounds || t.noOfRounds || 5) / 2)}`} className="btn small"><i className="fas fa fa-chess-board" /> Pairings</a>
+                                  <a href={`/player/rankings?tournament_id=${t._id}`} className="btn small"><i className="fas fa-medal" /> Live Standings</a>
+                                </>
                                 {complaintTournamentIds.has(String(t._id)) ? (
                                   <span className="status-pill pending">COMPLAINT SUBMITTED</span>
                                 ) : (
@@ -929,18 +934,24 @@ function PlayerTournament() {
                                     <form onSubmit={(e) => {
                                       e.preventDefault();
                                       const player1 = raw.username; // Captain is always player1
-                                      const player2 = e.currentTarget.player2.value.trim();
-                                      const player3 = e.currentTarget.player3.value.trim();
+                                      const player2 = e.currentTarget.elements.player2.value.trim();
+                                      const player3 = e.currentTarget.elements.player3.value.trim();
                                       if (!player1) {
-                                        setMessage({ text: 'Unable to determine your username. Please refresh the page.', isError: true });
+                                        const err = 'Unable to determine your username. Please refresh the page.';
+                                        setMessage({ text: err, isError: true });
+                                        alert(err);
                                         return;
                                       }
                                       if (!player2 || !player3) {
-                                        setMessage({ text: 'Please enter usernames for both teammates.', isError: true });
+                                        const err = 'Please enter usernames for both teammates.';
+                                        setMessage({ text: err, isError: true });
+                                        alert(err);
                                         return;
                                       }
                                       if (player1 === player2 || player1 === player3 || player2 === player3) {
-                                        setMessage({ text: 'All three players must be different.', isError: true });
+                                        const err = 'All three players must be different.';
+                                        setMessage({ text: err, isError: true });
+                                        alert(err);
                                         return;
                                       }
                                       joinTeam(t._id, { player1, player2, player3 });
@@ -977,8 +988,8 @@ function PlayerTournament() {
                                 )}
                                 {t.approved && (
                                   <>
-                                    <a href={`/player/pairings?tournament_id=${t._id}&rounds=5&type=team`} className="btn small"><i className="fas fa-chess-board" /> Pairings</a>
-                                    <a href={`/player/rankings?tournament_id=${t._id}&type=team`} className="btn small"><i className="fas fa-medal" /> Results</a>
+                                    <a href={`/player/pairings?tournament_id=${t._id}&rounds=${Math.ceil((t.no_of_rounds || t.noOfRounds || 5) / 2)}&type=team`} className="btn small"><i className="fas fa-chess-board" /> Pairings</a>
+                                    <a href={`/player/rankings?tournament_id=${t._id}&type=team`} className="btn small"><i className="fas fa-medal" /> Live Standings</a>
                                     {complaintTournamentIds.has(String(t._id)) ? (
                                       <span className="status-pill pending">COMPLAINT SUBMITTED</span>
                                     ) : (

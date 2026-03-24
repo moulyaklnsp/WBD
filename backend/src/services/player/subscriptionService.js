@@ -145,8 +145,10 @@ const SubscriptionService = {
       const wallet = balDoc?.wallet_balance || 0;
       if (wallet < diff) throw createError(`Insufficient wallet balance. Need ₹${diff} more.`, 400);
       await UserBalancesModel.updateOne(database, { user_id: userDoc._id }, { $inc: { wallet_balance: -diff } });
+      await insertWalletTransaction(database, userDoc._id, user?.email, 'debit', diff, `Upgraded to ${newPlan} Plan`);
     } else if (diff < 0) {
       await UserBalancesModel.updateOne(database, { user_id: userDoc._id }, { $inc: { wallet_balance: Math.abs(diff) } }, { upsert: true });
+      await insertWalletTransaction(database, userDoc._id, user?.email, 'credit', Math.abs(diff), `Downgraded to ${newPlan} Plan`);
     }
 
     await SubscriptionsModel.updateOne(

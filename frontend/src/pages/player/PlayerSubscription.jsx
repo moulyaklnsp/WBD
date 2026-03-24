@@ -56,34 +56,6 @@ function PlayerSubscription() {
     }
   }, []);
 
-  const generateDemoHistory = useCallback(() => {
-    const now = new Date();
-    const entries = [];
-    const activePlan = currentSubscription?.plan || 'Basic';
-
-    // Build a realistic history timeline
-    if (activePlan === 'Premium') {
-      // Started Basic, then upgraded to Premium
-      const d1 = new Date(now); d1.setMonth(d1.getMonth() - 4);
-      const d2 = new Date(now); d2.setMonth(d2.getMonth() - 2);
-      entries.push({ plan: 'Basic', price: PLAN_PRICES.Basic, date: d1.toISOString(), action: 'new' });
-      entries.push({ plan: 'Basic', price: PLAN_PRICES.Basic, date: new Date(d1.getTime() + 30 * 86400000).toISOString(), action: 'renewal' });
-      entries.push({ plan: 'Premium', price: PLAN_PRICES.Premium, date: d2.toISOString(), action: 'upgrade' });
-      entries.push({ plan: 'Premium', price: PLAN_PRICES.Premium, date: new Date(d2.getTime() + 30 * 86400000).toISOString(), action: 'renewal' });
-    } else {
-      // Basic plan history
-      const d1 = new Date(now); d1.setMonth(d1.getMonth() - 3);
-      const d2 = new Date(now); d2.setMonth(d2.getMonth() - 2);
-      const d3 = new Date(now); d3.setMonth(d3.getMonth() - 1);
-      entries.push({ plan: 'Basic', price: PLAN_PRICES.Basic, date: d1.toISOString(), action: 'new' });
-      entries.push({ plan: 'Basic', price: PLAN_PRICES.Basic, date: d2.toISOString(), action: 'renewal' });
-      entries.push({ plan: 'Basic', price: PLAN_PRICES.Basic, date: d3.toISOString(), action: 'renewal' });
-    }
-
-    // Sort newest first
-    return entries.sort((a, b) => new Date(b.date) - new Date(a.date));
-  }, [currentSubscription?.plan]);
-
   const loadHistory = useCallback(async () => {
     setHistoryLoading(true);
     try {
@@ -100,18 +72,17 @@ function PlayerSubscription() {
         if (fetched.length > 0) {
           setHistory(fetched);
         } else {
-          // Show demo history derived from current subscription
-          setHistory(generateDemoHistory());
+          setHistory([]);
         }
       } else {
-        setHistory(generateDemoHistory());
+        setHistory([]);
       }
     } catch (err) {
       console.error('Failed to load subscription history:', err);
-      setHistory(generateDemoHistory());
+      setHistory([]);
     }
     finally { setHistoryLoading(false); }
-  }, [generateDemoHistory]);
+  }, []);
 
   useEffect(() => { loadSubscription(); }, [loadSubscription]);
 

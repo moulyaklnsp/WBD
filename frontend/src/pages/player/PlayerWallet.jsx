@@ -22,9 +22,10 @@ export default function PlayerWallet() {
     setLoading(true);
     try {
       // 1. Fetch profile to get balance
-      const [profileRes, txRes] = await Promise.all([
+      const [profileRes, txRes, subRes] = await Promise.all([
         fetchAsPlayer('/player/api/profile'),
-        fetchAsPlayer('/player/api/wallet-transactions')
+        fetchAsPlayer('/player/api/wallet-transactions'),
+        fetchAsPlayer('/player/api/subscription/history')
       ]);
 
       if (profileRes.ok) {
@@ -34,10 +35,46 @@ export default function PlayerWallet() {
         if (profileRes.status === 401) return navigate('/login');
       }
 
+      let fetchedTx = [];
+      let fetchedSubs = [];
+
       if (txRes.ok) {
         const txData = await txRes.json();
-        setTransactions(txData.transactions || []);
+        fetchedTx = txData.transactions || [];
       }
+      
+      if (subRes.ok) {
+        const subData = await subRes.json();
+        fetchedSubs = subData.history || [];
+      }
+
+      // Format and deduplicate subscription history to act as wallet transactions
+      const combinedTx = [...fetchedTx];
+      fetchedSubs.forEach(sub => {
+        // Check if there is an existing wallet transaction for this subscription to avoid duplicates
+        const subDate = new Date(sub.date).getTime();
+        const exists = fetchedTx.some(t => {
+          const tDate = new Date(t.date).getTime();
+          // within 2 minutes and same amount
+          return Math.abs(tDate - subDate) < 120000 && t.amount === (sub.price || 0);
+        });
+
+        if (!exists) {
+          combinedTx.push({
+            date: sub.date,
+            description: sub.action === 'upgrade' ? `Upgraded to ${sub.plan} Plan` 
+               : sub.action === 'downgrade' ? `Downgraded to ${sub.plan} Plan` 
+               : `Subscription to ${sub.plan} Plan`,
+            amount: sub.price || 0,
+            type: sub.action === 'downgrade' ? 'credit' : 'debit'
+          });
+        }
+      });
+
+      // Sort combined descending by date
+      combinedTx.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+      setTransactions(combinedTx);
     } catch (err) {
       console.error('Error loading wallet data:', err);
       setMessage({ type: 'error', text: 'Failed to load wallet data.' });
@@ -62,10 +99,10 @@ export default function PlayerWallet() {
 
   const filteredTransactions = useMemo(() => {
     if (activeTab === 'all') return transactions;
-    if (activeTab === 'recharge') return transactions.filter(t => t.type === 'credit'); // Includes Add funds
-    if (activeTab === 'subscription') return transactions.filter(t => t.description.toLowerCase().includes('subscription'));
-    if (activeTab === 'store') return transactions.filter(t => t.description.toLowerCase().includes('store purchase'));
-    if (activeTab === 'tournament') return transactions.filter(t => t.description.toLowerCase().includes('tournament entry'));
+    if (activeTab === 'recharge') return transactions.filter(t => t.type === 'credit' && !(t.description || '').toLowerCase().includes('plan')); 
+    if (activeTab === 'subscription') return transactions.filter(t => (t.description || '').toLowerCase().includes('subscription') || (t.description || '').toLowerCase().includes('plan'));
+    if (activeTab === 'store') return transactions.filter(t => (t.description || '').toLowerCase().includes('store'));
+    if (activeTab === 'tournament') return transactions.filter(t => (t.description || '').toLowerCase().includes('tournament entry'));
     return transactions;
   }, [transactions, activeTab]);
 
@@ -127,23 +164,6 @@ export default function PlayerWallet() {
         .wallet-btn:disabled {
           opacity: 0.6;
           cursor: not-allowed;
-        }
-        .back-btn {
-          background: transparent;
-          border: 1px solid var(--sea-green);
-          color: var(--sea-green);
-          padding: 0.5rem 1rem;
-          border-radius: 8px;
-          cursor: pointer;
-          font-family: 'Cinzel', serif;
-          font-weight: bold;
-          margin-bottom: 1.5rem;
-          display: inline-flex;
-          align-items: center;
-          gap: 0.5rem;
-        }
-        .back-btn:hover {
-          background: rgba(46,139,87,0.1);
         }
         .wallet-card {
           display: flex;
@@ -216,11 +236,11 @@ export default function PlayerWallet() {
           opacity: 1;
         }
       `}</style>
+      <button onClick={() => navigate('/player/player_dashboard')} className="back-to-dashboard">
+        <i className="fas fa-arrow-left" /> Back to Dashboard
+      </button>
 
       <div style={styles.container}>
-        <button onClick={() => navigate('/player/player_dashboard')} className="back-btn">
-          <i className="fas fa-arrow-left" /> Back to Dashboard
-        </button>
 
         <h1 style={styles.title}><i className="fas fa-wallet" /> My Wallet</h1>
 

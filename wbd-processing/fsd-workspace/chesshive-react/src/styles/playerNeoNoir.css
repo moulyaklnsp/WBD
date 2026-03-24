@@ -1,0 +1,551 @@
+/* Global defaults for theme variables (used on non-player pages) */
+:root {
+  --cream: #EFD3C3; /* warmer & slightly darker background */
+  --card-bg: linear-gradient(180deg,#FFF2EE,#EFD3C3); /* warmer, slightly darker cards */
+  --card-border: rgba(11,79,108,0.08);
+  --text-color: #091216; /* slightly deeper body text for contrast */
+  --sea-green: #0B4F6C;
+  --sky-blue: #FF6B6B;
+  /* Accessibility helpers */
+  --muted-text: rgba(11,22,34,0.86); /* muted for small text */
+  --on-dark: #E9F8FF; /* text used on dark backgrounds */
+  --muted-on-dark: rgba(233,248,255,0.85);
+} 
+
+/* Player light theme (default for /player pages)
+  NOTE: `AnimatedSidebar` adds `player` on <body>. When dark mode is enabled,
+  `usePlayerTheme` adds `player-dark` on <body>. This selector must NOT match
+  in dark mode, otherwise it will override the dark palette variables.
+*/
+body.player:not(.player-dark) {
+  /* Light palette */
+  --chess-light-square: #FFF7ED;
+  --chess-dark-square: #22C55E;
+  --cream: #FFF7ED; /* background */
+
+  --sea-green: #22C55E; /* primary UI */
+  --sea-green-rgb: 34, 197, 94;
+
+  --sky-blue: #86EFAC; /* accent */
+  --sky-blue-hover: rgba(134, 239, 172, 0.45);
+
+  /* Text */
+  --text-color: #431407; /* main text on light bg */
+  --muted-text: rgba(67, 20, 7, 0.68);
+  --on-accent: #FFFFFF; /* text on primary */
+
+  /* Support colors */
+  --slate-accent: var(--sky-blue);
+  --pale-blue: rgba(34, 197, 94, 0.14);
+  --pale-mint: rgba(134, 239, 172, 0.18);
+
+  /* Page + borders (used across Player pages) */
+  --page-bg: var(--cream);
+  --border-color: rgba(var(--sea-green-rgb), 0.16);
+
+  /* Derived vars for AnimatedSidebar */
+  --sidebar-bg: linear-gradient(135deg, rgba(34,197,94,0.92) 0%, rgba(34,197,94,0.92) 60%, rgba(134,239,172,0.36) 100%);
+  --sidebar-border: rgba(var(--sea-green-rgb), 0.18);
+  --sidebar-text: var(--on-accent);
+  --hamburger-bg: var(--sea-green);
+  --hamburger-text: var(--on-accent);
+  --hamburger-hover: rgba(var(--sea-green-rgb), 0.90);
+  --link-hover: var(--slate-accent);
+  --content-bg: #FFEDD5;
+  --card-bg: linear-gradient(180deg, #FFEDD5, rgba(34,197,94,0.10));
+  --card-border: rgba(var(--sea-green-rgb), 0.08);
+  --card-text: var(--text-color);
+} 
+
+/* Light mode headings - energetic gradient */
+/* Light mode headings */
+.player h1, .player h2 {
+  /* Dark fallback color for legibility; gradient for visual flair */
+  color: var(--text-color) !important;
+  background: linear-gradient(90deg, var(--sea-green), var(--sky-blue));
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  -moz-background-clip: text;
+  text-shadow: 0 1px 0 rgba(186,223,231,0.7);
+  letter-spacing: 0.8px;
+} 
+
+.player .updates-section h3, .player h3 { color: var(--sea-green) !important; border-left: 6px solid rgba(var(--sea-green-rgb),0.18); padding-left: 1rem; font-weight:700; }
+
+
+.player .updates-section h3, .player h3 {
+  color: var(--sea-green) !important;
+  border-left: 4px solid rgba(var(--sea-green-rgb), 0.12);
+  padding-left: 1rem;
+  text-shadow: none;
+}
+
+/* Body text color for better contrast */
+.player .content, .player { color: var(--text-color); }
+
+/* Muted text */
+.player .muted, .player small { color: var(--muted-text); }
+
+
+/* Neo Noir dark theme when player toggles dark.
+   IMPORTANT: `usePlayerTheme` toggles `body.player-dark`, so scope dark rules to body.
+*/
+body.player-dark .player,
+body.player-dark .player-neo {
+  /* Drive NeoNoir tokens from the active Player palette variables */
+  --neo-charcoal: var(--content-bg); /* content surface */
+  --neo-cyan: var(--sea-green); /* primary */
+  --neo-blue: var(--sky-blue); /* accent */
+  --neo-red: var(--sea-green); /* legacy accent mapping */
+  --neo-cream: var(--text-color); /* text */
+  --neo-silver: rgba(245,245,245,0.76); /* muted */
+  --neo-violet: var(--sky-blue);
+  --neo-pink: var(--sea-green);
+  --neo-lime: var(--sea-green);
+
+  /* Typography accents (no glow) */
+  --letter-purple: var(--sky-blue);
+  --letter-red: var(--sea-green);
+  --heading-color: var(--letter-purple);
+
+  /* Buttons */
+  --button-bg: linear-gradient(90deg, var(--neo-cyan), var(--neo-blue));
+  --button-text: var(--on-accent);
+
+  /* Chat/tournament emphasis */
+  --pale-yellow: var(--neo-cream);
+  --chat-received-bg: rgba(245,245,245,0.06);
+  --chat-received-text: var(--text-color);
+  --chat-sent-bg: var(--neo-cyan);
+  --chat-sent-text: var(--on-accent);
+
+  color-scheme: dark;
+
+  /* Derived vars for AnimatedSidebar */
+  --sidebar-bg: linear-gradient(135deg, rgba(10,10,10,0.97) 0%, rgba(27,27,27,0.97) 60%, rgba(var(--sea-green-rgb),0.14) 100%);
+  --sidebar-border: rgba(136,136,136,0.18);
+  --sidebar-text: var(--text-color);
+  --hamburger-bg: var(--sea-green);
+  --hamburger-text: var(--text-color);
+  --hamburger-hover: var(--sky-blue-hover);
+  --link-hover: var(--sky-blue);
+  --card-bg: linear-gradient(135deg, rgba(10,10,10,0.92), rgba(27,27,27,0.84));
+  --card-border: rgba(136,136,136,0.12);
+  --muted-text: rgba(245,245,245,0.76);
+}
+
+/* AnimatedSidebar overrides when player theme active */
+.player-neo .hamburger-btn {
+  background: var(--hamburger-bg) !important;
+  color: var(--hamburger-text) !important;
+  box-shadow: 0 6px 20px rgba(255,45,45,0.15) !important;
+}
+
+/* dropdown background preview (used on hover) */
+.dropdown-menu { position: relative; overflow: hidden; }
+.dropdown-menu .dropdown-bg {
+  position: absolute;
+  inset: 0.6rem 0.6rem 0.6rem 0.6rem;
+  border-radius: 10px;
+  transform: translateZ(0);
+  filter: blur(12px) saturate(110%);
+  opacity: 0;
+  transition: opacity 240ms ease, transform 360ms ease;
+  pointer-events: none;
+  z-index: 1;
+}.dropdown-menu a { position: relative; z-index: 2; }
+.dropdown-menu a:focus { outline: none; box-shadow: inset 0 0 0 2px rgba(255,255,255,0.04); }
+
+
+.player-neo .dropdown-menu {
+  background: var(--sidebar-bg) !important;
+  border: 1px solid var(--sidebar-border) !important;
+  position: relative; /* allow preview bg */
+  overflow: hidden;
+}
+
+.player-neo .dropdown-menu a {
+  color: var(--sidebar-text) !important;
+}
+
+.player-neo .dropdown-menu a:hover {
+  background: rgba(var(--sea-green-rgb), 0.06) !important;
+  color: var(--link-hover) !important;
+}
+
+/* dropdown preview background */
+.dropdown-menu .dropdown-bg {
+  position: absolute;
+  inset: 0.6rem 0.6rem 0.6rem 0.6rem;
+  border-radius: 10px;
+  transform: translateZ(0);
+  filter: blur(10px) saturate(105%);
+  opacity: 0;
+  transition: opacity 240ms ease, transform 360ms ease;
+  pointer-events: none;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Preview card inside dropdown background */
+.dropdown-bg .preview { position: relative; width: 100%; height: 100%; padding: 1rem; display: none; opacity: 0; transform: translateY(8px); transition: all 260ms ease; }
+.dropdown-bg[style*="opacity: 1"] .preview { display: block; opacity: 1; transform: translateY(0); }
+
+.preview .preview-inner { display: none; max-width: 100%; opacity: 0.95; }
+.preview.profile .preview-inner.profile { display: flex; gap: 0.8rem; align-items: center; }
+.preview.growth .preview-inner.growth { display: block; }
+.preview.subscription .preview-inner.subscription { display: block; }
+.preview.store .preview-inner.store { display: block; }
+
+/* Profile preview */
+.preview .avatar { width: 64px; height:64px; border-radius: 999px; background: linear-gradient(135deg,#0B4F6C,#FFF); background-size: cover; box-shadow: 0 8px 24px rgba(0,0,0,0.12); border: 2px solid rgba(255,255,255,0.06); }
+.preview .meta { color: var(--neo-cream, #1f1f1f); font-size: 0.9rem; }
+.preview .name { font-weight:700; margin-bottom: 0.2rem; }
+.preview .info { font-size: 0.85rem; color: var(--muted-text); margin-bottom: 0.6rem; }
+.preview .stats { display:flex; gap:1rem; }
+.preview .stat { background: rgba(255,255,255,0.02); padding: 0.4rem 0.6rem; border-radius:8px; min-width:84px; text-align:center; }
+.preview .stat .label { font-size:0.75rem; opacity:0.8; }
+.preview .stat .value { font-weight:700; font-size:1.05rem; }
+
+/* Growth preview mini bar chart */
+.preview .mini-chart { display:flex; gap:0.4rem; align-items:end; height:44px; margin-bottom:0.6rem; }
+.preview .mini-chart .bar { width: 10px; background: linear-gradient(180deg, rgba(11,79,108,0.9), rgba(255,107,107,0.9)); border-radius:4px; }
+.preview .label { font-size:0.85rem; color:var(--muted-text); }
+
+/* Subscription card */
+.preview .sub-card { background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.0)); padding:0.8rem; border-radius:10px; border:1px solid rgba(255,255,255,0.03); }
+.preview .sub-card .tier { font-weight:700; font-size:1.05rem; margin-bottom:0.2rem; }
+.preview .sub-card .price { color:var(--sky-blue); font-weight:700; }
+.preview .sub-card .benefits { font-size:0.82rem; color:var(--muted-text); margin-top:0.4rem; }
+
+/* Store grid */
+.preview .store-grid { display:flex; gap:0.6rem; }
+.preview .product { width:64px; text-align:center; }
+.preview .thumb { height:44px; background: linear-gradient(135deg, rgba(11,79,108,0.06), rgba(255,107,107,0.1)); border-radius:6px; margin-bottom:0.3rem; }
+.preview .pname { font-size:0.75rem; color:var(--muted-text); }
+
+/* Skeleton styles */
+.skeleton { display:flex; gap:0.8rem; align-items:center; width:100%; }
+.skeleton * { box-sizing:border-box }
+.skeleton-avatar { width:64px; height:64px; border-radius:999px; background:linear-gradient(90deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03)); }
+.skeleton-line { height:12px; background:linear-gradient(90deg, rgba(255,255,255,0.04), rgba(255,255,255,0.06)); border-radius:6px; }
+.skeleton-stat { height:34px; width:84px; border-radius:8px; background:linear-gradient(90deg, rgba(255,255,255,0.04), rgba(255,255,255,0.06)); }
+.skeleton-bar { width:10px; height:32px; border-radius:4px; background:linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.06)); }
+.skeleton-thumb { height:44px; width:64px; border-radius:6px; background:linear-gradient(90deg, rgba(255,255,255,0.04), rgba(255,255,255,0.06)); }
+
+/* shimmer animation */
+@keyframes skeletonShimmer { 0% { background-position: -200% 0 } 100% { background-position: 200% 0 } }
+.skeleton-line, .skeleton-avatar, .skeleton-stat, .skeleton-bar, .skeleton-thumb { background-image: linear-gradient(90deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.02) 100%); background-size: 200% 100%; animation: skeletonShimmer 1.6s linear infinite; }
+
+
+/* Player page general adjustments */
+.player-neo .page { background: var(--content-bg); }
+.player-neo .content { color: var(--neo-cream); }
+/* Headings: ensure strong cyan headings in dark theme for legibility */
+.player-neo h1, .player-neo h2 {
+  color: var(--neo-cyan) !important;
+  -webkit-text-fill-color: var(--neo-cyan) !important;
+  background: none !important;
+  text-shadow: 0 1px 14px rgba(var(--sea-green-rgb), 0.12);
+  letter-spacing: 1px;
+}
+.player-neo .updates-section h3, .player-neo h3 {
+  color: var(--neo-cyan) !important;
+  border-left: 4px solid rgba(var(--sea-green-rgb), 0.12);
+  padding-left: 1rem;
+  text-shadow: none;
+}
+.player-neo .updates-section { background: var(--card-bg); box-shadow: none; border: 1px solid var(--card-border); color: var(--text-color); border-radius: 15px; padding: 1.6rem; }
+
+/* Small helper and empty state readability */
+.empty-message, .help-text, .small-muted { color: var(--muted-text) !important; }
+.notifications-content p { color: var(--muted-text) !important; }
+
+/* Updates list items: subtle divider and slightly tinted background for alternate rows */
+.player-neo .updates-section ul { list-style:none; margin:0; padding:0; }
+.player-neo .updates-section li { padding:1rem; border-bottom:1px solid rgba(11,79,108,0.04); background: transparent; }
+.player-neo .updates-section li:nth-child(odd) { background: linear-gradient(90deg, rgba(244,247,250,0.02), transparent); }
+
+/* Chess embellishments: subtle chessboard watermark on cards and pawn badge for headings */
+.player .updates-section, .player-neo .updates-section {
+  position: relative;
+  overflow: hidden;
+}
+.player .updates-section::after,
+.player-neo .updates-section::after {
+  /* chessboard watermark removed */
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: none;
+  opacity: 0;
+  pointer-events: none;
+} 
+
+/* Pawn badge removed */
+.player .updates-section h3::before,
+.player-neo .updates-section h3::before { display: none; }
+
+/* Slight hover lift & chess-themed accent for cards */
+.player .updates-section:hover,
+.player-neo .updates-section:hover {
+  transform: translateY(-6px);
+  transition: transform 0.28s ease, box-shadow 0.28s ease;
+  box-shadow: 0 8px 24px rgba(var(--sea-green-rgb), 0.10);
+}
+.player .updates-section:hover h3::before,
+.player-neo .updates-section:hover h3::before {
+  transform: scale(1.12);
+  transition: transform 0.28s ease;
+}
+
+/* Heading decorative rule */
+.player h1::after,
+.player-neo h1::after {
+  content: '';
+  display: block;
+  width: 100%;
+  height: 4px;
+  margin-top: 0.8rem;
+  background: linear-gradient(90deg, rgba(var(--sea-green-rgb), 0.18), rgba(59,130,246,0.18));
+  border-radius: 4px;
+} 
+
+/* Subtle chessboard corner on player pages for brand flair */
+.player .page::before,
+.player-neo .page::before { display: none; } 
+
+/* Emblems removed — classes disabled */
+.emblem-float { display: none !important; }
+.emblem-faint { display: none !important; }
+
+
+
+
+/* animated heading gradient */
+@keyframes slideGradient { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+.player h1, .player h2 { background-size: 200% 100%; animation: slideGradient 8s linear infinite; }
+
+/* pulsing price tag (subtle) */
+@keyframes pulseTag { 0% { box-shadow: inset 0 -4px 12px rgba(0,0,0,0.06); transform: translateY(0); } 50% { box-shadow: 0 8px 30px rgba(235,87,87,0.06); transform: translateY(-2px); } 100% { box-shadow: inset 0 -4px 12px rgba(0,0,0,0.06); transform: translateY(0); } }
+.price-tag { animation: pulseTag 8s ease-in-out infinite; }
+.price-tag:hover { animation: none; transform: translateY(-4px) scale(1.03); box-shadow: 0 12px 36px rgba(6,56,80,0.08); }
+
+
+/* button icon slide-in */
+.btn i { transform: translateX(-10px); opacity: 0; transition: all 0.22s ease; }
+.btn:hover i { transform: translateX(0); opacity: 1; }
+.btn { background: var(--button-bg, linear-gradient(90deg, var(--sea-green), var(--sky-blue))); color: var(--button-text, var(--on-accent)); border: none; border-radius: 8px; padding: 0.6rem 0.9rem; }
+.btn:hover { box-shadow: 0 12px 36px rgba(6,56,80,0.08); transform: translateY(-3px); }
+
+/* Dark headings: gradient from primary->accent, no glow */
+body.player-dark .player h1,
+body.player-dark .player h2,
+body.player-dark .player-neo h1,
+body.player-dark .player-neo h2 {
+  color: var(--heading-color) !important;
+  background: linear-gradient(90deg, var(--letter-red), var(--letter-purple)) !important;
+  background-clip: text !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  text-shadow: none !important;
+}
+
+/* chessboard slow drift */
+@keyframes chessboardShift { 0% { background-position: 0 0, 16px 16px; } 50% { background-position: -32px -32px, -16px -16px; } 100% { background-position: 0 0, 16px 16px; } }
+
+/* heading underline animation */
+.player h1::after, .player-neo h1::after { background-size: 300% 100%; animation: slideGradient 10s linear infinite; }
+
+.player-neo .approve-btn { background: var(--neo-cyan); color: var(--neo-charcoal); }
+.player-neo .approve-btn.reject { background: var(--neo-red); }
+.player-neo .price-tag { background: var(--neo-red); color: #fff; }
+.player-neo .logout-box button { background: var(--neo-silver); color: var(--neo-charcoal); }
+.player-neo .nav-section-title { color: var(--muted-text); }
+.player-neo .tournament-info strong { color: var(--neo-cream); }
+
+/* Notifications modal style */
+.player-neo #notifications-modal .notifications-content { background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01)); color: var(--neo-cream); }
+.player-neo .notifications-list li { background: rgba(255,255,255,0.02); color: var(--neo-cream); }
+.player-neo .notifications-list li small, .player-neo .notifications-content p { color: var(--muted-text) !important; }
+
+/* Player-neo dark pages: keep text readable and respect palette variables */
+body.player-dark .player-neo { color-scheme: dark; }
+
+body.player-dark .player-neo .content,
+body.player-dark .player-neo .page,
+body.player-dark .player-neo .content p,
+body.player-dark .player-neo p,
+body.player-dark .player-neo li,
+body.player-dark .player-neo .tournament-info,
+body.player-dark .player-neo .item-info,
+body.player-dark .player-neo .nav-section-title,
+body.player-dark .player-neo .updates-section p,
+body.player-dark .player-neo .form-container,
+body.player-dark .player-neo .profile-info,
+body.player-dark .player-neo .info-item,
+body.player-dark .player-neo .notifications-content {
+  color: var(--text-color) !important;
+}
+
+body.player-dark .player-neo .dropdown-menu {
+  background: var(--sidebar-bg) !important;
+  border: 1px solid var(--sidebar-border) !important;
+}
+body.player-dark .player-neo .dropdown-menu a { color: var(--sidebar-text) !important; }
+body.player-dark .player-neo .dropdown-menu a:hover {
+  background: rgba(var(--sea-green-rgb), 0.06) !important;
+  color: var(--link-hover) !important;
+}
+
+body.player-dark .player-neo #notifications-modal .notifications-content {
+  background: var(--card-bg) !important;
+  color: var(--text-color) !important;
+}
+body.player-dark .player-neo .notifications-list li {
+  background: rgba(255,255,255,0.02);
+  color: var(--text-color) !important;
+  border-radius: 8px;
+}
+
+body.player-dark .player-neo .inbox-icon i { color: var(--neo-cyan) !important; }
+body.player-dark .player-neo .inbox-icon .unread-count { background: var(--neo-cyan) !important; color: var(--on-accent) !important; }
+
+/* Optional right-edge accent strip (uses current primary instead of hardcoded cyan) */
+body.player-dark .player-neo::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100vh;
+  width: 6px;
+  background: linear-gradient(180deg, rgba(var(--sea-green-rgb),0.10), rgba(var(--sea-green-rgb),0.28));
+  box-shadow: 0 0 24px rgba(var(--sea-green-rgb),0.10);
+  z-index: 999;
+  pointer-events: none;
+}
+
+@keyframes c-blip { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(var(--sea-green-rgb),0.18); } 70% { transform: scale(1.06); box-shadow: 0 0 18px 8px rgba(var(--sea-green-rgb),0.04); } 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(var(--sea-green-rgb),0); } }
+.player-neo.player-dark .inbox-icon .unread-count { animation: c-blip 2.8s ease-in-out infinite; }
+
+.player-neo.player-dark .hamburger-btn {
+  border: 1px solid rgba(var(--sea-green-rgb),0.06);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.18), inset 0 -6px 14px rgba(0,0,0,0.20);
+  transition: transform 0.2s ease, box-shadow 0.24s ease;
+}
+.player-neo.player-dark .hamburger-btn:hover {
+  transform: scale(1.03);
+  box-shadow: 0 12px 44px rgba(var(--sea-green-rgb),0.08), inset 0 -6px 14px rgba(0,0,0,0.25);
+}
+.player-neo.player-dark .hamburger-btn i { color: var(--neo-cyan); }
+
+.player-neo.player-dark a,
+.player-neo.player-dark .nav-item { color: var(--neo-cyan) !important; }
+
+
+/* Responsive tweaks for mobile menu button */
+.player-neo .menu-btn { background: linear-gradient(90deg, var(--sea-green), rgba(var(--sea-green-rgb),0.6)); color: var(--hamburger-text); box-shadow: 0 8px 30px rgba(var(--sea-green-rgb),0.08); border-radius:10px; padding:0.6rem 0.8rem; border:none; }
+
+/* Legacy hardcoded Neo Noir palette removed (now driven by .player.player-dark variables above). */
+
+/* Slightly brighter neon outlines for dark mode */
+.player-neo.player-dark .gaming-frame {
+  box-shadow: 0 4px 30px rgba(0, 240, 255, 0.08), inset 0 0 12px rgba(0,0,0,0.25);
+}
+
+.player-neo.player-dark h1 { color: var(--neo-cyan); text-shadow: 0 0 20px rgba(0,240,255,0.08); }
+.player-neo.player-dark .updates-section { background: linear-gradient(135deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border: 1px solid rgba(255,255,255,0.02); }
+.player.player-dark .approve-btn { box-shadow: 0 6px 24px rgba(0,240,255,0.06); }
+
+/* Extra cyan accents for dark mode */
+.player.player-dark .dropdown-menu a:hover,
+.player.player-dark .dropdown-menu a:focus {
+  color: var(--neo-cyan) !important;
+  box-shadow: inset 0 0 18px rgba(0,240,255,0.06);
+}
+
+.player.player-dark .dropdown-menu {
+  border-color: rgba(0,240,255,0.06) !important;
+}
+
+.player.player-dark .nav-section a:hover,
+.player.player-dark .nav-section a:focus,
+.player.player-dark .nav-item:hover {
+  color: var(--neo-cyan) !important;
+  background: rgba(0,240,255,0.03) !important;
+  transform: translateX(5px);
+}
+
+.player.player-dark h1, .player.player-dark h2 {
+  color: var(--neo-cyan);
+  text-shadow: 0 0 24px rgba(0,240,255,0.06);
+}
+
+.player.player-dark .approve-btn {
+  background: linear-gradient(90deg, var(--neo-cyan), var(--neo-red));
+  color: #071018;
+  box-shadow: 0 8px 30px rgba(0,240,255,0.06);
+}
+
+.player.player-dark .price-tag {
+  background: linear-gradient(90deg, var(--neo-red), var(--neo-cyan));
+  color: #071018;
+}
+
+.player.player-dark .neon-text.cyan,
+.player.player-dark .gaming-glow-cyan,
+.player.player-dark .gaming-btn.cyan,
+.player.player-dark .gaming-badge.cyan {
+  color: var(--neo-cyan) !important;
+  text-shadow: 0 0 14px rgba(0,240,255,0.5);
+  box-shadow: 0 0 20px rgba(0,240,255,0.06);
+}
+
+.player.player-dark .inbox-icon .unread-count {
+  background: var(--neo-cyan) !important;
+  color: #001018 !important;
+}
+
+/* subtle cyan outline for cards */
+.player.player-dark .updates-section { border-left: 4px solid rgba(0,240,255,0.04); }
+
+/* Force cyan text across dark mode content for clear neon look */
+.player.player-dark .content,
+.player.player-dark .content p,
+.player.player-dark p,
+.player.player-dark li,
+.player.player-dark .tournament-info,
+.player.player-dark .item-info,
+.player.player-dark .nav-section-title,
+.player.player-dark .updates-section p,
+.player.player-dark .form-container,
+.player.player-dark .profile-info,
+.player.player-dark .info-item,
+.player.player-dark .notifications-content {
+  color: var(--text-color) !important;
+}
+
+/* Links and small text slightly softer cyan */
+.player.player-dark a,
+.player.player-dark .nav-item,
+.player.player-dark .back,
+.player.player-dark .more {
+  color: var(--neo-cyan) !important;
+}
+
+/* Keep muted text readable across themes */
+.muted, small { color: var(--muted-text) !important; }
+.player.player-dark .muted, .player.player-dark small { color: var(--muted-text) !important; }
+.player-neo.player-dark .muted, .player-neo.player-dark small { color: var(--muted-text) !important; }
+
+/* Adjust icon color accents */
+.player.player-dark .info-label i,
+.player.player-dark .updates-section li i {
+  color: var(--neo-cyan) !important;
+}
+
+
+
