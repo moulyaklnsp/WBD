@@ -40,7 +40,7 @@ const AdminDashboard = () => {
     messages: [],
     meetings: []
   });
-  const [visibleRows, setVisibleRows] = useState(5);
+  const [visibleRows, setVisibleRows] = useState(25);
 
   const onResize = useCallback(() => {
     const mobile = window.innerWidth <= 768;
@@ -82,7 +82,7 @@ const AdminDashboard = () => {
     { path: '/admin/admin_tournament_management', label: 'Tournament Approvals', icon: 'fas fa-trophy' },
     { path: '/admin/payments', label: 'Payments & Subscriptions', icon: 'fas fa-money-bill-wave' },
     { path: '/admin/growth_analytics', label: 'Growth Analytics', icon: 'fas fa-chart-area' },
-    { path: '/admin/organizer_analytics', label: 'Organizer Analytics', icon: 'fas fa-chart-line' }
+
   ];
 
   const moderationMessages = useMemo(
@@ -148,13 +148,25 @@ const AdminDashboard = () => {
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex' }}>
+    <div className="page player-neo" style={{ minHeight: '100vh', display: 'flex', width: '100%' }}>
       <style>{`
         :root {
           --card-bg-neo: rgba(30, 41, 59, 0.7);
           --card-border-neo: rgba(148, 163, 184, 0.1);
           --text-primary: #e2e8f0;
           --text-secondary: #94a3b8;
+        }
+        .page {
+          font-family: 'Playfair Display', serif;
+          background-color: var(--page-bg);
+          min-height: 100vh;
+          display: flex;
+          color: var(--text-color);
+        }
+        .content {
+          flex-grow: 1;
+          margin-left: 0;
+          padding: 2rem;
         }
         .dashboard-grid {
           display: grid;
@@ -210,10 +222,42 @@ const AdminDashboard = () => {
           align-items: center;
           gap: 0.8rem;
         }
-        .messages-list {
+        .messages-stack-container {
+          position: relative;
+          display: flex;
+          flex-direction: row;
+          padding: 2rem 0;
+          padding-left: 30px;
+          overflow-x: auto;
+          overflow-y: visible;
+          min-height: 400px;
+        }
+        .message-card {
+          background: rgba(255, 255, 255, 0.95);
+          backdrop-filter: blur(8px);
+          border: 1px solid var(--card-border);
+          border-radius: 16px;
+          padding: 1.5rem;
+          min-width: 320px;
+          max-width: 350px;
+          transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+          position: relative;
+          margin-left: -300px;
+          box-shadow: -10px 0 20px rgba(0,0,0,0.1);
+          flex-shrink: 0;
           display: flex;
           flex-direction: column;
-          gap: 1rem;
+          color: #334155;
+        }
+        .message-card:first-child {
+          margin-left: 0;
+        }
+        .message-card:hover {
+          transform: translateY(-25px) translateX(-15px) scale(1.05);
+          z-index: 100 !important;
+          background: rgba(255, 255, 255, 1);
+          border-color: var(--sea-green);
+          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15), 0 0 20px rgba(20, 184, 166, 0.2);
         }
         .stats-grid {
           display: grid;
@@ -222,16 +266,18 @@ const AdminDashboard = () => {
           margin-bottom: 1.5rem;
         }
         .stats-card {
-          background: rgba(30, 41, 59, 0.4);
+          background: rgba(255, 255, 255, 0.9);
           border: 1px solid var(--card-border);
           border-radius: 14px;
           padding: 1rem;
+          box-shadow: 0 4px 6px rgba(0,0,0,0.05);
         }
         .stats-card h4 {
           margin: 0;
           font-size: 0.85rem;
-          color: var(--text-secondary);
+          color: #475569;
           text-transform: uppercase;
+          font-weight: bold;
           letter-spacing: 0.8px;
         }
         .stats-card p {
@@ -239,22 +285,6 @@ const AdminDashboard = () => {
           font-size: 1.3rem;
           color: var(--sea-green);
           font-family: 'Cinzel', serif;
-        }
-        .message-card {
-          background: rgba(30, 41, 59, 0.4);
-          backdrop-filter: blur(8px);
-          border: 1px solid var(--card-border);
-          border-radius: 16px;
-          padding: 1.5rem;
-          transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-          position: relative;
-          overflow: hidden;
-        }
-        .message-card:hover {
-          transform: translateY(-5px) scale(1.02);
-          background: rgba(30, 41, 59, 0.7);
-          border-color: var(--sea-green);
-          box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5), 0 0 15px rgba(20, 184, 166, 0.2);
         }
         .message-card::before {
           content: '';
@@ -279,7 +309,7 @@ const AdminDashboard = () => {
           font-weight: bold;
         }
         .message-body {
-          color: var(--text-color);
+          color: #475569;
           line-height: 1.5;
           opacity: 0.9;
         }
@@ -307,9 +337,9 @@ const AdminDashboard = () => {
           width: 100%;
           padding: 0.55rem 0.75rem;
           border-radius: 8px;
-          border: 1px solid var(--card-border);
-          background: rgba(15, 23, 42, 0.7);
-          color: var(--text-primary);
+          border: 1px solid #cbd5e1;
+          background: #f8fafc;
+          color: #1e293b;
         }
         .status-pill {
           font-size: 0.75rem;
@@ -324,9 +354,13 @@ const AdminDashboard = () => {
         .status-pill.spam { background: rgba(239,68,68,0.2); color: #fca5a5; }
       `}</style>
       
+      <motion.div className="chess-knight-float" initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 0.14, scale: 1 }} transition={{ delay: 0.9, duration: 0.6 }} style={{ position: 'fixed', bottom: 20, right: 20, zIndex: 0, fontSize: '2.5rem', color: 'var(--sea-green)' }}>
+        <i className="fas fa-chess-king" />
+      </motion.div>
+
       <AnimatedSidebar links={adminLinks} logo={<i className="fas fa-chess-king" />} title="ChessHive" />
 
-      <div className="content player-neo" style={{ padding: '2rem', width: '100%', marginLeft: isMobile ? 0 : '0' }}>
+      <div className="content" style={{ padding: '2rem', width: '100%', marginLeft: isMobile ? 0 : '0' }}>
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
           <div>
@@ -336,7 +370,7 @@ const AdminDashboard = () => {
               transition={{ duration: 0.6 }}
               style={{ margin: 0, fontFamily: 'Cinzel, serif', color: 'var(--sea-green)' }}
             >
-              Dashboard Overview
+              Hi, {dashboardData.adminName || 'Admin'}
             </motion.h1>
             <motion.p
               initial={{ opacity: 0 }}
@@ -344,7 +378,7 @@ const AdminDashboard = () => {
               transition={{ delay: 0.2 }}
               style={{ color: 'var(--text-color)', opacity: 0.7, marginTop: '0.5rem' }}
             >
-              Welcome back, {dashboardData.adminName}
+              Dashboard Overview
             </motion.p>
           </div>
           <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
@@ -373,35 +407,13 @@ const AdminDashboard = () => {
           style={{ background: 'var(--card-bg)', borderRadius: '16px', border: '1px solid var(--card-border)', padding: '1.5rem', marginBottom: '1.5rem' }}
         >
           <h2 className="section-title" style={{ marginBottom: '1rem' }}>
-            <i className="fas fa-chart-pie" />
-            Key Metrics
+            <i className="fas fa-users" />
+            Active Users
           </h2>
           <div className="stats-grid">
             <div className="stats-card"><h4>Players</h4><p>{dashboardData.stats.players || 0}</p></div>
             <div className="stats-card"><h4>Organizers</h4><p>{dashboardData.stats.organizers || 0}</p></div>
             <div className="stats-card"><h4>Coordinators</h4><p>{dashboardData.stats.coordinators || 0}</p></div>
-            <div className="stats-card"><h4>Tournaments</h4><p>{dashboardData.stats.tournaments || 0}</p></div>
-            <div className="stats-card"><h4>Total Revenue</h4><p>INR {Number(dashboardData.stats.revenue || 0).toFixed(2)}</p></div>
-          </div>
-          <div>
-            <h3 className="section-title" style={{ fontSize: '1.2rem', marginBottom: '0.8rem' }}>
-              <i className="fas fa-calendar-alt" />
-              Upcoming Meetings
-            </h3>
-            {(dashboardData.meetings || []).length === 0 ? (
-              <div style={{ opacity: 0.7 }}>No meetings in the next 3 days.</div>
-            ) : (
-              <div style={{ display: 'grid', gap: '0.65rem' }}>
-                {dashboardData.meetings.slice(0, 5).map((meeting, idx) => (
-                  <div key={meeting._id || idx} style={{ padding: '0.75rem 1rem', border: '1px solid var(--card-border)', borderRadius: 12, background: 'rgba(30, 41, 59, 0.35)' }}>
-                    <div style={{ fontWeight: 700 }}>{meeting.title || 'Meeting'}</div>
-                    <div style={{ opacity: 0.75, fontSize: '0.9rem' }}>
-                      {meeting.date ? new Date(meeting.date).toLocaleDateString() : 'Date TBD'} {meeting.time ? `at ${meeting.time}` : ''}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         </motion.div>
 
@@ -422,13 +434,13 @@ const AdminDashboard = () => {
             </span>
           </div>
 
-          <div className="messages-list">
+          <div className="messages-stack-container">
             <AnimatePresence>
               {visibleMessages.length === 0 ? (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  style={{ textAlign: 'center', padding: '2rem', opacity: 0.6 }}
+                  style={{ textAlign: 'center', padding: '2rem', opacity: 0.6, width: '100%' }}
                 >
                   <i className="fas fa-inbox" style={{ fontSize: '2rem', marginBottom: '1rem', display: 'block' }} />
                   No new messages
@@ -441,6 +453,7 @@ const AdminDashboard = () => {
                     initial="hidden"
                     animate="visible"
                     className="message-card"
+                    style={{ zIndex: visibleMessages.length - idx }}
                   >
                     {(() => {
                       const edit = getMessageEdit(msg);
@@ -503,11 +516,39 @@ const AdminDashboard = () => {
 
           {moderationMessages.length > visibleRows && (
             <div style={{ textAlign: 'center', marginTop: '1.5rem' }}>
-              <button className="view-more-btn" onClick={() => setVisibleRows(v => v + 5)}>
+              <button className="view-more-btn" onClick={() => setVisibleRows(v => v + 25)}>
                 Load More Messages
               </button>
             </div>
           )}
+        </motion.div>
+
+        {/* Tournaments and Revenue Section */}
+        <motion.div
+           initial={{ opacity: 0, y: 20 }}
+           animate={{ opacity: 1, y: 0 }}
+           transition={{ delay: 0.6 }}
+           style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem', marginTop: '1.5rem' }}
+        >
+          {/* Tournaments Card */}
+          <div style={{ background: 'var(--card-bg)', borderRadius: '16px', border: '1px solid var(--card-border)', padding: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+             <i className="fas fa-trophy" style={{ fontSize: '3rem', color: 'var(--sea-green)', marginBottom: '1rem' }} />
+             <h3 style={{ margin: 0, fontFamily: 'Cinzel, serif', color: 'var(--text-color)', fontSize: '1.5rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Tournaments</h3>
+             <p style={{ margin: '0.5rem 0 0', fontSize: '2.5rem', color: 'var(--sea-green)', fontWeight: 'bold' }}>
+               {dashboardData.stats.tournaments || 0}
+             </p>
+             <span style={{ opacity: 0.7, marginTop: '0.5rem', fontSize: '0.9rem' }}>Total Tournaments Created</span>
+          </div>
+
+          {/* Revenue Card */}
+          <div style={{ background: 'var(--card-bg)', borderRadius: '16px', border: '1px solid var(--card-border)', padding: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+             <i className="fas fa-wallet" style={{ fontSize: '3rem', color: 'var(--sea-green)', marginBottom: '1rem' }} />
+             <h3 style={{ margin: 0, fontFamily: 'Cinzel, serif', color: 'var(--text-color)', fontSize: '1.5rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Total Revenue</h3>
+             <p style={{ margin: '0.5rem 0 0', fontSize: '2.5rem', color: 'var(--sea-green)', fontWeight: 'bold' }}>
+               INR {Number(dashboardData.stats.revenue || 0).toFixed(2)}
+             </p>
+             <span style={{ opacity: 0.7, marginTop: '0.5rem', fontSize: '0.9rem' }}>Overall Platform Earnings</span>
+          </div>
         </motion.div>
       </div>
     </div>

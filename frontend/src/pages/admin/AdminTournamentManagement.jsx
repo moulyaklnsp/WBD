@@ -25,7 +25,8 @@ const AdminTournamentManagement = () => {
   const [tournaments, setTournaments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [visible, setVisible] = useState(5);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
   const [attr, setAttr] = useState('name');
   const [query, setQuery] = useState('');
 
@@ -37,7 +38,7 @@ const AdminTournamentManagement = () => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setTournaments(Array.isArray(data?.tournaments) ? data.tournaments : []);
-      setVisible(5);
+      setCurrentPage(1);
     } catch (e) {
       setError('Failed to load tournaments.');
     } finally {
@@ -65,11 +66,13 @@ const AdminTournamentManagement = () => {
     return tournaments.filter((t) => (getVal(t) || '').toString().toLowerCase().includes(q));
   }, [tournaments, query, attr]);
 
-  const shown = useMemo(() => filtered.slice(0, visible), [filtered, visible]);
-  const counterText = `${Math.min(visible, filtered.length)} / ${filtered.length}`;
+  const totalPages = Math.ceil(filtered.length / itemsPerPage) || 1;
+  const shown = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filtered.slice(startIndex, startIndex + itemsPerPage);
+  }, [filtered, currentPage, itemsPerPage]);
 
-  const canMore = filtered.length > visible;
-  const canHide = visible > 5;
+  const counterText = `${Math.min(filtered.length, (currentPage - 1) * itemsPerPage + shown.length)} / ${filtered.length}`;
 
   const adminLinks = [
     { path: '/admin/organizer_management', label: 'Manage Organizers', icon: 'fas fa-users-cog' },
@@ -78,8 +81,17 @@ const AdminTournamentManagement = () => {
     { path: '/admin/admin_tournament_management', label: 'Tournament Approvals', icon: 'fas fa-trophy' },
     { path: '/admin/payments', label: 'Payments & Subscriptions', icon: 'fas fa-money-bill-wave' },
     { path: '/admin/growth_analytics', label: 'Growth Analytics', icon: 'fas fa-chart-area' },
-    { path: '/admin/organizer_analytics', label: 'Organizer Analytics', icon: 'fas fa-chart-line' }
+
   ];
+
+  // Aggregate stats
+  const totalTournaments = tournaments.length;
+  const totalRevenue = useMemo(() => tournaments.reduce((acc, t) => acc + (t.player_count || 0) * (Number(t.entry_fee) || 0), 0), [tournaments]);
+  const topTournaments = useMemo(() => {
+    return [...tournaments]
+      .sort((a, b) => ((b.player_count || 0) * (Number(b.entry_fee) || 0)) - ((a.player_count || 0) * (Number(a.entry_fee) || 0)))
+      .slice(0, 3);
+  }, [tournaments]);
 
   return (
     <div style={{ minHeight: '100vh' }}>
@@ -97,7 +109,10 @@ const AdminTournamentManagement = () => {
         .status-badge { padding:0.5rem 1rem; border-radius:20px; font-size:0.9rem; font-weight:bold; display:inline-block; text-align:center; }
         .status-badge.active { background-color:rgba(var(--sea-green-rgb, 27, 94, 63), 0.1); color:var(--sea-green); }
         .status-badge.pending { background-color:rgba(255,193,7,0.1); color:#ffc107; }
-        .more-btn { display:inline-flex; align-items:center; gap:0.5rem; background-color:var(--sea-green); color:var(--on-accent); text-decoration:none; padding:0.8rem 1.5rem; border-radius:8px; transition:all 0.3s ease; font-family:'Cinzel', serif; font-weight:bold; cursor:pointer; border:none; }
+        .pagination { display:flex; justify-content:center; align-items:center; gap:1rem; margin-top:2rem; }
+        .page-btn { background-color:var(--sea-green); color:var(--on-accent); border:none; padding:0.5rem 1rem; border-radius:4px; cursor:pointer; font-family:'Cinzel', serif; font-weight:bold; transition:opacity 0.3s; }
+        .page-btn:disabled { opacity:0.5; cursor:not-allowed; }
+        .page-info { font-family:'Cinzel', serif; color:var(--sea-green); font-weight:bold; }
         .row-counter { text-align:center; margin-bottom:1rem; font-family:'Cinzel', serif; font-size:1.2rem; color:var(--sea-green); background-color:rgba(var(--sea-green-rgb, 27, 94, 63), 0.1); padding:0.5rem 1rem; border-radius:8px; display:inline-block; }
         .empty { text-align:center; padding:2rem; color:var(--sea-green); font-style:italic; }
         .search-bar { display:flex; align-items:center; gap:10px; padding:12px; background:var(--card-bg); border-radius:10px; box-shadow:0 2px 6px rgba(0,0,0,0.1); width:min(100%, 860px); max-width:860px; margin:20px auto; border:1px solid var(--card-border); }
@@ -110,6 +125,29 @@ const AdminTournamentManagement = () => {
         .banner { padding:1rem; border-radius:8px; margin-bottom:1rem; text-align:center; font-weight:bold; }
         .banner.error { background:rgba(220,53,69,0.1); color:#dc3545; }
         .back-link { display:inline-flex; align-items:center; gap:0.5rem; background-color:var(--sea-green); color:var(--on-accent); text-decoration:none; padding:0.8rem 1.5rem; border-radius:8px; transition:all 0.3s ease; font-family:'Cinzel', serif; font-weight:bold; }
+        
+        /* Dashboard Stats Additions */
+        .stats-container { display: flex; flex-wrap: wrap; gap: 1.5rem; margin-bottom: 2rem; }
+        .stat-card {
+          background: var(--card-bg);
+          border: 1px solid var(--card-border);
+          border-radius: 12px;
+          padding: 1.5rem;
+          flex: 1 1 200px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+          box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+        .stat-card h3 { font-family: 'Playfair Display', serif; font-size: 1rem; opacity: 0.8; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 1px; }
+        .stat-card p { font-family: 'Cinzel', serif; font-size: 2rem; color: var(--sea-green); font-weight: bold; }
+        .top-tourneys-card { align-items: flex-start; text-align: left; }
+        .top-tourneys-list { width: 100%; list-style: none; display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1rem; }
+        .top-tourney-item { display: flex; justify-content: space-between; padding: 0.8rem; background: rgba(20, 184, 166, 0.05); border-radius: 8px; border-left: 4px solid var(--sea-green); }
+        .top-tourney-name { font-weight: bold; }
+        .top-tourney-rev { color: var(--sea-green); font-weight: bold; font-family: 'Cinzel', serif; }
       `}</style>
 
       <div className="page player-neo">
@@ -161,9 +199,51 @@ const AdminTournamentManagement = () => {
 
           {error && <div className="banner error">{error}</div>}
 
+          {!loading && (
+            <motion.div
+              className="stats-container"
+              custom={0}
+              variants={sectionVariants}
+              initial="hidden"
+              animate="visible"
+            >
+              <div className="stat-card top-tourneys-card" style={{ flex: '2 1 400px' }}>
+                <h3><i className="fas fa-medal" /> Top 3 Revenue Tournaments</h3>
+                {topTournaments.length > 0 ? (
+                  <ul className="top-tourneys-list">
+                    {topTournaments.map((t, idx) => {
+                      const rev = (t.player_count || 0) * (Number(t.entry_fee) || 0);
+                      return (
+                        <li key={idx} className="top-tourney-item">
+                          <span className="top-tourney-name">
+                             {idx + 1}. <Link to={`/admin/tournament/${t._id}`} style={{color: 'inherit', textDecoration: 'none'}}>{t.name}</Link>
+                          </span>
+                          <span className="top-tourney-rev">₹{rev.toLocaleString()}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <p style={{ fontSize: '1rem', fontFamily: 'sans-serif', opacity: 0.7, marginTop: '1rem' }}>No data available.</p>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', flex: '1 1 250px' }}>
+                <div className="stat-card" style={{ flex: 1 }}>
+                  <h3><i className="fas fa-chess-board" /> Tournaments Conducted</h3>
+                  <p>{totalTournaments}</p>
+                </div>
+                <div className="stat-card" style={{ flex: 1 }}>
+                  <h3><i className="fas fa-coins" /> Total Revenue</h3>
+                  <p>₹{totalRevenue.toLocaleString()}</p>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
           <motion.div
             className="updates-section"
-            custom={0}
+            custom={1}
             variants={sectionVariants}
             initial="hidden"
             animate="visible"
@@ -175,7 +255,7 @@ const AdminTournamentManagement = () => {
             </div>
 
             <div className="search-bar">
-              <select aria-label="Attribute" value={attr} onChange={(e) => { setAttr(e.target.value); setVisible(5); }} className="select">
+              <select aria-label="Attribute" value={attr} onChange={(e) => { setAttr(e.target.value); setCurrentPage(1); }} className="select">
                 <option value="name">Name</option>
                 <option value="date">Date</option>
                 <option value="location">Location</option>
@@ -184,7 +264,7 @@ const AdminTournamentManagement = () => {
                 <option value="status">Status</option>
                 <option value="players">Players</option>
               </select>
-              <input aria-label="Search" placeholder="Search…" value={query} onChange={(e) => { setQuery(e.target.value); setVisible(5); }} className="input" />
+              <input aria-label="Search" placeholder="Search…" value={query} onChange={(e) => { setQuery(e.target.value); setCurrentPage(1); }} className="input" />
             </div>
 
             {loading ? (
@@ -209,7 +289,11 @@ const AdminTournamentManagement = () => {
                     ) : (
                       shown.map((t, idx) => (
                         <tr key={`${t._id || t.name}-${idx}`}>
-                          <td className="td">{t.name}</td>
+                          <td className="td">
+                             <Link to={`/admin/tournament/${t._id}`} style={{ color: 'inherit', fontWeight: 'bold', textDecoration: 'none' }}>
+                                {t.name} <i className="fas fa-external-link-alt" style={{ fontSize: '0.8rem', opacity: 0.6, marginLeft: '4px' }} />
+                             </Link>
+                          </td>
                           <td className="td">{t.date}</td>
                           <td className="td">{t.location}</td>
                           <td className="td">₹{t.entry_fee}</td>
@@ -224,23 +308,32 @@ const AdminTournamentManagement = () => {
                   </tbody>
                 </table>
 
-                <div style={{ textAlign: 'center', margin: '1rem 0', display: 'flex', justifyContent: 'center', gap: '1rem' }}>
-                  {canMore && (
-                    <button type="button" className="more-btn" onClick={() => setVisible((v) => Math.min(v + 5, filtered.length))}>
-                      <i className="fas fa-chevron-down" /> More
+                {filtered.length > 0 && (
+                  <div className="pagination">
+                    <button 
+                      className="page-btn" 
+                      disabled={currentPage === 1} 
+                      onClick={() => setCurrentPage(p => p - 1)}
+                    >
+                      Previous
                     </button>
-                  )}
-                  {canHide && (
-                    <button type="button" className="more-btn" onClick={() => setVisible(5)}>
-                      <i className="fas fa-chevron-up" /> Hide
+                    <span className="page-info">
+                      Page {currentPage} of {totalPages}
+                    </span>
+                    <button 
+                      className="page-btn" 
+                      disabled={currentPage === totalPages} 
+                      onClick={() => setCurrentPage(p => p + 1)}
+                    >
+                      Next
                     </button>
-                  )}
-                </div>
+                  </div>
+                )}
               </>
             )}
 
             <div style={{ marginTop: '2rem', textAlign: 'right' }}>
-              <Link to="/admin/admin_dashboard" className="back-to-dashboard">
+              <Link to="/admin/admin_dashboard" className="back-link">
                 <i className="fas fa-arrow-left" /> Back to Dashboard
               </Link>
             </div>

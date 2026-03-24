@@ -77,7 +77,7 @@ export default function AdminGrowthAnalytics() {
     { path: '/admin/admin_tournament_management', label: 'Tournament Approvals', icon: 'fas fa-trophy' },
     { path: '/admin/payments', label: 'Payments & Subscriptions', icon: 'fas fa-money-bill-wave' },
     { path: '/admin/growth_analytics', label: 'Growth Analytics', icon: 'fas fa-chart-area' },
-    { path: '/admin/organizer_analytics', label: 'Organizer Analytics', icon: 'fas fa-chart-line' }
+
   ];
 
   const tournamentChartData = useMemo(() => ({
@@ -299,7 +299,7 @@ export default function AdminGrowthAnalytics() {
           )}
 
           <div style={{ marginTop: '1rem', textAlign: 'right' }}>
-            <Link to="/admin/admin_dashboard" className="back-to-dashboard">
+            <Link to="/admin/admin_dashboard" className="back-link">
               <i className="fas fa-arrow-left" /> Back to Dashboard
             </Link>
           </div>

@@ -26,7 +26,8 @@ const AdminPlayerManagement = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  const [visible, setVisible] = useState(5);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
   const [attr, setAttr] = useState('name');
   const [query, setQuery] = useState('');
 
@@ -38,7 +39,7 @@ const AdminPlayerManagement = () => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setPlayers(Array.isArray(data) ? data : (Array.isArray(data?.players) ? data.players : []));
-      setVisible(5);
+      setCurrentPage(1);
     } catch (e) {
       setError('Failed to load players.');
     } finally {
@@ -63,9 +64,10 @@ const AdminPlayerManagement = () => {
     return players.filter((p) => (getVal(p) || '').toString().toLowerCase().includes(q));
   }, [players, query, attr]);
 
-  const shown = filtered.slice(0, visible);
-  const canMore = filtered.length > visible;
-  const canHide = visible > 5;
+  const totalPages = Math.ceil(filtered.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const shown = filtered.slice(startIndex, startIndex + itemsPerPage);
+
   const isSelfDeleted = (user) => {
     const email = String(user?.email || '').trim().toLowerCase();
     const deletedBy = String(user?.deleted_by || '').trim().toLowerCase();
@@ -113,7 +115,7 @@ const AdminPlayerManagement = () => {
     { path: '/admin/admin_tournament_management', label: 'Tournament Approvals', icon: 'fas fa-trophy' },
     { path: '/admin/payments', label: 'Payments & Subscriptions', icon: 'fas fa-money-bill-wave' },
     { path: '/admin/growth_analytics', label: 'Growth Analytics', icon: 'fas fa-chart-area' },
-    { path: '/admin/organizer_analytics', label: 'Organizer Analytics', icon: 'fas fa-chart-line' }
+
   ];
 
   return (
@@ -206,17 +208,17 @@ const AdminPlayerManagement = () => {
             animate="visible"
           >
             <div style={{ textAlign: 'center' }}>
-              <span className="row-counter">{`${Math.min(visible, filtered.length)} / ${filtered.length}`}</span>
+              <span className="row-counter">{`${Math.min(startIndex + 1, filtered.length)} - ${Math.min(startIndex + itemsPerPage, filtered.length)} of ${filtered.length}`}</span>
             </div>
 
             <div className="search-bar">
-              <select aria-label="Attribute" value={attr} onChange={(e) => { setAttr(e.target.value); setVisible(5); }} className="select">
+              <select aria-label="Attribute" value={attr} onChange={(e) => { setAttr(e.target.value); setCurrentPage(1); }} className="select">
                 <option value="name">Name</option>
                 <option value="email">Email</option>
                 <option value="college">Assigned College</option>
                 <option value="status">Status</option>
               </select>
-              <input aria-label="Search" placeholder="Search…" value={query} onChange={(e) => { setQuery(e.target.value); setVisible(5); }} className="input" />
+              <input aria-label="Search" placeholder="Search…" value={query} onChange={(e) => { setQuery(e.target.value); setCurrentPage(1); }} className="input" />
             </div>
 
             {loading ? (
@@ -227,87 +229,71 @@ const AdminPlayerManagement = () => {
                   <thead>
                     <tr>
                       <th className="th"><i className="fas fa-user" /> Name</th>
-                      <th className="th"><i className="fas fa-envelope" /> Email</th>
-                      <th className="th"><i className="fas fa-university" /> Assigned College</th>
-                      <th className="th"><i className="fas fa-shopping-bag" /> Purchased Items</th>
-                      <th className="th"><i className="fas fa-rupee-sign" /> Total Spend</th>
-                      <th className="th"><i className="fas fa-cog" /> Actions</th>
+                      <th className="th"><i className="fas fa-id-card" /> ID / Email</th>
+                      <th className="th"><i className="fas fa-info-circle" /> Status</th>
                     </tr>
                   </thead>
                   <tbody>
                     {shown.length === 0 ? (
-                      <tr><td colSpan={6} className="empty"><i className="fas fa-info-circle" /> No players available.</td></tr>
+                      <tr><td colSpan={3} className="empty"><i className="fas fa-info-circle" /> No players available.</td></tr>
                     ) : (
-                      shown.map((p, idx) => (
+                      shown.map((p, idx) => {
+                        const selfDeleted = isSelfDeleted(p);
+                        const isRemoved = p.isDeleted && !selfDeleted;
+                        return (
                         <tr key={`${p.email}-${idx}`}>
-                          <td className="td">{p.name}</td>
+                          <td className="td">
+                            <Link to={`/admin/player/${encodeURIComponent(p.email)}`} style={{ color: 'inherit', fontWeight: 'bold', textDecoration: 'none' }}>
+                               {p.name} <i className="fas fa-external-link-alt" style={{ fontSize: '0.8rem', opacity: 0.6, marginLeft: '4px' }} />
+                            </Link>
+                          </td>
                           <td className="td">{p.email}</td>
-                          <td className="td">{p.college}</td>
                           <td className="td">
-                            {p.boughtProductsDetailed && p.boughtProductsDetailed.length > 0 ? (
-                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                                {p.boughtProductsDetailed.slice(0, 3).map((prod, i) => (
-                                  <span key={i} style={{ 
-                                    background: 'var(--card-bg)', 
-                                    border: '1px solid var(--card-border)',
-                                    padding: '0.2rem 0.5rem', 
-                                    borderRadius: '4px',
-                                    fontSize: '0.85rem' 
-                                  }}>
-                                    {prod.name} x{Number(prod.quantity || 1)} (₹{Number(prod.totalPrice || 0).toFixed(2)})
-                                  </span>
-                                ))}
-                                {p.boughtProductsDetailed.length > 3 && (
-                                  <span style={{ fontSize: '0.85rem', opacity: 0.7 }}>+{p.boughtProductsDetailed.length - 3} more</span>
-                                )}
-                              </div>
+                            {selfDeleted ? (
+                               <span style={{color: '#d97706', fontWeight: 'bold'}}><i className="fas fa-door-open" /> Left Platform</span>
+                            ) : isRemoved ? (
+                               <span style={{color: '#dc2626', fontWeight: 'bold'}}><i className="fas fa-ban" /> Removed</span>
                             ) : (
-                              <span style={{ opacity: 0.5, fontStyle: 'italic' }}>None</span>
-                            )}
-                          </td>
-                          <td className="td" style={{ fontWeight: 700, color: 'var(--sea-green)' }}>
-                            ₹{Number(p.totalSpent || 0).toFixed(2)}
-                          </td>
-                          <td className="td">
-                            {p.isDeleted ? (
-                              isSelfDeleted(p) ? (
-                                <span className="locked-tag">
-                                  <i className="fas fa-lock" /> Self deleted
-                                </span>
-                              ) : (
-                                <button type="button" className="action-btn restore-btn" onClick={() => handleRestore(p.email)}>
-                                  <i className="fas fa-user-plus" /> Restore
-                                </button>
-                              )
-                            ) : (
-                              <button type="button" className="action-btn" onClick={() => handleRemove(p.email)}>
-                                <i className="fas fa-user-minus" /> Remove
-                              </button>
+                               <span style={{color: '#16a34a', fontWeight: 'bold'}}><i className="fas fa-check-circle" /> Active</span>
                             )}
                           </td>
                         </tr>
-                      ))
+                        );
+                      })
                     )}
                   </tbody>
                 </table>
 
-                <div style={{ textAlign: 'center', margin: '1rem 0', display: 'flex', justifyContent: 'center', gap: '1rem' }}>
-                  {canMore && (
-                    <button type="button" className="more-btn" onClick={() => setVisible((v) => Math.min(v + 5, filtered.length))}>
-                      <i className="fas fa-chevron-down" /> More
+                {totalPages > 1 && (
+                  <div className="pagination" style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', marginTop: '1rem', alignItems: 'center' }}>
+                    <button
+                      type="button"
+                      className="more-btn"
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      style={{ opacity: currentPage === 1 ? 0.5 : 1, cursor: currentPage === 1 ? 'not-allowed' : 'pointer' }}
+                    >
+                      <i className="fas fa-chevron-left" /> Previous
                     </button>
-                  )}
-                  {canHide && (
-                    <button type="button" className="more-btn" onClick={() => setVisible(5)}>
-                      <i className="fas fa-chevron-up" /> Hide
+                    <span style={{ fontFamily: "'Cinzel', serif", fontWeight: 'bold' }}>
+                      Page {currentPage} of {totalPages}
+                    </span>
+                    <button
+                      type="button"
+                      className="more-btn"
+                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      style={{ opacity: currentPage === totalPages ? 0.5 : 1, cursor: currentPage === totalPages ? 'not-allowed' : 'pointer' }}
+                    >
+                      Next <i className="fas fa-chevron-right" />
                     </button>
-                  )}
-                </div>
+                  </div>
+                )}
               </>
             )}
 
             <div style={{ marginTop: '2rem', textAlign: 'right' }}>
-              <Link to="/admin/admin_dashboard" className="back-to-dashboard">
+              <Link to="/admin/admin_dashboard" className="back-link">
                 <i className="fas fa-arrow-left" /> Back to Dashboard
               </Link>
             </div>
