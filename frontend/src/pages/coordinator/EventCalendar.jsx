@@ -37,7 +37,8 @@ function EventCalendar() {
     description: '',
     date: '',
     time: '',
-    type: 'meeting'
+    type: 'meeting',
+    customType: ''
   });
   const [searchParams] = useSearchParams();
   const tournamentId = searchParams.get('tournament_id');
@@ -75,9 +76,14 @@ function EventCalendar() {
           isMine: event.isMine !== false
         }));
 
+        // Deduplicate events by _id in case they appear multiple times
+        const uniqueNormalized = Array.from(
+          new Map(normalized.map(e => [e._id, e])).values()
+        );
+
         const filteredEvents = tournamentId
-          ? normalized.filter((event) => event._id === tournamentId || event.type !== 'tournament')
-          : normalized;
+          ? uniqueNormalized.filter((event) => event._id === tournamentId || event.type !== 'tournament')
+          : uniqueNormalized;
         setEvents(filteredEvents);
         setError('');
       } else {
@@ -130,7 +136,7 @@ function EventCalendar() {
         description: eventForm.description.trim(),
         date: eventForm.date,
         time: eventForm.time.trim(),
-        type: eventForm.type || 'meeting'
+        type: eventForm.type === 'other' && eventForm.customType.trim() ? eventForm.customType.trim().toLowerCase() : (eventForm.type || 'meeting')
       };
       const res = await fetchAsCoordinator('/coordinator/api/calendar', {
         method: 'POST',
@@ -141,7 +147,7 @@ function EventCalendar() {
       if (res.ok) {
         showMessage('Event created successfully', 'success');
         setShowEventForm(false);
-        setEventForm({ title: '', description: '', date: '', time: '', type: 'meeting' });
+        setEventForm({ title: '', description: '', date: '', time: '', type: 'meeting', customType: '' });
         await fetchEvents();
       } else {
         showMessage(data.message || 'Failed to create event', 'error');
@@ -470,6 +476,18 @@ function EventCalendar() {
                     <option value="other">Other</option>
                   </select>
                 </div>
+                {eventForm.type === 'other' && (
+                  <div className="form-group">
+                    <label className="form-label">Specify Event Type:</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={eventForm.customType}
+                      onChange={(e) => setEventForm({ ...eventForm, customType: e.target.value })}
+                      placeholder="E.g. Workshop"
+                    />
+                  </div>
+                )}
                 <div style={{ display: 'flex', gap: '1rem' }}>
                   <button className="btn-primary" onClick={createEvent}>
                     <i className="fas fa-save" /> Create Event

@@ -178,7 +178,7 @@ function OrganizerDashboard() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
           >
-            <h3><i className="fas fa-calendar" /> Upcoming Meetings (Next 3 Days)</h3>
+            <h3><i className="fas fa-calendar" /> Upcoming Meetings (Next 5 Days)</h3>
             <ul style={{ padding: 0 }}>
               {loading ? (
                 <li>Loading meetings...</li>
@@ -215,14 +215,14 @@ function OrganizerDashboard() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
           >
-            <h3><i className="fas fa-clipboard-check" /> Tournament Approvals (Next 3 Days)</h3>
+            <h3><i className="fas fa-clipboard-check" /> Tournament Approvals (Next 5 Days)</h3>
             <ul style={{ padding: 0 }}>
               {loading ? (
                 <li>Loading approvals...</li>
               ) : error ? (
                 <li style={{ color: 'crimson' }}>{error}</li>
               ) : pendingApprovals.length === 0 ? (
-                <li>No tournament approvals due within the next 3 days.</li>
+                  <li>No tournament approvals due within the next 5 days.</li>
               ) : (
                 showApprovals.map((t, idx) => (
                   <li key={t._id || idx}>

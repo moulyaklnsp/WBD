@@ -296,9 +296,6 @@ const StoreMonitoring = () => {
                 <div className="stat-value">{formatCurrency(totalRevenue)}</div>
                 <div className="stat-label">Total Revenue</div>
               </div>
-              <div style={{ textAlign: 'right', marginBottom: '1rem' }}>
-                <Link to="/organizer/sales_analysis" className="back-link"><i className="fas fa-chart-line" /> View Sales Analysis</Link>
-              </div>
             </div>
 
             <motion.div

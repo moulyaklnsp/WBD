@@ -1,5 +1,5 @@
 import { TAB_ID, loadDataSafely, mergeData, getStoredData } from './multiTabManager';
-import { getAccessToken, isTokenExpired, refreshAccessToken } from './tokenManager';
+import { getAccessToken, refreshAccessToken } from './tokenManager';
 
 // Request queue to prevent duplicate concurrent requests
 const pendingRequests = new Map();
@@ -99,8 +99,6 @@ async function enhancedFetch(path, options, config = {}) {
 
       // ---- Other 4xx ----
       if (response.status >= 400 && response.status < 500) {
-        const errorData = await response.clone().json().catch(() => ({}));
-        
         // Instead of throwing an error which causes React Error Boundary overlay
         // Let's resolve with the error response, or attach an error property
         // The calling code can check for !response.ok
@@ -255,7 +253,7 @@ export function clearRequestCache() {
   pendingRequests.clear();
 }
 
-export default {
+const fetchUtils = {
   fetchAsAdmin,
   fetchAsOrganizer,
   fetchAsCoordinator,
@@ -267,3 +265,5 @@ export default {
   safePatch,
   clearRequestCache,
 };
+
+export default fetchUtils;

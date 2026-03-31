@@ -16,7 +16,7 @@ router.use(express.json());
 
 /**
  * @swagger
- * /player/api/dashboard:
+ * /api/dashboard:
  *   get:
  *     summary: Player dashboard with tournament status
  *     tags: [Player]
@@ -30,7 +30,7 @@ router.get('/api/dashboard', playerController.getDashboard);
 
 /**
  * @swagger
- * /player/api/tournaments:
+ * /api/tournaments:
  *   get:
  *     summary: List available tournaments to join
  *     tags: [Player]
@@ -44,7 +44,7 @@ router.get('/api/tournaments', playerController.getTournaments);
 
 /**
  * @swagger
- * /player/api/join-individual:
+ * /api/join-individual:
  *   post:
  *     summary: Join a tournament as an individual player
  *     tags: [Player]
@@ -67,7 +67,7 @@ router.post('/api/join-individual', playerController.joinIndividual);
 
 /**
  * @swagger
- * /player/api/join-team:
+ * /api/join-team:
  *   post:
  *     summary: Join a tournament as a team captain
  *     tags: [Player]
@@ -96,7 +96,7 @@ router.post('/api/join-team', playerController.joinTeam);
 
 /**
  * @swagger
- * /player/api/store:
+ * /api/store:
  *   get:
  *     summary: Browse available store products
  *     tags: [Player]
@@ -110,7 +110,7 @@ router.get('/api/store', playerController.getStore);
 
 /**
  * @swagger
- * /player/api/subscription:
+ * /api/subscription:
  *   get:
  *     summary: Get current subscription details
  *     tags: [Player]
@@ -126,7 +126,7 @@ router.get('/api/subscription', playerController.getSubscription);
 
 /**
  * @swagger
- * /player/api/growth:
+ * /api/growth:
  *   get:
  *     summary: Player growth overview (wins, losses, rating trend)
  *     tags: [Player]
@@ -140,7 +140,7 @@ router.get('/api/growth', playerController.getGrowth);
 
 /**
  * @swagger
- * /player/api/growth_analytics:
+ * /api/growth_analytics:
  *   get:
  *     summary: Get detailed growth analytics
  *     tags: [Player]
@@ -156,7 +156,7 @@ router.get('/api/growth_analytics', playerController.getGrowthAnalytics);
 
 /**
  * @swagger
- * /player/api/profile:
+ * /api/profile:
  *   get:
  *     summary: Get player profile
  *     tags: [Player]
@@ -178,7 +178,7 @@ router.get('/api/profile', playerController.getProfile);
 
 /**
  * @swagger
- * /player/api/profile/photo:
+ * /api/profile/photo:
  *   post:
  *     summary: Upload player profile photo
  *     tags: [Player]
@@ -200,7 +200,7 @@ router.put('/api/profile', playerController.updateProfile);
 
 /**
  * @swagger
- * /player/api/deleteAccount:
+ * /api/deleteAccount:
  *   delete:
  *     summary: Permanently delete player account
  *     tags: [Player]
@@ -234,7 +234,7 @@ router.post('/players/restore/:id', playerController.restorePlayer);
 
 /**
  * @swagger
- * /player/api/compare:
+ * /api/compare:
  *   get:
  *     summary: Compare your stats with another player
  *     tags: [Player]
@@ -255,7 +255,7 @@ router.get('/api/compare', playerController.comparePlayer);
 
 /**
  * @swagger
- * /player/api/add-funds:
+ * /api/add-funds:
  *   post:
  *     summary: Top up wallet balance
  *     tags: [Player]
@@ -278,7 +278,7 @@ router.post('/api/add-funds', playerController.addFunds);
 
 /**
  * @swagger
- * /player/api/wallet-transactions:
+ * /api/wallet-transactions:
  *   get:
  *     summary: Get wallet transaction history
  *     tags: [Player]
@@ -292,7 +292,7 @@ router.get('/api/wallet-transactions', playerController.getWalletTransactions);
 // Razorpay endpoints (create order, verify payment)
 /**
  * @swagger
- * /player/api/razorpay/create-order:
+ * /api/razorpay/create-order:
  *   post:
  *     summary: Create a Razorpay order
  *     tags: [Player]
@@ -306,7 +306,7 @@ router.post('/api/razorpay/create-order', paymentController.createRazorpayOrder)
 
 /**
  * @swagger
- * /player/api/razorpay/verify:
+ * /api/razorpay/verify:
  *   post:
  *     summary: Verify a Razorpay payment
  *     tags: [Player]
@@ -322,7 +322,7 @@ router.post('/api/razorpay/verify', paymentController.verifyRazorpayPayment);
 
 /**
  * @swagger
- * /player/api/pairings:
+ * /api/pairings:
  *   get:
  *     summary: Get individual pairings for your enrolled tournament
  *     tags: [Player]
@@ -336,7 +336,7 @@ router.get('/api/pairings', playerController.getPairings);
 
 /**
  * @swagger
- * /player/api/rankings:
+ * /api/rankings:
  *   get:
  *     summary: Get individual rankings
  *     tags: [Player]
@@ -350,7 +350,7 @@ router.get('/api/rankings', playerController.getRankings);
 
 /**
  * @swagger
- * /player/api/team-pairings:
+ * /api/team-pairings:
  *   get:
  *     summary: Get team pairings
  *     tags: [Player]
@@ -364,7 +364,7 @@ router.get('/api/team-pairings', playerController.getTeamPairings);
 
 /**
  * @swagger
- * /player/api/team-rankings:
+ * /api/team-rankings:
  *   get:
  *     summary: Get team rankings
  *     tags: [Player]
@@ -380,7 +380,7 @@ router.get('/api/team-rankings', playerController.getTeamRankings);
 
 /**
  * @swagger
- * /player/api/approve-team-request:
+ * /api/approve-team-request:
  *   post:
  *     summary: Accept or decline a team join request
  *     tags: [Player]
@@ -396,7 +396,7 @@ router.post('/api/approve-team-request', playerController.approveTeamRequest);
 
 /**
  * @swagger
- * /player/api/buy:
+ * /api/buy:
  *   post:
  *     summary: Purchase a product from the store
  *     tags: [Player]

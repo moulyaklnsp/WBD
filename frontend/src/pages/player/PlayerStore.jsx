@@ -46,6 +46,13 @@ function PlayerStore() {
   const [playerName, setPlayerName] = useState('');
   const [playerCollege, setPlayerCollege] = useState('');
   const [filter, setFilter] = useState({ search: '', category: '' });
+  const [productPage, setProductPage] = useState(1);
+  const PRODUCTS_PER_PAGE = 8;
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setProductPage(1);
+  }, [filter.search, filter.category]);
 
   // Cart state
   const [cart, setCart] = useState([]);
@@ -440,12 +447,15 @@ function PlayerStore() {
     (!filter.search || String(p.name || '').toLowerCase().includes(filter.search.toLowerCase()))
   );
 
-  const cartTotal = cart.reduce((sum, item) => {
-    const disc = discountPercentage > 0 ? (item.price * discountPercentage) / 100 : 0;
-    return sum + ((item.price - disc) * (item.quantity || 1));
-  }, 0);
+    const productTotalPages = Math.max(1, Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE));
+    const paginatedProducts = filteredProducts.slice(
+      (productPage - 1) * PRODUCTS_PER_PAGE,
+      productPage * PRODUCTS_PER_PAGE
+      );
 
-  const filteredOrders = orders.filter(o => {
+    const cartTotal = cart.reduce((sum, item) => sum + ((item.price || 0) * (item.quantity || 1)), 0);
+
+    const filteredOrders = orders.filter(o => {
     if (orderFilter !== 'all' && (o.status || 'pending') !== orderFilter) return false;
     if (orderSearch) {
       const q = orderSearch.toLowerCase();
@@ -743,7 +753,7 @@ function PlayerStore() {
               <div className="products-grid">
                 {filteredProducts.length === 0 ? (
                   <div className="card" style={{ textAlign: 'center', gridColumn: '1/-1' }}>No products available.</div>
-                ) : filteredProducts.map((product) => {
+                ) : paginatedProducts.map((product) => {
                   const images = getProductImages(product);
                   const selected = Math.min(productImageIndex[product._id] || 0, Math.max(images.length - 1, 0));
                   const currentImage = images[selected] || '';
@@ -797,6 +807,29 @@ function PlayerStore() {
                     </div>
                   );
                 })}
+              </div>
+            )}
+            {!loading && filteredProducts.length > PRODUCTS_PER_PAGE && (
+              <div className="pagination" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', marginTop: '2rem' }}>
+                <button 
+                  className="btn secondary" 
+                  disabled={productPage === 1}
+                  onClick={() => setProductPage(prev => Math.max(1, prev - 1))}
+                  style={{ opacity: productPage === 1 ? 0.5 : 1, cursor: productPage === 1 ? 'not-allowed' : 'pointer' }}
+                >
+                  <i className="fas fa-chevron-left"></i> Previous
+                </button>
+                <span style={{ fontWeight: 'bold', fontFamily: "'Cinzel', serif", color: 'var(--sea-green)' }}>
+                  Page {productPage} of {productTotalPages}
+                </span>
+                <button 
+                  className="btn secondary" 
+                  disabled={productPage === productTotalPages}
+                  onClick={() => setProductPage(prev => Math.min(productTotalPages, prev + 1))}
+                  style={{ opacity: productPage === productTotalPages ? 0.5 : 1, cursor: productPage === productTotalPages ? 'not-allowed' : 'pointer' }}
+                >
+                  Next <i className="fas fa-chevron-right"></i>
+                </button>
               </div>
             )}
           </div>
@@ -1464,3 +1497,4 @@ function PlayerStore() {
 }
 
 export default PlayerStore;
+

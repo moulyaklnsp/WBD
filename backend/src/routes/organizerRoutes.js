@@ -15,7 +15,7 @@ router.use(express.json());
 
 /**
  * @swagger
- * /organizer/api/dashboard:
+ * /api/dashboard:
  *   get:
  *     summary: Get organizer dashboard (upcoming meetings & tournaments)
  *     tags: [Organizer]
@@ -29,7 +29,7 @@ router.get('/api/dashboard', organizerController.getDashboard);
 
 /**
  * @swagger
- * /organizer/api/profile:
+ * /api/profile:
  *   get:
  *     summary: Get organizer profile
  *     tags: [Organizer]
@@ -62,7 +62,7 @@ router.put('/api/profile', organizerController.updateProfile);
 
 /**
  * @swagger
- * /organizer/api/upload-photo:
+ * /api/upload-photo:
  *   post:
  *     summary: Upload organizer profile photo
  *     tags: [Organizer]
@@ -85,7 +85,7 @@ router.post('/api/upload-photo', organizerController.uploadPhoto);
 
 /**
  * @swagger
- * /organizer/api/coordinators:
+ * /api/coordinators:
  *   get:
  *     summary: List coordinators under this organizer
  *     tags: [Organizer]
@@ -99,7 +99,7 @@ router.get('/api/coordinators', organizerController.getCoordinators);
 
 /**
  * @swagger
- * /organizer/api/coordinators/{email}:
+ * /api/coordinators/{email}:
  *   delete:
  *     summary: Remove a coordinator
  *     tags: [Organizer]
@@ -118,7 +118,7 @@ router.delete('/api/coordinators/:email', organizerController.removeCoordinator)
 
 /**
  * @swagger
- * /organizer/api/coordinators/restore/{email}:
+ * /api/coordinators/restore/{email}:
  *   patch:
  *     summary: Restore a soft-deleted coordinator
  *     tags: [Organizer]
@@ -139,7 +139,7 @@ router.patch('/api/coordinators/restore/:email', organizerController.restoreCoor
 
 /**
  * @swagger
- * /organizer/api/tournaments:
+ * /api/tournaments:
  *   get:
  *     summary: List tournaments pending approval
  *     tags: [Organizer]
@@ -153,7 +153,7 @@ router.get('/api/tournaments', organizerController.getTournaments);
 
 /**
  * @swagger
- * /organizer/api/tournaments/approve:
+ * /api/tournaments/approve:
  *   post:
  *     summary: Approve a tournament
  *     tags: [Organizer]
@@ -176,7 +176,7 @@ router.post('/api/tournaments/approve', organizerController.approveTournament);
 
 /**
  * @swagger
- * /organizer/api/tournaments/reject:
+ * /api/tournaments/reject:
  *   post:
  *     summary: Reject a tournament
  *     tags: [Organizer]

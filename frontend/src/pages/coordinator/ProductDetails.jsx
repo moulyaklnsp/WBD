@@ -217,7 +217,7 @@ export default function ProductDetails() {
   const [isDark, toggleTheme] = usePlayerTheme();
 
   return (
-    <div style={{ minHeight: '100vh' }}>
+    <div className="page player-neo" style={{ minHeight: '100vh', background: 'var(--page-bg)', color: 'var(--text-color)' }}>
       <style>{` .content-top-right { position: fixed; top: 18px; right: 18px; z-index: 1001; display:flex; gap:12px; align-items:center; } `}</style>
       <AnimatedSidebar links={coordinatorLinks} logo={<i className="fas fa-chess" />} title="ChessHive" />
       <div className="content-top-right">
@@ -225,7 +225,7 @@ export default function ProductDetails() {
           <i className={isDark ? 'fas fa-sun' : 'fas fa-moon'} />
         </motion.button>
       </div>
-      <div style={{ marginLeft: 0, padding: '2rem' }}>
+      <div className="content" style={{ marginLeft: 0, padding: '2rem' }}>
         <button className="btn ghost" onClick={() => navigate('/coordinator/store_management')} style={{ marginBottom: '1rem' }}>Back to Store</button>
         <h1 style={{ marginBottom: '1rem' }}>{product ? product.name : 'Product'}</h1>
 

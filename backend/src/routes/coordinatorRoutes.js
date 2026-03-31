@@ -15,7 +15,7 @@ router.use(express.json());
 
 /**
  * @swagger
- * /coordinator/api/streams:
+ * /api/streams:
  *   get:
  *     summary: List all live streams
  *     tags: [Coordinator]
@@ -50,7 +50,7 @@ router.post('/api/streams', coordinatorController.createStream);
 
 /**
  * @swagger
- * /coordinator/api/streams/{id}:
+ * /api/streams/{id}:
  *   patch:
  *     summary: Update a stream
  *     tags: [Coordinator]
@@ -85,7 +85,7 @@ router.delete('/api/streams/:id', coordinatorController.deleteStream);
 
 /**
  * @swagger
- * /coordinator/api/name:
+ * /api/name:
  *   get:
  *     summary: Get coordinator display name
  *     tags: [Coordinator]
@@ -99,7 +99,7 @@ router.get('/api/name', coordinatorController.getName);
 
 /**
  * @swagger
- * /coordinator/api/dashboard:
+ * /api/dashboard:
  *   get:
  *     summary: Coordinator dashboard with notifications
  *     tags: [Coordinator]
@@ -113,7 +113,7 @@ router.get('/api/dashboard', coordinatorController.getDashboard);
 
 /**
  * @swagger
- * /coordinator/api/notifications:
+ * /api/notifications:
  *   get:
  *     summary: Get coordinator notifications
  *     tags: [Coordinator]
@@ -127,7 +127,7 @@ router.get('/api/notifications', coordinatorController.getNotifications);
 
 /**
  * @swagger
- * /coordinator/api/notifications/mark-read:
+ * /api/notifications/mark-read:
  *   post:
  *     summary: Mark coordinator notifications as read
  *     tags: [Coordinator]
@@ -141,7 +141,7 @@ router.post('/api/notifications/mark-read', coordinatorController.markNotificati
 
 /**
  * @swagger
- * /coordinator/api/profile:
+ * /api/profile:
  *   get:
  *     summary: Get coordinator profile
  *     tags: [Coordinator]
@@ -172,7 +172,7 @@ router.put('/api/profile', coordinatorController.updateProfile);
 
 /**
  * @swagger
- * /coordinator/api/upload-photo:
+ * /api/upload-photo:
  *   post:
  *     summary: Upload coordinator profile photo
  *     tags: [Coordinator]
@@ -196,7 +196,7 @@ router.delete('/api/profile', coordinatorController.deleteProfile);
 
 /**
  * @swagger
- * /coordinator/api/tournaments:
+ * /api/tournaments:
  *   get:
  *     summary: List coordinator's tournaments
  *     tags: [Coordinator]
@@ -233,7 +233,7 @@ router.get('/api/tournaments', coordinatorController.getTournaments);
 
 /**
  * @swagger
- * /coordinator/api/tournaments/{id}:
+ * /api/tournaments/{id}:
  *   get:
  *     summary: Get tournament details
  *     tags: [Coordinator]
@@ -281,7 +281,7 @@ router.delete('/api/tournaments/:id', coordinatorController.deleteTournament);
 
 /**
  * @swagger
- * /coordinator/api/tournaments/{id}/upload:
+ * /api/tournaments/{id}/upload:
  *   post:
  *     summary: Upload tournament file (pairings, results, etc.)
  *     tags: [Coordinator]
@@ -307,7 +307,7 @@ router.post('/api/tournaments/:id/upload', coordinatorController.uploadTournamen
 
 /**
  * @swagger
- * /coordinator/api/tournaments/{id}/files:
+ * /api/tournaments/{id}/files:
  *   get:
  *     summary: List tournament files
  *     tags: [Coordinator]
@@ -326,7 +326,7 @@ router.get('/api/tournaments/:id/files', coordinatorController.getTournamentFile
 
 /**
  * @swagger
- * /coordinator/api/tournaments/{tournamentId}/files/{fileId}:
+ * /api/tournaments/{tournamentId}/files/{fileId}:
  *   delete:
  *     summary: Delete a tournament file
  *     tags: [Coordinator]
@@ -351,7 +351,7 @@ router.delete('/api/tournaments/:tournamentId/files/:fileId', coordinatorControl
 
 /**
  * @swagger
- * /coordinator/api/calendar:
+ * /api/calendar:
  *   get:
  *     summary: Get calendar events
  *     tags: [Coordinator]
@@ -374,7 +374,7 @@ router.post('/api/calendar', coordinatorController.createCalendarEvent);
 
 /**
  * @swagger
- * /coordinator/api/calendar/check-conflict:
+ * /api/calendar/check-conflict:
  *   get:
  *     summary: Check calendar conflicts for a date
  *     tags: [Coordinator]
@@ -397,7 +397,7 @@ router.post('/api/calendar/check-conflict', coordinatorController.checkDateConfl
 
 /**
  * @swagger
- * /coordinator/api/calendar/{id}:
+ * /api/calendar/{id}:
  *   delete:
  *     summary: Delete a calendar event
  *     tags: [Coordinator]

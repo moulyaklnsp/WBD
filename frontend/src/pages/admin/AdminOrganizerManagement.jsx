@@ -222,7 +222,7 @@ const AdminOrganizerManagement = () => {
             </div>
 
             {loading ? (
-              <table className="table"><tbody><tr><td colSpan={6} className="empty"><i className="fas fa-info-circle" /> Loading organizers…</td></tr></tbody></table>
+              <table className="table"><tbody><tr><td colSpan={5} className="empty"><i className="fas fa-info-circle" /> Loading organizers…</td></tr></tbody></table>
             ) : (
               <>
                 <table className="table">
@@ -233,12 +233,11 @@ const AdminOrganizerManagement = () => {
                       <th className="th"><i className="fas fa-phone" /> Phone</th>
                       <th className="th"><i className="fas fa-university" /> College</th>
                       <th className="th"><i className="fas fa-info-circle" /> Status</th>
-                      <th className="th"><i className="fas fa-cog" /> Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {shown.length === 0 ? (
-                      <tr><td colSpan={6} className="empty"><i className="fas fa-info-circle" /> No organizers available.</td></tr>
+                      <tr><td colSpan={5} className="empty"><i className="fas fa-info-circle" /> No organizers available.</td></tr>
                     ) : (
                       shown.map((o, idx) => {
                         const selfDeleted = isSelfDeleted(o);
@@ -260,19 +259,6 @@ const AdminOrganizerManagement = () => {
                                <span style={{color: '#dc2626', fontWeight: 'bold'}}><i className="fas fa-ban" /> Removed</span>
                             ) : (
                                <span style={{color: '#16a34a', fontWeight: 'bold'}}><i className="fas fa-check-circle" /> Active</span>
-                            )}
-                          </td>
-                          <td className="td">
-                            {!selfDeleted && (
-                              isRemoved ? (
-                                <button type="button" className="action-btn restore-btn" onClick={() => handleRestore(o.email)}>
-                                  <i className="fas fa-undo" /> Restore
-                                </button>
-                              ) : (
-                                <button type="button" className="action-btn" onClick={() => handleRemove(o.email)}>
-                                  <i className="fas fa-trash" /> Remove
-                                </button>
-                              )
                             )}
                           </td>
                         </tr>

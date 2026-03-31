@@ -166,12 +166,12 @@ export default function Home() {
     exit: (dir) => ({ x: dir > 0 ? -140 : 140, opacity: 0, scale: 0.99 }),
   };
 
-  // Auto-advance testimonials every 6 seconds (forward)
+  // Auto-advance testimonials with 3 second pause then smooth transition
   useEffect(() => {
     const timer = setInterval(() => {
       setDirection(1);
       setActiveIndex(i => (i + 1) % testimonials.length);
-    }, 6000);
+    }, 3500);
     return () => clearInterval(timer);
   }, [testimonials.length]);
 
@@ -387,7 +387,7 @@ export default function Home() {
                   marginBottom: '2rem'
                 }}
               >
-                What Our Community Says
+                Our Website Reviews
               </motion.h2>
               
               <div style={{ position: 'relative', minHeight: '240px', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>

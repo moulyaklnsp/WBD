@@ -91,6 +91,8 @@ export default function GrowthAnalysis() {
   const [engagementGrowth, setEngagementGrowth] = useState([]);
   const [platformGrowthTrend, setPlatformGrowthTrend] = useState([]);
   const [platformBreakdown, setPlatformBreakdown] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const rowsPerPage = 5;
 
   const loadGrowthData = useCallback(async () => {
     try {
@@ -291,6 +293,12 @@ export default function GrowthAnalysis() {
     ]
   }), [platformGrowthTrend]);
 
+  const totalPages = Math.ceil(platformBreakdown.length / rowsPerPage);
+  const paginatedBreakdown = platformBreakdown.slice(
+    (currentPage - 1) * rowsPerPage,
+    currentPage * rowsPerPage
+  );
+
   return (
     <div style={{ minHeight: '100vh' }}>
       <style>{`
@@ -482,7 +490,7 @@ export default function GrowthAnalysis() {
                     {platformBreakdown.length === 0 ? (
                       <tr><td className="td" colSpan="7">No monthly activity data available.</td></tr>
                     ) : (
-                      platformBreakdown.map((row) => (
+                      paginatedBreakdown.map((row) => (
                         <tr key={row.month}>
                           <td className="td">{row.month}</td>
                           <td className="td">{toNumber(row.users)}</td>
@@ -497,6 +505,27 @@ export default function GrowthAnalysis() {
                   </tbody>
                 </table>
               </div>
+              {totalPages > 1 && (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', marginTop: '1.5rem' }}>
+                  <button 
+                    style={{ background: 'rgba(20, 184, 166, 0.2)', color: 'var(--sea-green)', border: '1px solid var(--sea-green)', padding: '0.4rem 0.8rem', borderRadius: '6px', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', opacity: currentPage === 1 ? 0.5 : 1, fontFamily: 'Cinzel, serif', fontWeight: 'bold' }}
+                    disabled={currentPage === 1} 
+                    onClick={() => setCurrentPage(p => p - 1)}
+                  >
+                    Prev
+                  </button>
+                  <span style={{ fontFamily: 'Cinzel, serif', color: 'var(--sea-green)', fontWeight: 'bold', fontSize: '0.9rem' }}>
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <button 
+                    style={{ background: 'rgba(20, 184, 166, 0.2)', color: 'var(--sea-green)', border: '1px solid var(--sea-green)', padding: '0.4rem 0.8rem', borderRadius: '6px', cursor: currentPage === totalPages ? 'not-allowed' : 'pointer', opacity: currentPage === totalPages ? 0.5 : 1, fontFamily: 'Cinzel, serif', fontWeight: 'bold' }}
+                    disabled={currentPage === totalPages} 
+                    onClick={() => setCurrentPage(p => p + 1)}
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

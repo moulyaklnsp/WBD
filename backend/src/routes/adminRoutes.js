@@ -15,7 +15,7 @@ router.use(express.json());
 
 /**
  * @swagger
- * /admin/api/dashboard:
+ * /api/dashboard:
  *   get:
  *     summary: Get admin dashboard stats (revenue, player counts, meetings)
  *     tags: [Admin]
@@ -33,7 +33,7 @@ router.get('/api/dashboard', adminController.getDashboard);
 
 /**
  * @swagger
- * /admin/api/contact:
+ * /api/contact:
  *   get:
  *     summary: List all contact/support messages
  *     tags: [Admin]
@@ -47,7 +47,7 @@ router.get('/api/contact', adminController.getContactMessages);
 
 /**
  * @swagger
- * /admin/api/contact/{id}/status:
+ * /api/contact/{id}/status:
  *   patch:
  *     summary: Update status of a contact message
  *     tags: [Admin]
@@ -77,7 +77,7 @@ router.patch('/api/contact/:id/status', adminController.updateContactMessageStat
 
 /**
  * @swagger
- * /admin/api/tournaments:
+ * /api/tournaments:
  *   get:
  *     summary: List all tournaments
  *     tags: [Admin]
@@ -91,7 +91,7 @@ router.get('/api/tournaments', adminController.getTournaments);
 
 /**
  * @swagger
- * /admin/api/tournaments/{id}/details:
+ * /api/tournaments/{id}/details:
  *   get:
  *     summary: Get tournament details
  *     tags: [Admin]
@@ -112,7 +112,7 @@ router.get('/api/tournaments/:id/details', adminController.getTournamentDetails)
 
 /**
  * @swagger
- * /admin/api/tournaments/{id}:
+ * /api/tournaments/{id}:
  *   delete:
  *     summary: Remove a tournament
  *     tags: [Admin]
@@ -133,7 +133,7 @@ router.delete('/api/tournaments/:id', adminController.removeTournament);
 
 /**
  * @swagger
- * /admin/api/coordinators:
+ * /api/coordinators:
  *   get:
  *     summary: List all coordinators
  *     tags: [Admin]
@@ -147,7 +147,7 @@ router.get('/api/coordinators', adminController.getCoordinators);
 
 /**
  * @swagger
- * /admin/api/coordinators/{email}:
+ * /api/coordinators/{email}:
  *   delete:
  *     summary: Soft-delete a coordinator
  *     tags: [Admin]
@@ -166,7 +166,7 @@ router.delete('/api/coordinators/:email', adminController.removeCoordinator);
 
 /**
  * @swagger
- * /admin/api/coordinators/restore/{email}:
+ * /api/coordinators/restore/{email}:
  *   patch:
  *     summary: Restore a soft-deleted coordinator
  *     tags: [Admin]
@@ -186,7 +186,7 @@ router.patch('/api/coordinators/restore/:email', adminController.restoreCoordina
 // Get Coordinator Details
 /**
  * @swagger
- * /admin/api/coordinators/{email}/details:
+ * /api/coordinators/{email}/details:
  *   get:
  *     summary: Get coordinator details
  *     tags: [Admin]

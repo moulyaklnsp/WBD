@@ -1,0 +1,26 @@
+>                   {paginatedReviews.map((r, i) => (
+                      <div key={i} style={{ borderBottom: '1px solid var(--card-border)', padding: '1rem 0' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <strong>{r.user_name || 'User'}</strong>
+                          <span>{new Date(r.review_date).toLocaleDateString()}</span>
+                        </div>
+                        <div style={{ color: 'gold', margin: '0.3rem 0' }}>
+                          {[...Array(5)].map((_, si) => <i key={si} className={`fas fa-star ${si < r.rating ? '' : 'opt-50'}`} style={{ opacity: si < r.rating ? 1 : 0.3 }} />)}
+                        </div>
+                        <p>{r.comment}</p>
+                      </div>
+                    ))}
+                  </div>
+                )
+              )}
+            </div>
+          </div>
+        )}
+  
+        <Link to="/coordinator/coordinator_dashboard" className="back-to-dashboard">
+          <i className="fas fa-arrow-left" /> Back to Dashboard
+        </Link>
+      </div>
+    );
+  }
+  

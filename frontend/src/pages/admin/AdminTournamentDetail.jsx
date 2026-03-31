@@ -74,15 +74,15 @@ const AdminTournamentDetail = () => {
         .banner { padding:1rem; border-radius:8px; margin-bottom:1rem; text-align:center; font-weight:bold; }
         .banner.error { background:rgba(220,53,69,0.1); color:#dc3545; }
         .header-title { font-family:'Cinzel', serif; color:var(--sea-green); font-size:2.5rem; display:flex; align-items:center; gap:1rem; margin-bottom: 0.5rem; }
-        .section-card { background:rgba(30, 41, 59, 0.4); backdrop-filter: blur(8px); border:1px solid var(--card-border); border-radius:15px; padding:2rem; margin-bottom:2rem; transition: transform 0.3s ease; }
+        .section-card { background:var(--card-bg); border:1px solid var(--card-border); border-radius:15px; padding:2rem; margin-bottom:2rem; transition: transform 0.3s ease; }
         .section-title { font-family:'Cinzel', serif; color:var(--sea-green); font-size:1.5rem; display:flex; align-items:center; gap:0.8rem; margin-bottom: 1.5rem; }
         .table { width:100%; border-collapse:collapse; }
-        .th { background:rgba(20, 184, 166, 0.1); color:var(--sea-green); padding:1rem 1.2rem; text-align:left; font-family:'Cinzel', serif; text-transform: uppercase; font-size: 0.9rem; letter-spacing: 0.5px; }
+        .th { background:var(--sea-green); color:var(--on-accent, #fff); padding:1rem 1.2rem; text-align:left; font-family:'Cinzel', serif; text-transform: uppercase; font-size: 0.9rem; letter-spacing: 0.5px; }
         .td { padding:1rem; border-bottom:1px solid var(--card-border); }
-        .status-pill { padding: 0.3rem 0.8rem; border-radius: 9999px; font-size: 0.85rem; font-weight: bold; text-transform: uppercase; background: rgba(34, 197, 94, 0.2); color: #86efac; }
+        .status-pill { padding: 0.3rem 0.8rem; border-radius: 9999px; font-size: 0.85rem; font-weight: bold; text-transform: uppercase; background: rgba(var(--sea-green-rgb, 27, 94, 63), 0.2); color: var(--sea-green); }
         .empty { text-align:center; padding:2rem; color:var(--text-color); opacity: 0.7; font-style:italic; }
         .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
-        .stat-box { background: rgba(30, 41, 59, 0.6); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--card-border); display: flex; flex-direction: column; justify-content: center; }
+        .stat-box { background: var(--card-bg); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--card-border); display: flex; flex-direction: column; justify-content: center; }
         .stat-box h4 { font-size: 0.9rem; opacity: 0.7; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 1px; }
         .stat-box p { font-size: 1.6rem; color: var(--sea-green); font-family: 'Cinzel', serif; font-weight: bold; word-break: break-all; }
         .pagination { display: flex; justify-content: center; align-items: center; gap: 1rem; margin-top: 1.5rem; }
@@ -146,7 +146,7 @@ const AdminTournamentDetail = () => {
                 </div>
                 <div className="stat-box">
                   <h4>Total Players</h4>
-                  <p>{details.players?.length || 0}</p>
+                  <p>{details.totalPlayers !== undefined ? details.totalPlayers : (details.players?.length || 0)}</p>
                 </div>
               </motion.div>
 
@@ -167,7 +167,14 @@ const AdminTournamentDetail = () => {
                       ) : (
                         paginatedParticipants.map((p, idx) => (
                           <tr key={idx}>
-                            <td className="td" style={{ fontWeight: 'bold' }}>{p.name}</td>
+                            <td className="td" style={{ fontWeight: 'bold' }}>
+                               {p.name}
+                               {p.type === 'Team' && p.members && p.members.length > 0 && (
+                                 <div style={{ fontSize: '0.85rem', fontWeight: 'normal', color: 'gray', marginTop: '4px' }}>
+                                   Members: {p.members.join(', ')}
+                                 </div>
+                               )}
+                            </td>
                             <td className="td">{p.email || 'N/A'}</td>
                             <td className="td">{p.type}</td>
                           </tr>

@@ -67,7 +67,6 @@ import Meetings from '../pages/organizer/Meetings';
 import OrganizerDashboard from '../pages/organizer/OrganizerDashboard';
 import OrganizerProfile from '../pages/organizer/OrganizerProfile';
 import OrganizerTournament from '../pages/organizer/OrganizerTournament';
-import SalesAnalysis from '../pages/organizer/SalesAnalysis';
 import StoreMonitoring from '../pages/organizer/StoreMonitoring';
 
 // ─── Admin Pages ─────────────────────────────────────────────────
@@ -168,7 +167,6 @@ export default function AppRoutes() {
       <Route path="/organizer/organizer_dashboard" element={<AnimatedPageLayout><OrganizerDashboard /></AnimatedPageLayout>} />
       <Route path="/organizer/organizer_profile" element={<AnimatedPageLayout><OrganizerProfile /></AnimatedPageLayout>} />
       <Route path="/organizer/organizer_tournament" element={<AnimatedPageLayout><OrganizerTournament /></AnimatedPageLayout>} />
-      <Route path="/organizer/sales_analysis" element={<AnimatedPageLayout><SalesAnalysis /></AnimatedPageLayout>} />
       <Route path="/organizer/store_monitoring" element={<AnimatedPageLayout><StoreMonitoring /></AnimatedPageLayout>} />
 
       {/* ═══ Admin Routes ═══ */}

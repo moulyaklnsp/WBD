@@ -24,7 +24,7 @@ const AnalyticsService = {
       role: 'organizer'
     });
 
-    const threeDaysLater = moment().add(3, 'days').toDate();
+    const threeDaysLater = moment().add(5, 'days').toDate();
     const today = new Date();
 
     const meetings = await MeetingsModel.findMany(

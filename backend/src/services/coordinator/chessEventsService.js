@@ -38,9 +38,7 @@ const ChessEventsService = {
       throw createError('Title, date and category are required', 400);
     }
     const validCategories = ['Chess Talk', 'Tournament Alert', 'Live Announcement', 'Workshop', 'Webinar', 'Exhibition Match', 'Other'];
-    if (!validCategories.includes(category)) {
-      throw createError('Invalid category. Must be one of: ' + validCategories.join(', '), 400);
-    }
+    // We will allow custom categories now since frontend supports 'Other' Custom Types
 
     const database = await resolveDb(db);
     const coordinator = await requireCoordinatorById(database, userId);
@@ -74,8 +72,6 @@ const ChessEventsService = {
     if (description !== undefined) update.description = description.trim();
     if (date !== undefined) update.date = new Date(date);
     if (category !== undefined) {
-      const validCategories = ['Chess Talk', 'Tournament Alert', 'Live Announcement', 'Workshop', 'Webinar', 'Exhibition Match', 'Other'];
-      if (!validCategories.includes(category)) throw createError('Invalid category', 400);
       update.category = category;
     }
     if (location !== undefined) update.location = location.trim();

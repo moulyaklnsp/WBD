@@ -393,21 +393,33 @@ const getTournamentDetails = async (req, res) => {
       let captainId;
       try { captainId = new ObjectId(t.captain_id); } catch(e) { captainId = null; }
       const captain = captainId ? await db.collection('users').findOne({ _id: captainId }) : null;
-      const displayName = t.team_name ? t.team_name : (t.captain_name ? t.captain_name + "'s Team" : 'Team Entry');
-      return { name: displayName, email: captain ? captain.email : 'N/A', type: 'Team' };
+      const displayName = t.team_name ? t.team_name : (captain ? captain.name + "'s Team" : 'Team Entry');
+      const members = [t.player1_name, t.player2_name, t.player3_name].filter(Boolean);
+      return { 
+        name: displayName, 
+        email: captain ? captain.email : 'N/A', 
+        type: 'Team',
+        members: members,
+        playerCount: members.length
+      };
     }));
 
     const allPlayers = [...players, ...teams];
 
     const entryFee = Number(tournament.entry_fee || 0);
     const moneyGenerated = (players.length * entryFee) + (teams.length * entryFee * 3); // Based on previous multiplication logic
+    
+    let totalPlayersCount = 0;
+    players.forEach(() => totalPlayersCount += 1);
+    teams.forEach(t => totalPlayersCount += (t.playerCount || 3));
 
     res.json({
       tournament,
       conductedBy: tournament.added_by || 'Unknown',
       approvedBy: tournament.approved_by || 'Unknown',
       moneyGenerated,
-      players: allPlayers
+      players: allPlayers,
+      totalPlayers: totalPlayersCount
     });
   } catch (error) {
     console.error('Error fetching tournament details:', error);

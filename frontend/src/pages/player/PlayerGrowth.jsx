@@ -403,8 +403,9 @@ export default function PlayerGrowth() {
         .result-loss{ color:#e74c3c; font-weight:bold; }
         .result-draw{ color:#f39c12; font-weight:bold; }
         .compare-section{ display:flex; gap:0.75rem; align-items:center; margin-bottom:1.5rem; flex-wrap:wrap; }
-        .compare-input{ padding:0.6rem 1rem; border:1px solid var(--card-border); border-radius:8px; background:var(--card-bg); color:var(--text-color); font-family:'Playfair Display',serif; min-width:200px; }
-        .btn{ background:var(--sea-green); color:var(--on-accent); border:none; padding:0.6rem 1.2rem; border-radius:8px; cursor:pointer; font-family:'Cinzel',serif; font-weight:bold; }
+          .compare-input{ margin:0 !important; padding:0.6rem 1rem; border:1px solid var(--text-color); border-radius:8px; background:var(--glass-bg, rgba(255,255,255,0.05)); color:var(--text-color) !important; font-family:'Playfair Display',serif; min-width:200px; display: block; opacity: 1; visibility: visible; }
+          .compare-input::placeholder { color: var(--text-color); opacity: 0.6; }
+          .btn{ background:var(--sea-green); color:var(--on-accent) !important; border:none; padding:0.6rem 1.2rem; border-radius:8px; cursor:pointer; font-family:'Cinzel',serif; font-weight:bold; }
         .btn:hover{ filter:brightness(1.1); }
         .btn.secondary{ background:var(--sky-blue); color:var(--on-accent); }
 
@@ -536,7 +537,7 @@ export default function PlayerGrowth() {
         {tab === 'Compare' && (
           <>
             <div className="compare-section">
-              <input className="compare-input" placeholder="Enter opponent username..." value={compareUsername} onChange={e => setCompareUsername(e.target.value)} onKeyDown={e => e.key === 'Enter' && doCompare()} />
+              <input type="text" className="compare-input" placeholder="Enter opponent username..." value={compareUsername} onChange={e => setCompareUsername(e.target.value)} onKeyDown={e => e.key === 'Enter' && doCompare()} />
               <button className="btn" onClick={doCompare} disabled={compareLoading}>
                 {compareLoading ? <><i className="fas fa-spinner fa-spin" /> Comparing...</> : <><i className="fas fa-exchange-alt" /> Compare</>}
               </button>

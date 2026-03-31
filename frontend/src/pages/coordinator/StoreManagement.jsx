@@ -34,7 +34,7 @@ ChartJS.register(
   LineElement
 );
 
-const VISIBLE_COUNT = 8;
+const VISIBLE_COUNT = 4;
 const TABLE_ROWS_PER_PAGE = 10;
 
 const sectionVariants = {
@@ -60,7 +60,7 @@ function StoreManagement() {
   const [message, setMessage] = useState(null);
 
   // --- Products State ---
-  const [visible, setVisible] = useState(VISIBLE_COUNT);
+  const [productPage, setProductPage] = useState(1);
   const [form, setForm] = useState({
     productName: '',
     productCategory: '',
@@ -95,6 +95,8 @@ function StoreManagement() {
   const [selectedProductForReviews, setSelectedProductForReviews] = useState(null);
   const [reviews, setReviews] = useState([]);
   const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [reviewProductsPage, setReviewProductsPage] = useState(1);
+  const [reviewsPage, setReviewsPage] = useState(1);
   // --- Edit product modal state ---
   const [editProduct, setEditProduct] = useState(null);
   const [editForm, setEditForm] = useState({ name: '', category: '', price: '', availability: '', description: '' });
@@ -142,6 +144,14 @@ function StoreManagement() {
       return true;
     });
   }, [productsList, filter]);
+
+  const productTotalPages = Math.max(1, Math.ceil(filteredProducts.length / VISIBLE_COUNT));
+  const paginatedProducts = filteredProducts.slice(
+    (productPage - 1) * VISIBLE_COUNT,
+    productPage * VISIBLE_COUNT
+  );
+
+  useEffect(() => { setProductPage(1); }, [filter.search, filter.category]);
 
   const getProductImages = useCallback((product) => {
     return Array.from(new Set([
@@ -503,8 +513,16 @@ function StoreManagement() {
 
   const openReviews = (product) => {
     setSelectedProductForReviews(product);
+    setReviewsPage(1);
     fetchReviews(product._id);
   };
+
+  const reviewProductsTotalPages = Math.max(1, Math.ceil(productsList.length / VISIBLE_COUNT));
+  const paginatedReviewProducts = productsList.slice((reviewProductsPage - 1) * VISIBLE_COUNT, reviewProductsPage * VISIBLE_COUNT);
+
+  const REVIEWS_PER_PAGE = 5;
+  const reviewsTotalPages = Math.max(1, Math.ceil(reviews.length / REVIEWS_PER_PAGE));
+  const paginatedReviews = reviews.slice((reviewsPage - 1) * REVIEWS_PER_PAGE, reviewsPage * REVIEWS_PER_PAGE);
 
   const filteredOrders = useMemo(() => {
     const query = orderSearch.trim().toLowerCase();
@@ -701,7 +719,7 @@ function StoreManagement() {
                   <input placeholder="Search..." value={filter.search} onChange={e => setFilter({ ...filter, search: e.target.value })} className="form-input" style={{ maxWidth: '300px' }} />
                 </div>
                 <div className="products-grid">
-                  {filteredProducts.map((p) => {
+                  {paginatedProducts.map((p) => {
                     const images = getProductImages(p);
                     const selected = Math.min(productImageIndex[p._id] || 0, Math.max(images.length - 1, 0));
                     const currentImage = images[selected] || '/images/placeholder.jpg';
@@ -775,6 +793,32 @@ function StoreManagement() {
                   );
                   })}
                 </div>
+
+                {productTotalPages > 0 && (
+                  <div className="pagination" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', marginTop: '2rem' }}>
+                    <button 
+                      type="button" 
+                      className="btn-primary" 
+                      style={{ padding: '0.4rem 1rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }} 
+                      disabled={productPage === 1}
+                      onClick={() => setProductPage(p => Math.max(1, p - 1))}
+                    >
+                      <i className="fas fa-chevron-left" /> Prev
+                    </button>
+                    <span style={{ fontWeight: 'bold', fontFamily: "'Cinzel', serif" }}>
+                      Page {productPage} of {productTotalPages}
+                    </span>
+                    <button 
+                      type="button" 
+                      className="btn-primary" 
+                      style={{ padding: '0.4rem 1rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}
+                      disabled={productPage === productTotalPages}
+                      onClick={() => setProductPage(p => Math.min(productTotalPages, p + 1))}
+                    >
+                      Next <i className="fas fa-chevron-right" />
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
@@ -979,18 +1023,44 @@ function StoreManagement() {
                 <h3>Manage Reviews</h3>
                 <p>Select a product to view its reviews.</p>
                 <div className="products-grid" style={{ marginTop: '1rem' }}>
-                  {productsList.map(p => (
+                  {paginatedReviewProducts.map(p => (
                     <div key={p._id} className="product-card" onClick={() => openReviews(p)} style={{ cursor: 'pointer' }}>
                       <div style={{ padding: '1rem', textAlign: 'center' }}>
                         <h4 style={{ color: 'var(--sea-green)' }}>{p.name}</h4>
                         <div style={{ fontSize: '0.8rem', opacity: 0.7 }}>Click to view reviews</div>
+                        </div>
                       </div>
+                    ))}
+                  </div>
+
+                  {reviewProductsTotalPages > 0 && (
+                    <div className="pagination" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', marginTop: '2rem' }}>
+                      <button 
+                        type="button" 
+                        className="btn-primary" 
+                        style={{ padding: '0.4rem 1rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }} 
+                        disabled={reviewProductsPage === 1}
+                        onClick={() => setReviewProductsPage(p => Math.max(1, p - 1))}
+                      >
+                        <i className="fas fa-chevron-left" /> Prev
+                      </button>
+                      <span style={{ fontWeight: 'bold', fontFamily: "'Cinzel', serif" }}>
+                        Page {reviewProductsPage} of {reviewProductsTotalPages}
+                      </span>
+                      <button 
+                        type="button" 
+                        className="btn-primary" 
+                        style={{ padding: '0.4rem 1rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}
+                        disabled={reviewProductsPage === reviewProductsTotalPages}
+                        onClick={() => setReviewProductsPage(p => Math.min(reviewProductsTotalPages, p + 1))}
+                      >
+                        Next <i className="fas fa-chevron-right" />
+                      </button>
                     </div>
-                  ))}
+                  )}
                 </div>
-              </div>
-            )}
-          </motion.div>
+              )}
+            </motion.div>
         </div>
       </div>
 
@@ -1224,7 +1294,7 @@ function StoreManagement() {
             {reviewsLoading ? <p>Loading...</p> : (
               reviews.length === 0 ? <p>No reviews visible.</p> : (
                 <div style={{ marginTop: '1rem' }}>
-                  {reviews.map((r, i) => (
+                  {paginatedReviews.map((r, i) => (
                     <div key={i} style={{ borderBottom: '1px solid var(--card-border)', padding: '1rem 0' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                         <strong>{r.user_name || 'User'}</strong>
@@ -1234,11 +1304,36 @@ function StoreManagement() {
                         {[...Array(5)].map((_, si) => <i key={si} className={`fas fa-star ${si < r.rating ? '' : 'opt-50'}`} style={{ opacity: si < r.rating ? 1 : 0.3 }} />)}
                       </div>
                       <p>{r.comment}</p>
-                    </div>
-                  ))}
+                      </div>
+                    ))}
+                  </div>
+                )
+              )}
+              {reviews.length > 0 && reviewsTotalPages > 0 && !reviewsLoading && (
+                <div className="pagination" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.75rem', marginTop: '1.5rem' }}>
+                  <button 
+                    type="button" 
+                    className="btn-primary" 
+                    style={{ padding: '0.3rem 0.8rem', fontSize: '0.85rem' }} 
+                    disabled={reviewsPage === 1}
+                    onClick={() => setReviewsPage(p => Math.max(1, p - 1))}
+                  >
+                    <i className="fas fa-chevron-left" /> Prev
+                  </button>
+                  <span style={{ fontWeight: 'bold', fontSize: '0.9rem', fontFamily: "'Cinzel', serif" }}>
+                    {reviewsPage} / {reviewsTotalPages}
+                  </span>
+                  <button 
+                    type="button" 
+                    className="btn-primary" 
+                    style={{ padding: '0.3rem 0.8rem', fontSize: '0.85rem' }}
+                    disabled={reviewsPage === reviewsTotalPages}
+                    onClick={() => setReviewsPage(p => Math.min(reviewsTotalPages, p + 1))}
+                  >
+                    Next <i className="fas fa-chevron-right" />
+                  </button>
                 </div>
-              )
-            )}
+              )}
           </div>
         </div>
       )}
@@ -1251,6 +1346,18 @@ function StoreManagement() {
 }
 
 export default StoreManagement;
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

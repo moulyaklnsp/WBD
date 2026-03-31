@@ -60,7 +60,7 @@ const itemVariants = {
   }
 };
 
-const emptyForm = { title: '', description: '', date: '', category: 'Chess Talk', location: '', link: '' };
+const emptyForm = { title: '', description: '', date: '', category: 'Chess Talk', customCategory: '', location: '', link: '' };
 
 function CoordinatorChessEvents() {
   const [isDark, toggleTheme] = usePlayerTheme();
@@ -124,11 +124,18 @@ function CoordinatorChessEvents() {
   };
 
   const handleEdit = (ev) => {
+    let cat = ev.category || 'Chess Talk';
+    let cCat = '';
+    if (!CATEGORIES.includes(cat)) {
+      cCat = cat;
+      cat = 'Other';
+    }
     setForm({
       title: ev.title || '',
       description: ev.description || '',
       date: ev.date ? new Date(ev.date).toISOString().slice(0, 16) : '',
-      category: ev.category || 'Chess Talk',
+      category: cat,
+      customCategory: cCat,
       location: ev.location || '',
       link: ev.link || ''
     });
@@ -165,7 +172,7 @@ function CoordinatorChessEvents() {
         title,
         description: form.description.trim(),
         date: new Date(form.date).toISOString(),
-        category: form.category,
+        category: form.category === 'Other' && form.customCategory.trim() ? form.customCategory.trim() : form.category,
         location: form.location.trim(),
         link: form.link.trim()
       };
@@ -373,17 +380,19 @@ function CoordinatorChessEvents() {
                     ))}
                   </select>
                 </div>
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="event-description"><i className="fas fa-align-left" /> Description</label>
-                <textarea
-                  id="event-description"
-                  placeholder="Describe the event - what players can expect, topics covered, etc."
-                  value={form.description}
-                  onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                  rows={4}
-                  style={{ minHeight: '100px' }}
+                  {form.category === 'Other' && (
+                    <div className="form-group">
+                      <label htmlFor="custom-category"><i className="fas fa-tag" /> Specify Event Type *</label>
+                      <input
+                        id="custom-category"
+                        type="text"
+                        placeholder="Enter the type of chess event"
+                        value={form.customCategory}
+                        onChange={(e) => setForm((f) => ({ ...f, customCategory: e.target.value }))}
+                        required
+                      />
+                    </div>
+                  )}
                 />
               </div>
 
