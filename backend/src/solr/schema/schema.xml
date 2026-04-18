@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+  ChessHive Solr schema (Solr 9)
+
+  NOTE:
+  - This file mirrors `managed-schema` so teams that prefer `schema.xml` can mount it.
+  - The runtime bootstrap path for CI/docker should use Schema API via `src/solr/SolrSchemaSetup.js`
+    (idempotent, no file-system coupling).
+
+  Key conventions:
+  - `id` is the unique key and should be globally unique across all entities.
+  - `entity` is the entity discriminator (users, products, contact, blogs, tournaments, streams, etc.).
+  - `visible_to` is a multiValued string used for role-based filtering.
+      Example values: public, admin, organizer, coordinator, player
+      Queries must append: fq=visible_to:(<role> OR public)
+
+  Field type guidelines requested:
+  - text_general for full-text fields
+  - string for exact match + faceting
+  - pdate for dates
+  - plong/pfloat for numerics
+-->
+<schema name="chesshive" version="1.6">
+  <!-- ========= Field Types ========= -->
+  <fieldType name="string" class="solr.StrField" sortMissingLast="true" />
+  <fieldType name="boolean" class="solr.BoolField" sortMissingLast="true" />
+  <fieldType name="pdate" class="solr.DatePointField" docValues="true" />
+  <fieldType name="plong" class="solr.LongPointField" docValues="true" />
+  <fieldType name="pfloat" class="solr.FloatPointField" docValues="true" />
+
+  <fieldType name="text_general" class="solr.TextField" positionIncrementGap="100">
+    <analyzer type="index">
+      <tokenizer class="solr.StandardTokenizerFactory" />
+      <filter class="solr.LowerCaseFilterFactory" />
+    </analyzer>
+    <analyzer type="query">
+      <tokenizer class="solr.StandardTokenizerFactory" />
+      <filter class="solr.LowerCaseFilterFactory" />
+    </analyzer>
+  </fieldType>
+
+  <!-- ========= Core Fields ========= -->
+  <uniqueKey>id</uniqueKey>
+
+  <field name="id" type="string" indexed="true" stored="true" required="true" multiValued="false" />
+  <field name="entity" type="string" indexed="true" stored="true" multiValued="false" docValues="true" />
+  <field name="visible_to" type="string" indexed="true" stored="false" multiValued="true" docValues="true" />
+
+  <!-- Catch-all full-text field (copyField destination) -->
+  <field name="_text_" type="text_general" indexed="true" stored="false" multiValued="true" />
+
+  <!-- Common timestamps (optional) -->
+  <field name="created_at_dt" type="pdate" indexed="true" stored="true" docValues="true" />
+  <field name="updated_at_dt" type="pdate" indexed="true" stored="true" docValues="true" />
+
+  <!-- ========= Entity-Oriented Fields (explicit) ========= -->
+  <!-- Users -->
+  <field name="user_role_s" type="string" indexed="true" stored="true" docValues="true" />
+  <field name="user_name_txt" type="text_general" indexed="true" stored="true" />
+  <field name="user_username_s" type="string" indexed="true" stored="true" docValues="true" />
+  <field name="user_email_s" type="string" indexed="true" stored="true" docValues="true" />
+  <field name="user_college_s" type="string" indexed="true" stored="true" docValues="true" />
+  <field name="user_is_deleted_b" type="boolean" indexed="true" stored="true" docValues="true" />
+
+  <!-- Contact / Support messages -->
+  <field name="contact_status_s" type="string" indexed="true" stored="true" docValues="true" />
+  <field name="contact_name_txt" type="text_general" indexed="true" stored="true" />
+  <field name="contact_email_s" type="string" indexed="true" stored="true" docValues="true" />
+  <field name="contact_message_txt" type="text_general" indexed="true" stored="true" />
+  <field name="contact_internal_note_txt" type="text_general" indexed="true" stored="true" />
+  <field name="contact_submitted_by_s" type="string" indexed="true" stored="true" docValues="true" />
+  <field name="contact_submission_date_dt" type="pdate" indexed="true" stored="true" docValues="true" />
+  <field name="contact_status_updated_at_dt" type="pdate" indexed="true" stored="true" docValues="true" />
+
+  <!-- Products -->
+  <field name="product_name_txt" type="text_general" indexed="true" stored="true" />
+  <field name="product_category_s" type="string" indexed="true" stored="true" docValues="true" />
+  <field name="product_price_f" type="pfloat" indexed="true" stored="true" docValues="true" />
+  <field name="product_availability_l" type="plong" indexed="true" stored="true" docValues="true" />
+  <field name="product_college_s" type="string" indexed="true" stored="true" docValues="true" />
+  <field name="product_coordinator_s" type="string" indexed="true" stored="true" docValues="true" />
+  <field name="product_comments_enabled_b" type="boolean" indexed="true" stored="true" docValues="true" />
+
+  <!-- Blogs -->
+  <field name="blog_title_txt" type="text_general" indexed="true" stored="true" />
+  <field name="blog_status_s" type="string" indexed="true" stored="true" docValues="true" />
+  <field name="blog_published_b" type="boolean" indexed="true" stored="true" docValues="true" />
+  <field name="blog_coordinator_s" type="string" indexed="true" stored="true" docValues="true" />
+  <field name="blog_content_txt" type="text_general" indexed="true" stored="true" />
+  <field name="blog_published_at_dt" type="pdate" indexed="true" stored="true" docValues="true" />
+  <field name="blog_updated_date_dt" type="pdate" indexed="true" stored="true" docValues="true" />
+  <field name="blog_created_date_dt" type="pdate" indexed="true" stored="true" docValues="true" />
+
+  <!-- Tournaments -->
+  <field name="tournament_name_txt" type="text_general" indexed="true" stored="true" />
+  <field name="tournament_type_s" type="string" indexed="true" stored="true" docValues="true" />
+  <field name="tournament_status_s" type="string" indexed="true" stored="true" docValues="true" />
+  <field name="tournament_date_dt" type="pdate" indexed="true" stored="true" docValues="true" />
+  <field name="tournament_start_date_dt" type="pdate" indexed="true" stored="true" docValues="true" />
+  <field name="tournament_end_date_dt" type="pdate" indexed="true" stored="true" docValues="true" />
+  <field name="tournament_location_txt" type="text_general" indexed="true" stored="true" />
+  <field name="tournament_college_s" type="string" indexed="true" stored="true" docValues="true" />
+  <field name="tournament_coordinator_s" type="string" indexed="true" stored="true" docValues="true" />
+  <field name="tournament_entry_fee_f" type="pfloat" indexed="true" stored="true" docValues="true" />
+
+  <!-- Streams -->
+  <field name="stream_title_txt" type="text_general" indexed="true" stored="true" />
+  <field name="stream_url_s" type="string" indexed="true" stored="true" docValues="true" />
+  <field name="stream_platform_s" type="string" indexed="true" stored="true" docValues="true" />
+  <field name="stream_type_s" type="string" indexed="true" stored="true" docValues="true" />
+  <field name="stream_description_txt" type="text_general" indexed="true" stored="true" />
+  <field name="stream_match_label_txt" type="text_general" indexed="true" stored="true" />
+  <field name="stream_is_live_b" type="boolean" indexed="true" stored="true" docValues="true" />
+  <field name="stream_featured_b" type="boolean" indexed="true" stored="true" docValues="true" />
+  <field name="stream_created_by_email_s" type="string" indexed="true" stored="true" docValues="true" />
+  <field name="stream_created_by_name_txt" type="text_general" indexed="true" stored="true" />
+  <field name="stream_created_at_dt" type="pdate" indexed="true" stored="true" docValues="true" />
+  <field name="stream_updated_at_dt" type="pdate" indexed="true" stored="true" docValues="true" />
+
+  <!-- Announcements -->
+  <field name="announcement_title_txt" type="text_general" indexed="true" stored="true" />
+  <field name="announcement_body_txt" type="text_general" indexed="true" stored="true" />
+  <field name="announcement_target_role_ss" type="string" indexed="true" stored="true" docValues="true" multiValued="true" />
+  <field name="announcement_is_active_b" type="boolean" indexed="true" stored="true" docValues="true" />
+  <field name="announcement_posted_date_dt" type="pdate" indexed="true" stored="true" docValues="true" />
+
+  <!-- Chess events -->
+  <field name="chess_event_title_txt" type="text_general" indexed="true" stored="true" />
+  <field name="chess_event_description_txt" type="text_general" indexed="true" stored="true" />
+  <field name="chess_event_category_s" type="string" indexed="true" stored="true" docValues="true" />
+  <field name="chess_event_location_txt" type="text_general" indexed="true" stored="true" />
+  <field name="chess_event_date_dt" type="pdate" indexed="true" stored="true" docValues="true" />
+  <field name="chess_event_active_b" type="boolean" indexed="true" stored="true" docValues="true" />
+  <field name="chess_event_coordinator_id_s" type="string" indexed="true" stored="true" docValues="true" />
+
+  <!-- Platform updates -->
+  <field name="platform_update_message_txt" type="text_general" indexed="true" stored="true" />
+  <field name="platform_update_date_dt" type="pdate" indexed="true" stored="true" docValues="true" />
+
+  <!-- ========= Dynamic Fields (extension points) ========= -->
+  <dynamicField name="*_s" type="string" indexed="true" stored="true" docValues="true" multiValued="false" />
+  <dynamicField name="*_ss" type="string" indexed="true" stored="true" docValues="true" multiValued="true" />
+  <dynamicField name="*_txt" type="text_general" indexed="true" stored="true" multiValued="false" />
+  <dynamicField name="*_dt" type="pdate" indexed="true" stored="true" docValues="true" multiValued="false" />
+  <dynamicField name="*_l" type="plong" indexed="true" stored="true" docValues="true" multiValued="false" />
+  <dynamicField name="*_f" type="pfloat" indexed="true" stored="true" docValues="true" multiValued="false" />
+  <dynamicField name="*_b" type="boolean" indexed="true" stored="true" docValues="true" multiValued="false" />
+
+  <!-- ========= Copy Fields ========= -->
+  <!-- Catch-all full-text search -->
+  <copyField source="*_txt" dest="_text_" />
+  <copyField source="user_email_s" dest="_text_" />
+  <copyField source="user_username_s" dest="_text_" />
+  <copyField source="contact_email_s" dest="_text_" />
+  <copyField source="product_category_s" dest="_text_" />
+  <copyField source="blog_status_s" dest="_text_" />
+  <copyField source="tournament_type_s" dest="_text_" />
+</schema>
+

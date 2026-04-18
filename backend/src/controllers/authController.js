@@ -7,6 +7,10 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const AuthApiService = require('../services/authApiService');
 const { normalizeKey } = require('../utils/mongo');
+const { createSolrService } = require('../solr/SolrService');
+const { isSolrEnabled } = require('../solr/solrEnabled');
+const { mapUserToSolrDoc } = require('../solr/mappers/userMapper');
+const { mapContactToSolrDoc } = require('../solr/mappers/contactMapper');
 
 let multer;
 try { multer = require('multer'); } catch (e) { multer = null; }
@@ -118,6 +122,15 @@ module.exports = {
     const userId = result.insertedId;
     console.log('New user signed up:', { email, role, userId });
 
+    if (isSolrEnabled()) {
+      try {
+        const solr = createSolrService();
+        await solr.indexDocument('users', mapUserToSolrDoc({ ...user, _id: userId }));
+      } catch (e) {
+        console.error('[solr] Failed to index legacy signup user:', e?.message || e);
+      }
+    }
+
     if (role === "player") {
       await db.collection('user_balances').insertOne({ user_id: userId, wallet_balance: 0 });
       console.log('Initialized wallet balance for player:', userId);
@@ -164,13 +177,23 @@ module.exports = {
     const db = await connectDB();
 
     // Insert the message into the database
-    await db.collection('contact').insertOne({
+    const doc = {
       name,
       email,
       message,
       submission_date: new Date(),
       status: 'pending'
-    });
+    };
+    const insert = await db.collection('contact').insertOne(doc);
+
+    if (isSolrEnabled()) {
+      try {
+        const solr = createSolrService();
+        await solr.indexDocument('contact', mapContactToSolrDoc({ ...doc, _id: insert.insertedId }));
+      } catch (e) {
+        console.error('[solr] Failed to index legacy contact message:', e?.message || e);
+      }
+    }
     console.log('Contact message submitted:', { name, email });
 
     // Redirect with success message

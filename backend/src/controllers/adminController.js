@@ -202,28 +202,27 @@ const getDashboard = async (req, res) => {
 
 const getContactMessages = async (req, res) => {
   try {
-    const db = await connectDB();
+    const { ContactMessagesService } = require('../services/admin/contactMessagesService');
+
     const status = (req.query.status || '').toString().trim().toLowerCase();
-    const search = (req.query.search || '').toString().trim();
-    const filter = {};
+    const q = (req.query.q || req.query.search || '').toString().trim();
+    const page = req.query.page != null ? parseInt(String(req.query.page), 10) : 1;
+    const pageSize = req.query.pageSize != null ? parseInt(String(req.query.pageSize), 10) : 200;
+    const facets = req.query.facets || '';
 
-    if (CONTACT_STATUSES.includes(status)) {
-      filter.status = status;
-    }
-    if (search) {
-      filter.$text = { $search: search };
-    }
+    const data = await ContactMessagesService.list(null, req.session, {
+      status,
+      q,
+      search: q,
+      page,
+      pageSize,
+      facets
+    });
 
-    const cursor = db.collection('contact').find(filter);
-    if (search) {
-      cursor.project({ score: { $meta: 'textScore' } });
-      cursor.sort({ score: { $meta: 'textScore' }, submission_date: -1 });
-    } else {
-      cursor.sort({ submission_date: -1 });
-    }
-    const messages = await cursor.limit(200).toArray();
-
-    return res.json({ messages });
+    const payload = { messages: data.messages || [] };
+    if (data.facetCounts) payload.facetCounts = data.facetCounts;
+    if (data.totalResults != null) payload.totalResults = data.totalResults;
+    return res.json(payload);
   } catch (error) {
     console.error('Error fetching contact messages:', error);
     return res.status(500).json({ error: 'Failed to fetch contact messages' });
@@ -264,6 +263,20 @@ const updateContactMessageStatus = async (req, res) => {
     }
 
     const updated = await db.collection('contact').findOne({ _id: new ObjectId(id) });
+
+    if (updated) {
+      try {
+        const { isSolrEnabled } = require('../solr/solrEnabled');
+        if (isSolrEnabled()) {
+          const { createSolrService } = require('../solr/SolrService');
+          const { mapContactToSolrDoc } = require('../solr/mappers/contactMapper');
+          const solr = createSolrService();
+          await solr.indexDocument('contact', mapContactToSolrDoc(updated));
+        }
+      } catch (e) {
+        console.error('[solr] Failed to index contact status update:', e?.message || e);
+      }
+    }
     let emailDelivery = { attempted: false, sent: false };
     if (updated?.email) {
       emailDelivery.attempted = true;

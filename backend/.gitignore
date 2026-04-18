@@ -1,5 +1,6 @@
 node_modules/
 .env
+coverage/
 public/uploads/profile-photos/*
 !public/uploads/profile-photos/.gitkeep
 logs/*

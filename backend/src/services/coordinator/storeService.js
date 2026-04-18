@@ -23,9 +23,64 @@ const ReviewsModel = getModel('reviews');
 const OrderComplaintsModel = getModel('order_complaints');
 const OtpsModel = getModel('otps');
 const { normalizeKey, parsePagination } = require('../../utils/mongo');
+const { createSolrService } = require('../../solr/SolrService');
+const { isSolrEnabled } = require('../../solr/solrEnabled');
+const { mapProductToSolrDoc } = require('../../solr/mappers/productMapper');
 
 const createError = (message, statusCode, extra) => Object.assign(new Error(message), { statusCode, ...extra });
 const resolveDb = async (db) => (db ? db : connectDB());
+
+function toArray(value) {
+  if (value == null) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+function solrPhrase(value) {
+  const raw = safeTrim(value);
+  const escaped = raw.replace(/(["\\])/g, '\\$1');
+  return `"${escaped}"`;
+}
+
+function normalizeFacets(value) {
+  const raw = Array.isArray(value) ? value : (safeTrim(value) ? safeTrim(value).split(',') : []);
+  const allow = new Set(['product_category_s', 'product_college_s', 'product_comments_enabled_b']);
+  return raw.map((v) => safeTrim(v)).filter((v) => allow.has(v));
+}
+
+function parseMongoIdFromSolrId(entity, solrId) {
+  const raw = safeTrim(solrId);
+  const prefix = `${entity}:`;
+  if (raw.startsWith(prefix)) return raw.slice(prefix.length);
+  return raw;
+}
+
+function sortByIdOrder(items, ids) {
+  const order = new Map(ids.map((id, idx) => [String(id), idx]));
+  return (items || [])
+    .slice()
+    .sort((a, b) => (order.get(String(a?._id)) ?? 1e9) - (order.get(String(b?._id)) ?? 1e9));
+}
+
+function parseProductSort(value, { hasQuery } = {}) {
+  const raw = safeTrim(value?.sort || value?.sortBy || value?.orderBy).toLowerCase();
+  const direction = safeTrim(value?.order || value?.direction).toLowerCase() === 'asc' ? 'asc' : 'desc';
+
+  if (!raw) return hasQuery ? 'score desc, created_at_dt desc' : 'created_at_dt desc';
+  if (raw === 'newest') return 'created_at_dt desc';
+  if (raw === 'oldest') return 'created_at_dt asc';
+  if (raw === 'name' || raw === 'name_asc') return `product_name_s asc, created_at_dt desc`;
+  if (raw === 'name_desc') return `product_name_s desc, created_at_dt desc`;
+  if (raw === 'price' || raw === 'price_asc') return `product_price_f asc, created_at_dt desc`;
+  if (raw === 'price_desc') return `product_price_f desc, created_at_dt desc`;
+  if (raw === 'availability' || raw === 'availability_desc') return `product_availability_l desc, created_at_dt desc`;
+  if (raw === 'availability_asc') return `product_availability_l asc, created_at_dt desc`;
+
+  if (raw === 'product_name_s') return `product_name_s ${direction}, created_at_dt desc`;
+  if (raw === 'product_price_f') return `product_price_f ${direction}, created_at_dt desc`;
+  if (raw === 'product_availability_l') return `product_availability_l ${direction}, created_at_dt desc`;
+
+  return hasQuery ? 'score desc, created_at_dt desc' : 'created_at_dt desc';
+}
 
 const StoreService = {
   async getProducts(db, user, query = {}) {
@@ -34,6 +89,76 @@ const StoreService = {
     const college = user?.college || user?.collegeName;
     const { limit, skip } = parsePagination(query, { defaultLimit: 50, maxLimit: 200 });
     const onlyAvailable = String(query?.available || '').toLowerCase() === 'true';
+    const q = safeTrim(query?.q || query?.search);
+    const facets = normalizeFacets(query?.facets);
+
+    if (isSolrEnabled() && college) {
+      const solr = createSolrService();
+      const fq = [
+        `product_college_s:${solrPhrase(college)}`,
+        ...(onlyAvailable ? ['product_availability_l:[1 TO *]'] : []),
+        ...toArray(query?.fq).map((v) => safeTrim(v)).filter(Boolean)
+      ];
+      const sort = parseProductSort(query, { hasQuery: Boolean(q) });
+      const role = safeTrim(user?.role || 'coordinator').toLowerCase();
+
+      const solrResult = await solr.search('products', {
+        q,
+        role,
+        page: 1,
+        pageSize: limit,
+        start: skip,
+        facets,
+        sort,
+        fq
+      });
+
+      if (solrResult?.success === true) {
+        const idStrings = (solrResult.docs || [])
+          .map((d) => parseMongoIdFromSolrId('products', d?.id))
+          .filter((idStr) => ObjectId.isValid(idStr));
+        const objectIds = idStrings.map((idStr) => new ObjectId(idStr));
+
+        const rows = objectIds.length
+          ? await ProductsModel.findMany(database, { _id: { $in: objectIds }, college: college }, {
+            projection: {
+              name: 1,
+              category: 1,
+              price: 1,
+              image_url: 1,
+              image_urls: 1,
+              availability: 1,
+              coordinator: 1,
+              college: 1,
+              comments_enabled: 1
+            }
+          })
+          : [];
+
+        const ordered = sortByIdOrder(rows, objectIds);
+        const normalized = (ordered || []).map((p) => ({
+          ...p,
+          _id: p._id ? p._id.toString() : '',
+          imageUrl: p.image_url || p.imageUrl || (Array.isArray(p.image_urls) ? p.image_urls[0] : ''),
+          image_urls: Array.from(new Set([
+            ...(Array.isArray(p.image_urls)
+              ? p.image_urls
+              : (typeof p.image_urls === 'string'
+                  ? p.image_urls.split(',').map((s) => s.trim())
+                  : [])),
+            p.image_url,
+            p.imageUrl
+          ].filter(Boolean))),
+          comments_enabled: !!p.comments_enabled
+        }));
+
+        const response = { products: normalized, totalProducts: solrResult.total || 0, pagination: { limit, skip } };
+        if (facets.length) response.facetCounts = solrResult.facetCounts || {};
+        return response;
+      }
+
+      console.error('coordinator.storeService.getProducts solr failed:', solrResult?.error || 'unknown');
+    }
 
     const filter = {
       college: college,
@@ -154,6 +279,10 @@ const StoreService = {
 
     const result = await ProductsModel.insertOne(database, product);
     if (result.insertedId) {
+      if (isSolrEnabled()) {
+        const solr = createSolrService();
+        await solr.indexDocument('products', mapProductToSolrDoc({ ...product, _id: result.insertedId }));
+      }
       await Cache.invalidateTags(['store'], { reason: 'coordinator.store.addProduct' });
       return { success: true, message: 'Product added successfully' };
     }
@@ -251,6 +380,10 @@ const StoreService = {
     }
 
     const updated = await ProductsModel.findOne(database, { _id: new ObjectId(productId) });
+    if (isSolrEnabled()) {
+      const solr = createSolrService();
+      await solr.indexDocument('products', mapProductToSolrDoc(updated));
+    }
     await Cache.invalidateTags(['store'], { reason: 'coordinator.store.updateProduct' });
     return { success: true, product: updated };
   },
@@ -282,6 +415,10 @@ const StoreService = {
     }
 
     await ProductsModel.deleteOne(database, { _id: new ObjectId(productId) });
+    if (isSolrEnabled()) {
+      const solr = createSolrService();
+      await solr.deleteDocument('products', productId);
+    }
     await Cache.invalidateTags(['store'], { reason: 'coordinator.store.deleteProduct' });
     return { success: true };
   },
@@ -307,6 +444,11 @@ const StoreService = {
       { _id: new ObjectId(productId) },
       { $set: { comments_enabled: nextValue } }
     );
+
+    if (isSolrEnabled()) {
+      const solr = createSolrService();
+      await solr.indexDocument('products', mapProductToSolrDoc({ ...product, comments_enabled: nextValue, updated_date: new Date() }));
+    }
 
     await Cache.invalidateTags(['store'], { reason: 'coordinator.store.toggleComments' });
     return { success: true, comments_enabled: nextValue };

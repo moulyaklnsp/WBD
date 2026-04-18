@@ -14,6 +14,7 @@ const FeedbackService = require('../services/coordinator/feedbackService');
 const AnnouncementsService = require('../services/coordinator/announcementsService');
 const ChessEventsService = require('../services/coordinator/chessEventsService');
 const Cache = require('../utils/cache');
+const { isSolrEnabled } = require('../solr/solrEnabled');
 
 let multer;
 try { multer = require('multer'); } catch (e) { multer = null; }
@@ -563,7 +564,23 @@ const getProducts = async (req, res) => {
   try {
     const user = getSessionUser(req, res);
     if (!user) return;
-    const data = await StoreService.getProducts(null, user, req.query);
+
+    const q = (req.query.q || req.query.search || '').toString().trim();
+    const facets = (req.query.facets || '').toString().trim();
+    const sort = (req.query.sort || req.query.sortBy || '').toString().trim();
+    const page = req.query.page != null ? parseInt(String(req.query.page), 10) : undefined;
+    const pageSize = req.query.pageSize != null ? parseInt(String(req.query.pageSize), 10) : undefined;
+
+    const query = {
+      ...req.query,
+      q,
+      facets: facets || undefined,
+      sort: sort || undefined,
+      page: Number.isFinite(page) && page > 0 ? page : undefined,
+      pageSize: Number.isFinite(pageSize) && pageSize > 0 ? Math.min(pageSize, 200) : undefined
+    };
+
+    const data = await StoreService.getProducts(null, user, query);
     return res.status(200).json(data);
   } catch (error) {
     console.error('Error fetching products:', error);
@@ -777,14 +794,29 @@ const getBlogs = async (req, res) => {
 
 const getPublishedBlogsPublic = async (req, res) => {
   try {
-    const cacheKey = Cache.keys.blogsPublished();
+    const q = (req.query.q || '').toString().trim();
+    const facets = (req.query.facets || '').toString().trim();
+    const sort = (req.query.sort || '').toString().trim();
+    const page = req.query.page != null ? parseInt(String(req.query.page), 10) : 1;
+    const pageSize = req.query.pageSize != null ? parseInt(String(req.query.pageSize), 10) : 0;
+
+    const engine = isSolrEnabled() ? 'solr' : 'db';
+    const cacheKey = Cache.keys.blogsPublished({
+      q: (q || 'none').toLowerCase(),
+      page: Number.isFinite(page) && page > 0 ? page : 1,
+      pageSize: Number.isFinite(pageSize) && pageSize > 0 ? Math.min(pageSize, 200) : 0,
+      sort: (sort || 'default').toLowerCase(),
+      facets: facets || 'none',
+      engine
+    });
     const { value } = await Cache.cacheAsideJson({
       key: cacheKey,
       ttlSeconds: Cache.config.ttl.longSeconds,
       tags: ['blogs'],
       res,
       label: 'GET /api/public/coordinator-blogs',
-      fetcher: async () => BlogsService.getPublishedBlogsPublic(null)
+      fetcher: async () => BlogsService.getPublishedBlogsPublic(null, { q, facets, sort, page, pageSize }),
+      cacheWhen: (result) => String(result?._meta?.engine || 'db') === engine
     });
     return res.status(200).json(value);
   } catch (error) {

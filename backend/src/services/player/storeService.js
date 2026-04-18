@@ -11,9 +11,69 @@ const ProductsModel = getModel('products');
 const SalesModel = getModel('sales');
 const OrdersModel = getModel('orders');
 const ReviewsModel = getModel('reviews');
+const { createSolrService } = require('../../solr/SolrService');
+const { isSolrEnabled } = require('../../solr/solrEnabled');
+const { mapProductToSolrDoc } = require('../../solr/mappers/productMapper');
 
 const createError = (message, statusCode) => Object.assign(new Error(message), { statusCode });
 const resolveDb = async (db) => (db ? db : connectDB());
+
+function safeTrim(value) {
+  return String(value == null ? '' : value).trim();
+}
+
+function toArray(value) {
+  if (value == null) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+function toPositiveInt(value, fallback) {
+  const n = Number.parseInt(String(value), 10);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return n;
+}
+
+function normalizeFacets(value) {
+  const raw = Array.isArray(value) ? value : (safeTrim(value) ? safeTrim(value).split(',') : []);
+  const allow = new Set(['product_category_s', 'product_college_s']);
+  return raw.map((v) => safeTrim(v)).filter((v) => allow.has(v));
+}
+
+function parseMongoIdFromSolrId(entity, solrId) {
+  const raw = safeTrim(solrId);
+  const prefix = `${entity}:`;
+  if (raw.startsWith(prefix)) return raw.slice(prefix.length);
+  return raw;
+}
+
+function sortByIdOrder(items, ids) {
+  const order = new Map(ids.map((id, idx) => [String(id), idx]));
+  return (items || [])
+    .slice()
+    .sort((a, b) => (order.get(String(a?._id)) ?? 1e9) - (order.get(String(b?._id)) ?? 1e9));
+}
+
+function parseProductSortToSolr(query, { hasQuery } = {}) {
+  const raw = safeTrim(query?.sort || query?.sortBy || query?.orderBy).toLowerCase();
+  const direction = safeTrim(query?.order || query?.direction).toLowerCase() === 'asc' ? 'asc' : 'desc';
+
+  if (!raw) return hasQuery ? 'score desc, created_at_dt desc' : 'created_at_dt desc';
+
+  if (raw === 'newest') return 'created_at_dt desc';
+  if (raw === 'oldest') return 'created_at_dt asc';
+  if (raw === 'name' || raw === 'name_asc') return 'product_name_s asc, created_at_dt desc';
+  if (raw === 'name_desc') return 'product_name_s desc, created_at_dt desc';
+  if (raw === 'price' || raw === 'price_asc') return 'product_price_f asc, created_at_dt desc';
+  if (raw === 'price_desc') return 'product_price_f desc, created_at_dt desc';
+  if (raw === 'availability' || raw === 'availability_desc') return 'product_availability_l desc, created_at_dt desc';
+  if (raw === 'availability_asc') return 'product_availability_l asc, created_at_dt desc';
+
+  if (raw === 'product_name_s') return `product_name_s ${direction}, created_at_dt desc`;
+  if (raw === 'product_price_f') return `product_price_f ${direction}, created_at_dt desc`;
+  if (raw === 'product_availability_l') return `product_availability_l ${direction}, created_at_dt desc`;
+
+  return hasQuery ? 'score desc, created_at_dt desc' : 'created_at_dt desc';
+}
 
 const StoreService = {
   async getStore(db, user, query = {}) {
@@ -50,6 +110,93 @@ const StoreService = {
 
     const buyerKey = normalizeKey(row.name || row.email);
     const userEmail = String(row.email || user?.email || '').trim();
+
+    if (isSolrEnabled()) {
+      const solr = createSolrService();
+      const q = safeTrim(query?.q || query?.search);
+      const facets = normalizeFacets(query?.facets);
+      const sortSolr = parseProductSortToSolr(query, { hasQuery: Boolean(q) });
+
+      const fq = [
+        ...(onlyAvailable ? ['product_availability_l:[1 TO *]'] : []),
+        ...toArray(query?.fq).map((v) => safeTrim(v)).filter(Boolean)
+      ];
+
+      const solrResult = await solr.search('products', {
+        q,
+        role: safeTrim(user?.role || 'player').toLowerCase(),
+        page: 1,
+        pageSize: limit,
+        start: skip,
+        sort: sortSolr,
+        facets,
+        fq
+      });
+
+      if (solrResult?.success === true) {
+        const idStrings = (solrResult.docs || [])
+          .map((d) => parseMongoIdFromSolrId('products', d?.id))
+          .filter((idStr) => ObjectId.isValid(idStr));
+        const objectIds = idStrings.map((idStr) => new ObjectId(idStr));
+
+        const [products, sales, orders] = await Promise.all([
+          objectIds.length ? ProductsModel.findMany(database, { _id: { $in: objectIds } }) : [],
+          objectIds.length
+            ? SalesModel.findMany(database, {
+              product_id: { $in: objectIds },
+              $or: [{ buyer_id: row._id }, { buyer_key: buyerKey }]
+            }, { projection: { product_id: 1 } })
+            : [],
+          objectIds.length
+            ? OrdersModel.findMany(database, {
+              user_email: userEmail,
+              status: { $ne: 'cancelled' },
+              'items.productId': { $in: objectIds }
+            }, { projection: { items: 1 } })
+            : []
+        ]);
+
+        const purchased = new Set();
+        (sales || []).forEach((s) => {
+          if (s?.product_id) purchased.add(String(s.product_id));
+        });
+        (orders || []).forEach((o) => {
+          (Array.isArray(o?.items) ? o.items : []).forEach((item) => {
+            if (item?.productId) purchased.add(String(item.productId));
+          });
+        });
+
+        const ordered = sortByIdOrder(products, objectIds);
+        const normalizedProducts = (ordered || []).map((p) => {
+          const imageUrls = normalizeProductImages(p);
+          const pid = p?._id ? String(p._id) : '';
+          return {
+            ...p,
+            _id: pid,
+            image: imageUrls[0] || '',
+            image_url: p.image_url || imageUrls[0] || '',
+            image_urls: imageUrls,
+            comments_enabled: !!p.comments_enabled,
+            canReview: purchased.has(pid)
+          };
+        });
+
+        const payload = {
+          products: normalizedProducts,
+          totalProducts: solrResult.total || 0,
+          walletBalance: row.wallet_balance || 0,
+          playerName: row.name,
+          playerCollege: row.college,
+          subscription,
+          discountPercentage,
+          pagination: { limit, skip }
+        };
+        if (facets.length) payload.facetCounts = solrResult.facetCounts || {};
+        return payload;
+      }
+
+      console.error('player.storeService.getStore solr failed:', solrResult?.error || 'unknown');
+    }
 
     const [productPage] = await database.collection('products').aggregate([
       { $match: productMatch },
@@ -197,6 +344,12 @@ const StoreService = {
       { _id: new ObjectId(productId) },
       { $inc: { availability: -1 } }
     );
+
+    if (isSolrEnabled()) {
+      const nextAvailability = Math.max(0, (Number(product?.availability) || 0) - 1);
+      const solr = createSolrService();
+      await solr.indexDocument('products', mapProductToSolrDoc({ ...product, availability: nextAvailability, updated_date: new Date() }));
+    }
 
     await SalesModel.updateOne(
       database,

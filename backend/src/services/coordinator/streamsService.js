@@ -3,6 +3,9 @@ const { ObjectId } = require('mongodb');
 const { normalizePlatform, normalizeStreamType, safeTrim, requireCoordinator } = require('./coordinatorUtils');
 const { getModel } = require('../../models');
 const Cache = require('../../utils/cache');
+const { createSolrService } = require('../../solr/SolrService');
+const { isSolrEnabled } = require('../../solr/solrEnabled');
+const { mapStreamToSolrDoc } = require('../../solr/mappers/streamMapper');
 const StreamsModel = getModel('streams');
 const UserModel = getModel('users');
 
@@ -74,6 +77,15 @@ const StreamsService = {
 
     const result = await StreamsModel.insertOne(database, doc);
     await Cache.invalidateTags(['streams'], { reason: 'streams.create' });
+
+    if (isSolrEnabled()) {
+      try {
+        const solr = createSolrService();
+        await solr.indexDocument('streams', mapStreamToSolrDoc({ ...doc, _id: result.insertedId }));
+      } catch (e) {
+        console.error('[solr] Failed to index stream create:', e?.message || e);
+      }
+    }
     return { ...doc, _id: result.insertedId.toString() };
   },
 
@@ -125,6 +137,15 @@ const StreamsService = {
     const updated = await StreamsModel.findOne(database, filter);
 
     await Cache.invalidateTags(['streams'], { reason: 'streams.update' });
+
+    if (isSolrEnabled() && updated) {
+      try {
+        const solr = createSolrService();
+        await solr.indexDocument('streams', mapStreamToSolrDoc(updated));
+      } catch (e) {
+        console.error('[solr] Failed to index stream update:', e?.message || e);
+      }
+    }
     return {
       ...(updated || {}),
       _id: updated?._id ? updated._id.toString() : undefined
@@ -141,6 +162,15 @@ const StreamsService = {
 
     if (result.deletedCount === 0) throw createError('Stream not found', 404);
     await Cache.invalidateTags(['streams'], { reason: 'streams.delete' });
+
+    if (isSolrEnabled()) {
+      try {
+        const solr = createSolrService();
+        await solr.deleteDocument('streams', `streams:${id}`);
+      } catch (e) {
+        console.error('[solr] Failed to delete stream from index:', e?.message || e);
+      }
+    }
     return { success: true };
   }
 };

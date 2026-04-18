@@ -10,6 +10,7 @@ function loadCoordinatorStoreServiceWithMocks(overrides = {}) {
     },
     products: {
       findMany: jest.fn(async () => []),
+      findManyPaginated: jest.fn(async () => ({ items: [], total: 0, limit: 50, skip: 0 })),
       findOne: jest.fn(async () => null),
       insertOne: jest.fn(async () => ({ insertedId: new ObjectId() })),
       ...overrides.products
@@ -107,13 +108,18 @@ describe('coordinator/storeService', () => {
   test('getProducts normalizes image urls and booleans', async () => {
     const { StoreService } = loadCoordinatorStoreServiceWithMocks({
       products: {
-        findMany: jest.fn(async () => [{
-          _id: new ObjectId(),
-          name: 'P1',
-          image_urls: 'https://a/x.png, https://b/y.png',
-          imageUrl: 'https://c/z.png',
-          comments_enabled: 0
-        }])
+        findManyPaginated: jest.fn(async () => ({
+          items: [{
+            _id: new ObjectId(),
+            name: 'P1',
+            image_urls: 'https://a/x.png, https://b/y.png',
+            imageUrl: 'https://c/z.png',
+            comments_enabled: 0
+          }],
+          total: 1,
+          limit: 50,
+          skip: 0
+        }))
       }
     });
 

@@ -4,6 +4,9 @@ const StorageModel = require('../../models/StorageModel');
 const { safeTrim, requireCoordinator } = require('./coordinatorUtils');
 const { getModel } = require('../../models');
 const Cache = require('../../utils/cache');
+const { createSolrService } = require('../../solr/SolrService');
+const { isSolrEnabled } = require('../../solr/solrEnabled');
+const { mapBlogToSolrDoc } = require('../../solr/mappers/blogMapper');
 const BlogsModel = getModel('blogs');
 const BlogReviewsModel = getModel('blog_reviews');
 
@@ -56,6 +59,12 @@ function normalizeBlogBlocks(rawBlocks) {
     .filter(Boolean);
 }
 
+function normalizeFacets(value) {
+  const raw = Array.isArray(value) ? value : (safeTrim(value) ? safeTrim(value).split(',') : []);
+  const allow = new Set(['blog_status_s']);
+  return raw.map((v) => safeTrim(v)).filter((v) => allow.has(v));
+}
+
 function normalizeBlogResponse(blog) {
   const imageCandidate = [
     blog?.image_url,
@@ -94,26 +103,83 @@ const BlogsService = {
     return { blogs: (blogs || []).map(normalizeBlogResponse) };
   },
 
-  async getPublishedBlogsPublic(db) {
+  async getPublishedBlogsPublic(db, query = {}) {
     const database = await resolveDb(db);
-    const blogs = await BlogsModel.findMany(
-      database,
-      {
-        $or: [
-          { status: 'published' },
-          { published: true }
-        ]
-      },
-      {
-        sort: {
-          published_at: -1,
-          updated_date: -1,
-          created_date: -1
-        }
-      }
-    );
 
-    return { blogs: (blogs || []).map(normalizeBlogResponse) };
+    const q = safeTrim(query?.q || query?.search || '');
+    const page = Number.parseInt(query?.page, 10);
+    const pageSize = Number.parseInt(query?.pageSize ?? query?.limit, 10);
+    const facets = normalizeFacets(query?.facets);
+    const sortRaw = safeTrim(query?.sort || '');
+
+    if (isSolrEnabled()) {
+      const solr = createSolrService();
+      const fq = ['(blog_status_s:published OR blog_published_b:true)'];
+
+      const sort =
+        sortRaw === 'published_at_asc'
+          ? 'blog_published_at_dt asc, blog_updated_date_dt desc, blog_created_date_dt desc'
+          : 'blog_published_at_dt desc, blog_updated_date_dt desc, blog_created_date_dt desc';
+
+      const solrResult = await solr.search('blogs', {
+        q,
+        role: 'public',
+        page: Number.isFinite(page) && page > 0 ? page : 1,
+        pageSize: Number.isFinite(pageSize) && pageSize > 0 ? Math.min(pageSize, 200) : 50,
+        facets,
+        sort,
+        fq
+      });
+
+      if (solrResult?.success === true) {
+        const ids = (solrResult.docs || [])
+          .map((d) => String(d?.id || ''))
+          .filter(Boolean)
+          .map((rawId) => rawId.startsWith('blogs:') ? rawId.slice('blogs:'.length) : rawId)
+          .filter((id) => ObjectId.isValid(id))
+          .map((id) => new ObjectId(id));
+
+        const rows = ids.length
+          ? await BlogsModel.findMany(database, { _id: { $in: ids } })
+          : [];
+
+        const byId = new Map((rows || []).map((b) => [String(b?._id), b]));
+        const ordered = ids.map((oid) => byId.get(String(oid))).filter(Boolean);
+
+        const response = { blogs: ordered.map(normalizeBlogResponse) };
+        if (solrResult.facetCounts) response.facetCounts = solrResult.facetCounts;
+        response.totalResults = solrResult.total || ordered.length;
+        response._meta = { engine: 'solr' };
+        return response;
+      }
+
+      console.error('BlogsService.getPublishedBlogsPublic solr failed:', solrResult?.error || 'unknown');
+    }
+
+    const filter = {
+      $or: [
+        { status: 'published' },
+        { published: true }
+      ]
+    };
+
+    if (q) {
+      filter.$text = { $search: q };
+    }
+
+    const options = {
+      sort: q
+        ? { score: { $meta: 'textScore' }, published_at: -1, updated_date: -1, created_date: -1 }
+        : { published_at: -1, updated_date: -1, created_date: -1 }
+    };
+    if (q) options.projection = { score: { $meta: 'textScore' } };
+
+    let blogs = await BlogsModel.findMany(database, filter, options);
+    const limit = Number.isFinite(pageSize) && pageSize > 0 ? Math.min(pageSize, 200) : null;
+    const skip = Number.isFinite(page) && page > 0 && limit ? (page - 1) * limit : 0;
+    if (limit) blogs = (blogs || []).slice(skip, skip + limit);
+
+    return { blogs: (blogs || []).map(normalizeBlogResponse), _meta: { engine: 'db' } };
   },
 
   async getBlogById(db, user, { id }) {
@@ -300,6 +366,15 @@ const BlogsService = {
 
     await Cache.invalidateTags(['blogs'], { reason: 'blogs.create' });
 
+    if (isSolrEnabled()) {
+      try {
+        const solr = createSolrService();
+        await solr.indexDocument('blogs', mapBlogToSolrDoc(blog));
+      } catch (e) {
+        console.error('[solr] Failed to index blog create:', e?.message || e);
+      }
+    }
+
     return { success: true, blog: normalizeBlogResponse(blog) };
   },
 
@@ -440,6 +515,18 @@ const BlogsService = {
 
     await Cache.invalidateTags(['blogs'], { reason: 'blogs.update' });
 
+    if (isSolrEnabled()) {
+      try {
+        const updated = await BlogsModel.findOne(database, { _id: new ObjectId(id) });
+        if (updated) {
+          const solr = createSolrService();
+          await solr.indexDocument('blogs', mapBlogToSolrDoc(updated));
+        }
+      } catch (e) {
+        console.error('[solr] Failed to index blog update:', e?.message || e);
+      }
+    }
+
     return { success: true };
   },
 
@@ -459,6 +546,15 @@ const BlogsService = {
     await BlogsModel.deleteOne(database, { _id: new ObjectId(id) });
 
     await Cache.invalidateTags(['blogs'], { reason: 'blogs.delete' });
+
+    if (isSolrEnabled()) {
+      try {
+        const solr = createSolrService();
+        await solr.deleteDocument('blogs', `blogs:${id}`);
+      } catch (e) {
+        console.error('[solr] Failed to delete blog from index:', e?.message || e);
+      }
+    }
     return { success: true };
   }
 };

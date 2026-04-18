@@ -21,8 +21,8 @@ function buildKey(...parts) {
 
 const keys = {
   // Users
-  usersSearch({ role = 'all', q = 'none' } = {}) {
-    return buildKey('users', 'search', 'role', role, 'q', q);
+  usersSearch({ role = 'all', q = 'none', page = 1, pageSize = 200, sort = 'default', facets = 'none', engine = 'db' } = {}) {
+    return buildKey('users', 'search', 'engine', engine, 'role', role, 'q', q, 'page', page, 'pageSize', pageSize, 'sort', sort, 'facets', facets);
   },
 
   // Tournaments
@@ -37,8 +37,11 @@ const keys = {
   },
 
   // Blogs
-  blogsPublished() {
-    return buildKey('blogs', 'published');
+  blogsPublished({ q = 'none', page = 1, pageSize = 0, sort = 'default', facets = 'none', engine = 'db' } = {}) {
+    // Keep the old key for the legacy "no query params" call path.
+    const hasQuery = Boolean((q && q !== 'none') || page !== 1 || (pageSize && pageSize !== 0) || (sort && sort !== 'default') || (facets && facets !== 'none') || (engine && engine !== 'db'));
+    if (!hasQuery) return buildKey('blogs', 'published');
+    return buildKey('blogs', 'published', 'engine', engine, 'q', q, 'page', page, 'pageSize', pageSize, 'sort', sort, 'facets', facets);
   },
   blogPublic(id) {
     return buildKey('blogs', 'public', id || 'none');
@@ -48,16 +51,24 @@ const keys = {
   },
 
   // Streams
-  streamsPlayer() {
-    return buildKey('streams', 'player');
+  streamsPlayer({ q = 'none', page = 1, pageSize = 0, sort = 'default', facets = 'none', engine = 'db' } = {}) {
+    const hasQuery = Boolean((q && q !== 'none') || page !== 1 || (pageSize && pageSize !== 0) || (sort && sort !== 'default') || (facets && facets !== 'none') || (engine && engine !== 'db'));
+    if (!hasQuery) return buildKey('streams', 'player');
+    return buildKey('streams', 'player', 'engine', engine, 'q', q, 'page', page, 'pageSize', pageSize, 'sort', sort, 'facets', facets);
   },
 
   // Player notifications / news
-  announcementsPlayer() {
-    return buildKey('announcements', 'player');
+  announcementsPlayer({ q = 'none', page = 1, pageSize = 0, sort = 'default', facets = 'none', engine = 'db' } = {}) {
+    const hasQuery = Boolean((q && q !== 'none') || page !== 1 || (pageSize && pageSize !== 0) || (sort && sort !== 'default') || (facets && facets !== 'none') || (engine && engine !== 'db'));
+    if (!hasQuery) return buildKey('announcements', 'player');
+    return buildKey('announcements', 'player', 'engine', engine, 'q', q, 'page', page, 'pageSize', pageSize, 'sort', sort, 'facets', facets);
   },
   newsPlayer() {
     return buildKey('news', 'player');
+  },
+  newsPlayerV2({ engine = 'db' } = {}) {
+    if (!engine || engine === 'db') return buildKey('news', 'player');
+    return buildKey('news', 'player', 'engine', engine);
   },
 
   // Store

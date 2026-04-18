@@ -6,6 +6,10 @@ const bcrypt = require('bcryptjs');
 const { sendOtpEmail, sendForgotPasswordOtp } = require('./emailService');
 const { generateTokenPair } = require('../utils/jwt');
 const { normalizeKey } = require('../utils/mongo');
+const { createSolrService } = require('../solr/SolrService');
+const { isSolrEnabled } = require('../solr/solrEnabled');
+const { mapUserToSolrDoc } = require('../solr/mappers/userMapper');
+const { mapContactToSolrDoc } = require('../solr/mappers/contactMapper');
 
 const BCRYPT_ROUNDS = 12;
 const isBcryptHash = (value) => typeof value === 'string' && /^\$2[aby]\$/.test(value);
@@ -154,6 +158,15 @@ const AuthApiService = {
 
     const result = await db.collection('users').insertOne(user);
     const userId = result.insertedId;
+
+    if (isSolrEnabled()) {
+      try {
+        const solr = createSolrService();
+        await solr.indexDocument('users', mapUserToSolrDoc({ ...user, _id: userId }));
+      } catch (e) {
+        console.error('[solr] Failed to index user signup:', e?.message || e);
+      }
+    }
 
     await db.collection('signup_otps').deleteOne({ _id: signupRecord._id });
 
@@ -333,14 +346,24 @@ const AuthApiService = {
     }
 
     const sessionEmail = String(session?.userEmail || '').trim().toLowerCase();
-    await db.collection('contact').insertOne({
+    const doc = {
       name,
       email,
       message,
       submission_date: new Date(),
       status: 'pending',
       submitted_by: sessionEmail || String(email || '').trim().toLowerCase()
-    });
+    };
+    const result = await db.collection('contact').insertOne(doc);
+
+    if (isSolrEnabled()) {
+      try {
+        const solr = createSolrService();
+        await solr.indexDocument('contact', mapContactToSolrDoc({ ...doc, _id: result.insertedId }));
+      } catch (e) {
+        console.error('[solr] Failed to index contact message:', e?.message || e);
+      }
+    }
 
     return { message: 'Message sent successfully!' };
   },

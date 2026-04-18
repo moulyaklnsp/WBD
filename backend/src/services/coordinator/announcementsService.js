@@ -2,6 +2,9 @@ const { connectDB } = require('../../config/database');
 const { requireCoordinator } = require('./coordinatorUtils');
 const { getModel } = require('../../models');
 const Cache = require('../../utils/cache');
+const { createSolrService } = require('../../solr/SolrService');
+const { isSolrEnabled } = require('../../solr/solrEnabled');
+const { mapAnnouncementToSolrDoc } = require('../../solr/mappers/announcementMapper');
 const AnnouncementsModel = getModel('announcements');
 const resolveDb = async (db) => (db ? db : connectDB());
 
@@ -26,6 +29,15 @@ const AnnouncementsService = {
 
     if (io) {
       io.emit('liveAnnouncement', announcement);
+    }
+
+    if (isSolrEnabled()) {
+      try {
+        const solr = createSolrService();
+        await solr.indexDocument('announcements', mapAnnouncementToSolrDoc(announcement));
+      } catch (e) {
+        console.error('[solr] Failed to index announcement:', e?.message || e);
+      }
     }
 
     await Cache.invalidateTags(['announcements'], { reason: 'announcements.post' });

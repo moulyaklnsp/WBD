@@ -11,6 +11,7 @@ const StreamsService = require('../services/player/streamsService');
 const WalletService = require('../services/player/walletService');
 const ComplaintsService = require('../services/player/complaintsService');
 const Cache = require('../utils/cache');
+const { isSolrEnabled } = require('../solr/solrEnabled');
 
 let multer;
 try { multer = require('multer'); } catch (e) { multer = null; }
@@ -208,7 +209,23 @@ const getStore = async (req, res) => {
   try {
     const user = getSessionUser(req, res);
     if (!user) return;
-    const data = await StoreService.getStore(null, user, req.query);
+
+    const q = (req.query.q || req.query.search || '').toString().trim();
+    const facets = (req.query.facets || '').toString().trim();
+    const sort = (req.query.sort || req.query.sortBy || '').toString().trim();
+    const page = req.query.page != null ? parseInt(String(req.query.page), 10) : undefined;
+    const pageSize = req.query.pageSize != null ? parseInt(String(req.query.pageSize), 10) : undefined;
+
+    const query = {
+      ...req.query,
+      q,
+      facets: facets || undefined,
+      sort: sort || undefined,
+      page: Number.isFinite(page) && page > 0 ? page : undefined,
+      pageSize: Number.isFinite(pageSize) && pageSize > 0 ? Math.min(pageSize, 200) : undefined
+    };
+
+    const data = await StoreService.getStore(null, user, query);
     return res.status(200).json(data);
   } catch (error) {
     console.error('Error fetching store:', error);
@@ -700,16 +717,39 @@ const getPlayerStreams = async (req, res) => {
   try {
     const user = getSessionUser(req, res);
     if (!user) return;
-    const cacheKey = Cache.keys.streamsPlayer();
+
+    const q = (req.query.q || '').toString().trim();
+    const facets = (req.query.facets || '').toString().trim();
+    const sort = (req.query.sort || '').toString().trim();
+    const page = req.query.page != null ? parseInt(String(req.query.page), 10) : 1;
+    const pageSize = req.query.pageSize != null ? parseInt(String(req.query.pageSize), 10) : 0;
+
+    const engine = isSolrEnabled() ? 'solr' : 'db';
+
+    const cacheKey = Cache.keys.streamsPlayer({
+      q: (q || 'none').toLowerCase(),
+      page: Number.isFinite(page) && page > 0 ? page : 1,
+      pageSize: Number.isFinite(pageSize) && pageSize > 0 ? Math.min(pageSize, 200) : 0,
+      sort: (sort || 'default').toLowerCase(),
+      facets: facets || 'none',
+      engine
+    });
+
     const { value } = await Cache.cacheAsideJson({
       key: cacheKey,
       ttlSeconds: 60,
       tags: ['streams'],
       res,
       label: 'GET /player/api/streams',
-      fetcher: async () => StreamsService.getPlayerStreams(null, user)
+      fetcher: async () => StreamsService.getPlayerStreams(null, user, { q, facets, sort, page, pageSize }),
+      cacheWhen: (result) => {
+        if (Array.isArray(result)) return engine === 'db';
+        return String(result?._meta?.engine || 'db') === engine;
+      }
     });
-    return res.status(200).json(value);
+
+    const list = Array.isArray(value) ? value : (value?.streams || []);
+    return res.status(200).json(list);
   } catch (error) {
     console.error('Error fetching streams for player:', error);
     return sendError(res, error, 'Failed to fetch streams');
@@ -720,16 +760,39 @@ const getAnnouncements = async (req, res) => {
   try {
     const user = getSessionUser(req, res);
     if (!user) return;
-    const cacheKey = Cache.keys.announcementsPlayer();
+
+    const q = (req.query.q || '').toString().trim();
+    const facets = (req.query.facets || '').toString().trim();
+    const sort = (req.query.sort || '').toString().trim();
+    const page = req.query.page != null ? parseInt(String(req.query.page), 10) : 1;
+    const pageSize = req.query.pageSize != null ? parseInt(String(req.query.pageSize), 10) : 0;
+
+    const engine = isSolrEnabled() ? 'solr' : 'db';
+
+    const cacheKey = Cache.keys.announcementsPlayer({
+      q: (q || 'none').toLowerCase(),
+      page: Number.isFinite(page) && page > 0 ? page : 1,
+      pageSize: Number.isFinite(pageSize) && pageSize > 0 ? Math.min(pageSize, 200) : 0,
+      sort: (sort || 'default').toLowerCase(),
+      facets: facets || 'none',
+      engine
+    });
+
     const { value } = await Cache.cacheAsideJson({
       key: cacheKey,
       ttlSeconds: Cache.config.ttl.defaultSeconds,
       tags: ['announcements'],
       res,
       label: 'GET /player/api/announcements',
-      fetcher: async () => NotificationsService.getAnnouncements(null)
+      fetcher: async () => NotificationsService.getAnnouncements(null, user, { q, facets, sort, page, pageSize }),
+      cacheWhen: (result) => {
+        if (Array.isArray(result)) return engine === 'db';
+        return String(result?._meta?.engine || 'db') === engine;
+      }
     });
-    return res.status(200).json(value);
+
+    const list = Array.isArray(value) ? value : (value?.announcements || []);
+    return res.status(200).json(list);
   } catch (error) {
     console.error('Error fetching announcements:', error);
     return sendError(res, error, 'Failed to fetch announcements');
@@ -740,14 +803,19 @@ const getNews = async (req, res) => {
   try {
     const user = getSessionUser(req, res);
     if (!user) return;
-    const cacheKey = Cache.keys.newsPlayer();
+    const engine = isSolrEnabled() ? 'solr' : 'db';
+    const cacheKey = Cache.keys.newsPlayerV2({ engine });
     const { value } = await Cache.cacheAsideJson({
       key: cacheKey,
       ttlSeconds: Cache.config.ttl.defaultSeconds,
       tags: ['news'],
       res,
       label: 'GET /player/api/news',
-      fetcher: async () => NotificationsService.getNews(null)
+      fetcher: async () => NotificationsService.getNews(null),
+      cacheWhen: (result) => {
+        if (!result || typeof result !== 'object') return engine === 'db';
+        return String(result?._meta?.engine || 'db') === engine;
+      }
     });
     return res.status(200).json(value);
   } catch (error) {
