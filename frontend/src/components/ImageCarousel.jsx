@@ -6,11 +6,12 @@ export default function ImageCarousel({ images = [], maxHeight = 400, className 
     () => (Array.isArray(images) ? images.filter((img) => typeof img === 'string' && img.trim()) : []),
     [images]
   );
+  const normalizedKey = useMemo(() => normalized.join('|'), [normalized]);
   const [index, setIndex] = useState(0);
 
   useEffect(() => {
     setIndex(0);
-  }, [normalized.join('|')]);
+  }, [normalizedKey]);
 
   if (normalized.length === 0) return null;
 

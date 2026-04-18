@@ -20,7 +20,6 @@ export default function PaymentGatewayModal({ walletBalance = 0, onClose, onSucc
   // Processing step animation
   useEffect(() => {
     if (step !== 'processing') return;
-    let idx = 0;
     setProcStep(0);
     const timers = [];
     let cumulative = 0;

@@ -398,7 +398,7 @@ export function initTokenManager() {
   }
 }
 
-export default {
+const tokenManager = {
   storeTokens,
   getAccessToken,
   getRefreshToken,
@@ -411,3 +411,5 @@ export default {
   logoutUser,
   initTokenManager
 };
+
+export default tokenManager;

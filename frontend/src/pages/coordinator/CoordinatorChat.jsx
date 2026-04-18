@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import usePlayerTheme from '../../hooks/usePlayerTheme';
 import { createSocket } from '../../utils/socket';
 import EmojiPicker from 'emoji-picker-react';
 import ChatChoiceEmblem from '../../components/ChatChoiceEmblem';
@@ -12,7 +11,6 @@ const SOCKET_IO_PATH = '/socket.io/socket.io.js';
 
 function CoordinatorChat() {
   const navigate = useNavigate();
-  const [isDark, toggleTheme] = usePlayerTheme();
   const [role, setRole] = useState('Coordinator');
   const [username, setUsername] = useState('');
   const [joined, setJoined] = useState(false);
@@ -190,17 +188,6 @@ function CoordinatorChat() {
     } catch (e) {
       // ignore
     }
-  };
-
-  const openChatWith = (target) => {
-    const t = (target || '').trim();
-    if (!t) return;
-    if (t === username) {
-      alert('You cannot chat with yourself');
-      return;
-    }
-    if (!joined) joinChat();
-    setReceiver(t);
   };
 
   // Persist selected receiver to localStorage so reload keeps the chat open

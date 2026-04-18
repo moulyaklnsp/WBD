@@ -68,11 +68,17 @@ describe('organizer/analyticsService', () => {
 
   test('getDashboard returns organizer name and pending coordinator requests', async () => {
     const pending = [{ email: 'c@example.com' }];
+    const cursor = {
+      project: jest.fn(() => cursor),
+      sort: jest.fn(() => cursor),
+      limit: jest.fn(() => cursor),
+      toArray: jest.fn(async () => pending)
+    };
     const db = {
       collection: (name) => {
         if (name !== 'pending_coordinators') throw new Error('unexpected collection');
         return {
-          find: () => ({ toArray: async () => pending })
+          find: () => cursor
         };
       }
     };
@@ -88,37 +94,49 @@ describe('organizer/analyticsService', () => {
   });
 
   test('getGrowthAnalysis builds month series and summary', async () => {
-    const { AnalyticsService } = loadOrganizerAnalyticsServiceWithMocks({
-      users: {
-        findMany: jest.fn(async () => [
-          { role: 'player', created_at: '2025-01-05' },
-          { role: 'coordinator', created_at: '2025-02-01' }
-        ])
-      },
-      sales: {
-        findMany: jest.fn(async () => [
-          { price: 100, purchase_date: '2025-01-10' },
-          { price: 50, purchase_date: '2025-02-10' }
-        ])
-      },
-      tournaments: {
-        findMany: jest.fn(async () => [
-          { status: 'Approved', submitted_date: '2025-01-01' },
-          { status: 'Approved', submitted_date: '2025-02-01' }
-        ])
-      },
-      meetingsdb: {
-        findMany: jest.fn(async () => [{ created_at: '2025-01-15' }])
-      },
-      enrolledtournaments_team: {
-        findMany: jest.fn(async () => [{ enrollment_date: '2025-02-05' }])
-      },
-      tournament_players: {
-        findMany: jest.fn(async () => [{ enrollment_date: '2025-02-06' }])
-      }
+    const { AnalyticsService } = loadOrganizerAnalyticsServiceWithMocks();
+
+    const usersByMonth = [
+      { _id: '2025-01', count: 1, players: 1, coordinators: 0, organizers: 0 },
+      { _id: '2025-02', count: 1, players: 0, coordinators: 1, organizers: 0 }
+    ];
+    const userTotals = [
+      { _id: 'player', count: 1 },
+      { _id: 'coordinator', count: 1 }
+    ];
+    const salesByMonth = [
+      { _id: '2025-01', revenue: 100, transactions: 1 },
+      { _id: '2025-02', revenue: 50, transactions: 1 }
+    ];
+    const tournamentsByMonth = [
+      { _id: '2025-01', count: 1 },
+      { _id: '2025-02', count: 1 }
+    ];
+    const meetingsByMonth = [{ _id: '2025-01', count: 1 }];
+    const teamEnrollmentsByMonth = [{ _id: '2025-02', count: 1 }];
+    const individualEnrollmentsByMonth = [{ _id: '2025-02', count: 1 }];
+
+    const usersToArray = jest.fn()
+      .mockResolvedValueOnce(usersByMonth)
+      .mockResolvedValueOnce(userTotals);
+
+    const makeCollection = (toArrayFn) => ({
+      aggregate: () => ({ toArray: toArrayFn })
     });
 
-    const result = await AnalyticsService.getGrowthAnalysis({});
+    const db = {
+      collection: (name) => {
+        if (name === 'users') return makeCollection(usersToArray);
+        if (name === 'sales') return makeCollection(jest.fn(async () => salesByMonth));
+        if (name === 'tournaments') return makeCollection(jest.fn(async () => tournamentsByMonth));
+        if (name === 'meetingsdb') return makeCollection(jest.fn(async () => meetingsByMonth));
+        if (name === 'enrolledtournaments_team') return makeCollection(jest.fn(async () => teamEnrollmentsByMonth));
+        if (name === 'tournament_players') return makeCollection(jest.fn(async () => individualEnrollmentsByMonth));
+        throw new Error(`Unexpected collection: ${name}`);
+      }
+    };
+
+    const result = await AnalyticsService.getGrowthAnalysis(db);
     expect(result.summary).toMatchObject({
       totalUsers: 2,
       totalPlayers: 1,

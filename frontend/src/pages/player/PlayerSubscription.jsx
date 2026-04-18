@@ -8,7 +8,6 @@ const PLAN_PRICES = {
   Basic: 99,
   Premium: 199
 };
-const MAX_WALLET_TOPUP = 5000;
 const MAX_WALLET_BALANCE = 100000;
 
 const plans = [

@@ -280,7 +280,7 @@ export {
   isNewTab
 };
 
-export default {
+const multiTabManager = {
   TAB_ID,
   MAX_TABS,
   initialize,
@@ -296,3 +296,5 @@ export default {
   clearStoredData,
   isNewTab
 };
+
+export default multiTabManager;

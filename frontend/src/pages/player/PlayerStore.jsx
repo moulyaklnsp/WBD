@@ -334,9 +334,6 @@ function PlayerStore() {
   };
 
   // Slip modal state and helpers
-  const [slipModal, setSlipModal] = useState(null);
-  const openSlip = (slip) => setSlipModal(slip || null);
-  const closeSlip = () => setSlipModal(null);
   const printSlip = (slip) => {
     try {
       const itemsHtml = (slip.items || []).map(i => `<tr><td>${String(i.name || '')}</td><td style="text-align:right">${i.quantity || 1}</td><td style="text-align:right">₹${((i.price||0) * (i.quantity||1)).toFixed(2)}</td></tr>`).join('');
@@ -363,7 +360,7 @@ function PlayerStore() {
 
   const apiBase = process.env.REACT_APP_API_BASE_URL || `${window.location.protocol}//${window.location.hostname}:3001`;
   const downloadSlip = async (slip) => {
-    if (!slip || !slip.pdf_url) return openSlip(slip);
+    if (!slip || !slip.pdf_url) return printSlip(slip);
     try {
       // Use a direct link to the server route which sets Content-Disposition: attachment
       const url = `${apiBase}${slip.pdf_url}`;
@@ -376,7 +373,7 @@ function PlayerStore() {
       a.remove();
     } catch (e) {
       console.error('Download failed', e);
-      openSlip(slip);
+      printSlip(slip);
     }
   };
 

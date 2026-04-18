@@ -4,6 +4,8 @@ module.exports = {
   roots: ['<rootDir>/src/tests'],
   testMatch: ['**/*.test.js'],
   moduleFileExtensions: ['js', 'json'],
-  clearMocks: true
+  clearMocks: true,
+  collectCoverage: true,
+  coverageReporters: ['text', 'lcov'],
+  setupFiles: ['<rootDir>/src/tests/jest.setup.js']
 };
-

@@ -1,26 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { loadDataSafely, getStoredData, clearStoredData, TAB_ID, mergeData } from '../../utils/multiTabManager';
-import { storeTokens, clearTokens, getAccessToken, logoutUser, getRefreshToken } from '../../utils/tokenManager';
-
-// Helper to safely load user without overwriting existing data
-const loadUserSafely = (data) => {
-	if (!data?.user) return null;
-	
-	const existing = getStoredData('chesshive_user');
-	const merged = mergeData(existing, data.user, { overwrite: false });
-	
-	// Store in sessionStorage (per-tab) with merge
-	loadDataSafely('chesshive_user', data.user, { overwrite: false });
-	
-	// Store backup in localStorage for tab restoration
-	try {
-		localStorage.setItem('chesshive_user_backup', JSON.stringify(merged));
-	} catch (e) {
-		console.warn('Failed to backup user data:', e);
-	}
-	
-	return merged;
-};
+import { loadDataSafely, clearStoredData } from '../../utils/multiTabManager';
+import { storeTokens, clearTokens, getAccessToken, logoutUser } from '../../utils/tokenManager';
 
 // Thunk: login (email + password, no OTP)
 export const login = createAsyncThunk('auth/login', async (credentials, thunkAPI) => {
@@ -229,11 +209,6 @@ const authSlice = createSlice({
 		setCoordinatorRejected(state) {
 			state.pendingApproval = false;
 			state.error = 'Signup request was rejected by an organizer.';
-		},
-		clearError(state) { 
-			state.error = null;
-			state.pendingApproval = false;
-			state.otpSent = false;
 		},
 		logout(state) {
 			state.user = null;

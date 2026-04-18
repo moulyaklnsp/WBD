@@ -1,11 +1,8 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import usePlayerTheme from '../../hooks/usePlayerTheme';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import PaymentGatewayModal from '../../components/PaymentGatewayModal';
 
 function PlayerProfile() {
   const navigate = useNavigate();
-  const [isDark, toggleTheme] = usePlayerTheme();
 
   const [message, setMessage] = useState(null); // { type: 'success' | 'error', text: string }
   const [player, setPlayer] = useState({});
@@ -195,13 +192,6 @@ function PlayerProfile() {
     } catch (err) {
       setMessage({ type: 'error', text: `Error loading profile: ${err.message}` });
     }
-  };
-
-  const formatDateTime = (value) => {
-    if (!value) return 'N/A';
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return 'N/A';
-    return d.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
   };
 
   const formatDate = (value) => {

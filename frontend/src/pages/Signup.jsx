@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDispatch, useSelector } from 'react-redux';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { signup, verifySignupOtp, setCoordinatorApproved, setCoordinatorRejected } from '../features/auth/authSlice';
 import ChessBackground from "../components/ChessBackground";
 import AnimatedSidebar from "../components/AnimatedSidebar";
@@ -27,8 +27,6 @@ function ensureSocketIoLoadedOnce() {
 
 export default function Signup() {
   const navigate = useNavigate();
-  const location = useLocation();
-  const swapAnimation = location.state?.swapAnimation || false;
   const [form, setForm] = React.useState({ name: "", email: "", dob: "", gender: "", college: "", phone: "", password: "", role: "", aicf_id: "", fide_id: "" });
   const [otp, setOtp] = React.useState("");
   const [errors, setErrors] = React.useState({});

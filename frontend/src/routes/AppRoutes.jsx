@@ -82,7 +82,6 @@ import AdminOrganizerDetail from '../pages/admin/AdminOrganizerDetail';
 import AdminPlayerManagement from '../pages/admin/AdminPlayerManagement';
 import AdminPlayerDetail from '../pages/admin/AdminPlayerDetail';
 import AdminPayments from '../pages/admin/AdminPayments';
-import AdminOrganizerAnalytics from '../pages/admin/AdminOrganizerAnalytics';
 import AdminGrowthAnalytics from '../pages/admin/AdminGrowthAnalytics';
 import AdminAddAdmin from '../pages/admin/AdminAddAdmin';
 

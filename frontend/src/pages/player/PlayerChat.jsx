@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import usePlayerTheme from '../../hooks/usePlayerTheme';
 import { createSocket } from '../../utils/socket';
 import EmojiPicker from 'emoji-picker-react';
 import ChatChoiceEmblem from '../../components/ChatChoiceEmblem';

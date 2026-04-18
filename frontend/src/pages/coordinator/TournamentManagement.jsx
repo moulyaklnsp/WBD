@@ -332,23 +332,6 @@ function TournamentManagement() {
     }
   };
 
-  const requestFeedback = async (id) => {
-    try {
-      const res = await fetchAsCoordinator(`/coordinator/api/tournaments/${id}/request-feedback`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({})
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to request feedback');
-      showMessage('Feedback requested successfully', 'success');
-      await fetchTournaments();
-    } catch (err) {
-      console.error('Request feedback error:', err);
-      showMessage('Error requesting feedback', 'error');
-    }
-  };
-
   const handleFileUpload = async (tournamentId) => {
     if (!selectedFile) {
       showMessage('Please select a file to upload', 'error');

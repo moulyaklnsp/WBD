@@ -25,7 +25,7 @@ const AdminCoordinatorManagement = () => {
   const [coordinators, setCoordinators] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  const [notice] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
   const [attr, setAttr] = useState('name');
@@ -73,35 +73,6 @@ const AdminCoordinatorManagement = () => {
     const email = String(user?.email || '').trim().toLowerCase();
     const deletedBy = String(user?.deleted_by || '').trim().toLowerCase();
     return Boolean(email && deletedBy && email === deletedBy);
-  };
-
-  const handleRemove = async (email) => {
-    if (!window.confirm(`Are you sure you want to remove ${email}?`)) return;
-    try {
-      const res = await fetchAsAdmin(`/admin/api/coordinators/${encodeURIComponent(email)}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed');
-      setCoordinators((prev) => prev.map((c) => (c.email === email ? { ...c, isDeleted: true } : c)));
-      setNotice('Coordinator removed successfully.');
-      setTimeout(() => setNotice(''), 2500);
-    } catch (e) {
-      setError('Failed to remove coordinator.');
-      setTimeout(() => setError(''), 2500);
-    }
-  };
-
-  const handleRestore = async (email) => {
-    if (!window.confirm(`Are you sure you want to restore ${email}?`)) return;
-    try {
-      const res = await fetchAsAdmin(`/admin/api/coordinators/restore/${encodeURIComponent(email)}`, { method: 'PATCH' });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body?.error || body?.message || 'Failed to restore coordinator.');
-      setCoordinators((prev) => prev.map((c) => (c.email === email ? { ...c, isDeleted: false } : c)));
-      setNotice(body?.message || 'Coordinator restored successfully.');
-      setTimeout(() => setNotice(''), 2500);
-    } catch (e) {
-      setError(e.message || 'Failed to restore coordinator.');
-      setTimeout(() => setError(''), 2500);
-    }
   };
 
   const adminLinks = [

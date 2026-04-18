@@ -6,20 +6,6 @@ import usePlayerTheme from '../../hooks/usePlayerTheme';
 import AnimatedSidebar from '../../components/AnimatedSidebar';
 import { coordinatorLinks } from '../../constants/coordinatorLinks';
 
-const sectionVariants = {
-  hidden: { opacity: 0, y: 28, scale: 0.97 },
-  visible: (i) => ({
-    opacity: 1,
-    y: 0,
-    scale: 1,
-    transition: {
-      delay: i * 0.12,
-      duration: 0.55,
-      ease: [0.22, 1, 0.36, 1]
-    }
-  })
-};
-
 function FeedbackView() {
   const [isDark, toggleTheme] = usePlayerTheme();
   const [searchParams] = useSearchParams();

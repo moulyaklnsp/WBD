@@ -21,11 +21,11 @@ function loadGrowthServiceWithMocks(overrides = {}) {
       ...overrides.users
     },
     tournament_pairings: {
-      findMany: jest.fn(async () => []),
+      aggregate: jest.fn(async () => []),
       ...overrides.tournament_pairings
     },
     tournament_team_pairings: {
-      findMany: jest.fn(async () => []),
+      aggregate: jest.fn(async () => []),
       ...overrides.tournament_team_pairings
     },
     tournaments: {
@@ -105,9 +105,7 @@ describe('player/growthService', () => {
       player_stats: {
         findOne: jest.fn(async () => null),
         insertOne: jest.fn(async () => ({}))
-      },
-      tournament_pairings: { findMany: jest.fn(async () => []) },
-      tournament_team_pairings: { findMany: jest.fn(async () => []) }
+      }
     });
 
     const result = await GrowthService.getGrowthAnalytics({}, { email: 'a@example.com', role: 'player' });
@@ -119,7 +117,6 @@ describe('player/growthService', () => {
 
   test('getGrowthAnalytics uses real games when pairings exist', async () => {
     const playerUserId = new ObjectId();
-    const tournamentId = new ObjectId();
 
     const { GrowthService, modelsByName } = loadGrowthServiceWithMocks({
       users: {
@@ -130,8 +127,9 @@ describe('player/growthService', () => {
         updateOne: jest.fn(async () => ({ modifiedCount: 1 }))
       },
       tournament_pairings: {
-        findMany: jest.fn(async () => [{
-          tournament_id: tournamentId,
+        aggregate: jest.fn(async () => [{
+          tournamentName: 'T1',
+          tournamentDate: '2025-01-01',
           rounds: [
             {
               round: 1,
@@ -146,10 +144,7 @@ describe('player/growthService', () => {
           ]
         }])
       },
-      tournament_team_pairings: { findMany: jest.fn(async () => []) },
-      tournaments: {
-        findOne: jest.fn(async () => ({ _id: tournamentId, name: 'T1', date: '2025-01-01' }))
-      },
+      tournament_team_pairings: { aggregate: jest.fn(async () => []) },
       rating_history: { updateOne: jest.fn(async () => ({})) }
     });
 

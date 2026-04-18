@@ -35,22 +35,7 @@ ChartJS.register(
   LineElement
 );
 
-const VISIBLE_COUNT = 8;
 const TABLE_ROWS_PER_PAGE = 10;
-
-const sectionVariants = {
-  hidden: { opacity: 0, y: 28, scale: 0.97 },
-  visible: (i) => ({
-    opacity: 1,
-    y: 0,
-    scale: 1,
-    transition: {
-      delay: i * 0.12,
-      duration: 0.55,
-      ease: [0.22, 1, 0.36, 1]
-    }
-  })
-};
 
 function StoreManagement() {
   const [isDark, toggleTheme] = usePlayerTheme();
@@ -61,7 +46,6 @@ function StoreManagement() {
   const [message, setMessage] = useState(null);
 
   // --- Products State ---
-  const [visible, setVisible] = useState(VISIBLE_COUNT);
   const [form, setForm] = useState({
     productName: '',
     productCategory: '',
@@ -120,6 +104,7 @@ function StoreManagement() {
   useEffect(() => {
     if (activeTab === 'orders') fetchOrders();
     if (activeTab === 'analytics') fetchAnalytics();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
   useEffect(() => {
@@ -205,32 +190,6 @@ function StoreManagement() {
   };
 
   // --- Edit product handlers ---
-  const openEditProduct = (product) => {
-    setEditError('');
-    setEditProduct(product);
-    setEditForm({
-      name: product.name || '',
-      category: product.category || '',
-      price: product.price != null ? String(product.price) : '',
-      availability: product.availability != null ? String(product.availability) : '',
-      description: product.description || ''
-    });
-    setEditImageFiles([]);
-    setEditImagePreviews([]);
-    setEditRemovePublicIds([]);
-    setEditRemoveUrls([]);
-  };
-
-  const openCombinedProduct = async (product) => {
-    openEditProduct(product);
-    // load analytics into productAnalyticsDetails/selectedProductAnalytics
-    try {
-      await fetchProductAnalyticsDetails(product);
-    } catch (e) {
-      // ignore analytics errors here; edit view should still open
-    }
-  };
-
   const handleEditFiles = (e) => {
     const files = Array.from(e.target.files || []);
     setEditImageFiles(files);
@@ -475,15 +434,6 @@ function StoreManagement() {
       setProductAnalyticsLoading(false);
     }
   }, [mapProductAnalyticsPayload]);
-
-  const openProductAnalytics = async (row) => {
-    const productId = String(row?.product?._id || row?._id || '').trim();
-    const productContext = {
-      _id: productId,
-      name: row?.product?.name || row?.name || 'Product'
-    };
-    await fetchProductAnalyticsDetails(productContext);
-  };
 
   // --- Reviews Logic ---
   const fetchReviews = async (productId) => {

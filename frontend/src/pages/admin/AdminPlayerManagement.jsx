@@ -25,7 +25,7 @@ const AdminPlayerManagement = () => {
   const [players, setPlayers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  const [notice] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
   const [attr, setAttr] = useState('name');
@@ -72,40 +72,6 @@ const AdminPlayerManagement = () => {
     const email = String(user?.email || '').trim().toLowerCase();
     const deletedBy = String(user?.deleted_by || '').trim().toLowerCase();
     return Boolean(email && deletedBy && email === deletedBy);
-  };
-
-  const handleRemove = async (email) => {
-    if (!window.confirm(`Are you sure you want to remove ${email}?`)) return;
-    try {
-      const res = await fetchAsAdmin(`/admin/api/players/${encodeURIComponent(email)}`, { method: 'DELETE' });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body?.error || body?.message || 'Failed to remove player.');
-      setPlayers((prev) => prev.map((p) => (
-        String(p.email || '').toLowerCase() === String(email || '').toLowerCase() ? { ...p, isDeleted: 1 } : p
-      )));
-      setNotice('Player removed successfully.');
-      setTimeout(() => setNotice(''), 2500);
-    } catch (e) {
-      setError(e.message || 'Failed to remove player.');
-      setTimeout(() => setError(''), 2500);
-    }
-  };
-
-  const handleRestore = async (email) => {
-    if (!window.confirm(`Are you sure you want to restore ${email}?`)) return;
-    try {
-      const res = await fetchAsAdmin(`/admin/api/players/restore/${encodeURIComponent(email)}`, { method: 'PATCH' });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body?.error || body?.message || 'Failed to restore player.');
-      setPlayers((prev) => prev.map((p) => (
-        String(p.email || '').toLowerCase() === String(email || '').toLowerCase() ? { ...p, isDeleted: 0 } : p
-      )));
-      setNotice(body?.message || 'Player restored successfully.');
-      setTimeout(() => setNotice(''), 2500);
-    } catch (e) {
-      setError(e.message || 'Failed to restore player.');
-      setTimeout(() => setError(''), 2500);
-    }
   };
 
   const adminLinks = [

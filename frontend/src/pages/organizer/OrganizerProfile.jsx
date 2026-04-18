@@ -78,6 +78,7 @@ function OrganizerProfile() {
     }
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadProfile(); }, []);
 
   const validateName = (name) => !!name && /^[A-Za-z]+(?: [A-Za-z]+)*$/.test(name);

@@ -16,7 +16,6 @@ export default function ContactUs() {
   const [touched, setTouched] = React.useState({ name: false, email: false, message: false });
   const [hoveredSocial, setHoveredSocial] = React.useState(null);
   const iconRefs = React.useRef({});
-  const [sidebarPos, setSidebarPos] = React.useState({ left: null, top: null });
 
   const socialLinks = [
     { id: 'facebook', icon: 'fab fa-facebook-f', name: 'Facebook', username: 'ChessHive', url: 'https://facebook.com/chesshive' },

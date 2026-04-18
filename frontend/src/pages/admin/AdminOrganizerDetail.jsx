@@ -60,12 +60,6 @@ const AdminOrganizerDetail = () => {
     fetchDetails();
   }, [email]);
 
-  const isSelfDeleted = (org) => {
-    const orgEmail = String(org?.email || '').trim().toLowerCase();
-    const deletedBy = String(org?.deleted_by || '').trim().toLowerCase();
-    return Boolean(orgEmail && deletedBy && orgEmail === deletedBy);
-  };
-
   const handleRemove = async () => {
     if (!window.confirm(`Are you sure you want to remove organizer: ${email}?`)) return;
     try {

@@ -157,6 +157,7 @@ function TournamentDetails() {
   useEffect(() => {
     loadDetails();
     loadFiles();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const saveTournament = async () => {

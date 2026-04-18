@@ -45,7 +45,6 @@ function PlayerDashboard() {
   const [isDark, toggleTheme] = usePlayerTheme();
 
   // UI State
-  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
   const [hoveredFeature, setHoveredFeature] = useState(null);
 
   // Data state
@@ -259,12 +258,6 @@ function PlayerDashboard() {
   };
 
   // ─── Effects ────────────────────────────────────────────
-  useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth <= 768);
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
-
   useEffect(() => {
     const saved = localStorage.getItem('player_notifications_enabled');
     setNotificationsEnabled(saved === null ? true : saved === 'true');

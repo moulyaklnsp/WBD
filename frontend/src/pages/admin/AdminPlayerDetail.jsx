@@ -17,7 +17,6 @@ import {
   Tooltip,
   Legend
 } from 'chart.js';
-import { Line, Bar } from 'react-chartjs-2';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend);
 
@@ -110,52 +109,6 @@ const AdminPlayerDetail = () => {
     };
   }, [playerStatsInfo]);
   const ratingDisplay = detailSummary.rating > 0 ? detailSummary.rating : 'N/A';
-
-  const ratingChartData = useMemo(() => {
-    const points = Array.isArray(playerStatsInfo?.ratingProgression) ? playerStatsInfo.ratingProgression : [];
-    return {
-      labels: points.map((point) => point.date),
-      datasets: [
-        {
-          label: 'Rating',
-          data: points.map((point) => Number(point.rating || 0)),
-          borderColor: '#2E8B57',
-          backgroundColor: 'rgba(46, 139, 87, 0.15)',
-          tension: 0.3
-        }
-      ]
-    };
-  }, [playerStatsInfo]);
-
-  const performanceChartData = useMemo(() => {
-    const rows = Array.isArray(playerStatsInfo?.performanceHistory) ? playerStatsInfo.performanceHistory : [];
-    return {
-      labels: rows.map((row) => row.month),
-      datasets: [
-        {
-          label: 'Wins',
-          data: rows.map((row) => Number(row.wins || 0)),
-          backgroundColor: 'rgba(46, 139, 87, 0.75)'
-        },
-        {
-          label: 'Losses',
-          data: rows.map((row) => Number(row.losses || 0)),
-          backgroundColor: 'rgba(198, 40, 40, 0.7)'
-        },
-        {
-          label: 'Draws',
-          data: rows.map((row) => Number(row.draws || 0)),
-          backgroundColor: 'rgba(29, 126, 168, 0.7)'
-        }
-      ]
-    };
-  }, [playerStatsInfo]);
-
-  const isSelfDeleted = (org) => {
-    const orgEmail = String(org?.email || '').trim().toLowerCase();
-    const deletedBy = String(org?.deleted_by || '').trim().toLowerCase();
-    return Boolean(orgEmail && deletedBy && orgEmail === deletedBy);
-  };
 
   const handleRemove = async () => {
     if (!window.confirm(`Are you sure you want to remove player: ${email}?`)) return;

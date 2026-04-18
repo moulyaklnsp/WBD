@@ -7,17 +7,6 @@ import usePlayerTheme from '../../hooks/usePlayerTheme';
 import AnimatedSidebar from '../../components/AnimatedSidebar';
 import { getStoredUser } from '../../utils/tokenManager';
 
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.1,
-      delayChildren: 0.2
-    }
-  }
-};
-
 const itemVariants = {
   hidden: { opacity: 0, y: 20 },
   visible: {
@@ -31,10 +20,8 @@ const itemVariants = {
 const AdminDashboard = () => {
   const navigate = useNavigate();
   const [isDark, toggleTheme] = usePlayerTheme();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
   const [isSuperAdmin] = useState(() => Boolean(getStoredUser()?.isSuperAdmin));
-  const [loading, setLoading] = useState(true);
   const [savingMessageId, setSavingMessageId] = useState('');
   const [messageEdits, setMessageEdits] = useState({});
   const [messageSaveUi, setMessageSaveUi] = useState({});
@@ -51,7 +38,6 @@ const AdminDashboard = () => {
   const onResize = useCallback(() => {
     const mobile = window.innerWidth <= 768;
     setIsMobile(mobile);
-    if (!mobile) setSidebarOpen(true);
   }, []);
 
   useEffect(() => {
@@ -62,7 +48,6 @@ const AdminDashboard = () => {
 
   const fetchDashboard = useCallback(async () => {
     try {
-      setLoading(true);
       const res = await fetchAsAdmin('/admin/api/dashboard');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
@@ -74,8 +59,6 @@ const AdminDashboard = () => {
       });
     } catch (e) {
       console.error('Failed to load dashboard', e);
-    } finally {
-      setLoading(false);
     }
   }, []);
 

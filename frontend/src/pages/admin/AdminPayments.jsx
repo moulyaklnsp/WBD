@@ -284,7 +284,6 @@ const AdminPayments = () => {
             whileHover={{ scale: 1.08 }}
             whileTap={{ scale: 0.94 }}
             style={{
-                        cursor: 'pointer',
                         background: 'var(--card-bg)', border: '1px solid var(--card-border)',
               color: 'var(--text-color)', width: 40, height: 40, borderRadius: 10,
               display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '1.1rem'
