@@ -1,0 +1,404 @@
+/* Import Chess Light & Dark Themes */
+@import './lightTheme.css';
+@import './darkTheme.css';
+
+:root {
+  --cream: #F5F0E6;
+  --card-bg: #FFFFFF;
+  --card-border: rgba(44, 24, 16, 0.1);
+  --text-color: #1C1917;
+  --sea-green: #1B5E3F;
+  --sky-blue: #B8860B;
+  --muted-text: rgba(28, 25, 23, 0.65);
+  --on-dark: #F5F0E6;
+  --player-wallpaper-layer: none;
+  --player-wallpaper-overlay: none;
+}
+
+/* ========== Chess-themed animations ========== */
+@keyframes chessPieceBob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+@keyframes chessPawnMarch {
+  0% { transform: translateY(0) scale(1); opacity: 0.9; }
+  50% { transform: translateY(-3px) scale(1.02); opacity: 1; }
+  100% { transform: translateY(0) scale(1); opacity: 0.9; }
+}
+@keyframes chessCheckerboard {
+  0% { background-position: 0 0, 0 12px, 12px -12px, -12px 0; }
+  100% { background-position: 24px 0, 24px 12px, 36px -12px, 0 0; }
+}
+@keyframes chessCapture {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(var(--sea-green-rgb, 27, 94, 63), 0.2); }
+  50% { transform: scale(1.02); box-shadow: 0 0 12px 2px rgba(var(--sea-green-rgb, 27, 94, 63), 0.15); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 transparent; }
+}
+@keyframes chessKingGlow {
+  0%, 100% { filter: drop-shadow(0 2px 4px rgba(0,0,0,0.12)); }
+  50% { filter: drop-shadow(0 4px 12px rgba(var(--sea-green-rgb, 27, 94, 63), 0.2)); }
+}
+@keyframes slideGradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+@keyframes chessKnightFloat {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(4px, -3px); }
+  50% { transform: translate(6px, 2px); }
+  75% { transform: translate(2px, 4px); }
+}
+@keyframes chessPieceNod {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+@keyframes chessPieceBreathe {
+  0%, 100% { transform: translateY(0) scale(1); opacity: 1; }
+  50% { transform: translateY(-4px) scale(1.03); opacity: 0.95; }
+}
+@keyframes chessMagicShimmer {
+  0% { transform: translateX(-100%) skewX(-12deg); opacity: 0; }
+  20% { opacity: 0.15; }
+  50% { opacity: 0.2; }
+  80% { opacity: 0.1; }
+  100% { transform: translateX(200%) skewX(-12deg); opacity: 0; }
+}
+@keyframes chessPieceMaterialize {
+  0% { opacity: 0; transform: scale(0.85) translateY(8px); filter: blur(4px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); }
+}
+
+.chess-piece-bob { animation: chessPieceBob 2.5s ease-in-out infinite; }
+.chess-piece-nod { animation: chessPieceNod 2s ease-in-out infinite; }
+.chess-piece-breathe { animation: chessPieceBreathe 3.2s ease-in-out infinite; }
+.chess-piece-materialize { animation: chessPieceMaterialize 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+.chess-pawn-march { animation: chessPawnMarch 3s ease-in-out infinite; }
+.chess-king-glow { animation: chessKingGlow 2s ease-in-out infinite; }
+.chess-capture-hover:hover { animation: chessCapture 0.5s ease-out; }
+.chess-knight-float { animation: chessKnightFloat 4s ease-in-out infinite; }
+
+/* Magical section card: subtle shimmer sweep on hover (light only) */
+.chess-piece-icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.piece-icon {
+  display: inline-flex;
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.player-neo .updates-section li:hover .piece-icon {
+  transform: scale(1.08);
+}
+
+.chess-card-magic {
+  position: relative;
+  overflow: hidden;
+}
+.chess-card-magic::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.04) 40%,
+    rgba(255, 255, 255, 0.1) 50%,
+    rgba(255, 255, 255, 0.04) 60%,
+    transparent 100%
+  );
+  pointer-events: none;
+  transform: translateX(-100%) skewX(-12deg);
+  opacity: 0;
+}
+body.player:not(.player-dark) .chess-card-magic:hover::after {
+  animation: chessMagicShimmer 1.4s ease-out forwards;
+}
+
+/* Dark mode: keep capture pulse & checkerboard static (no shine); piece animations on */
+body.player-dark .chess-capture-hover:hover { animation: none; }
+body.player-dark .chess-dash-checkerboard::before { animation: none; opacity: 0.03; }
+/* King: gentle bob only in dark (no glow) */
+body.player-dark .chess-king-glow {
+  animation: chessPieceBob 2.5s ease-in-out infinite;
+  filter: none;
+}
+
+/* Player layout – use theme vars only */
+.player .content,
+.player-neo .content { color: var(--text-color); }
+.player .muted,
+.player-neo .muted,
+.player small,
+.player-neo small { color: var(--muted-text); }
+
+.player h1,
+.player h2,
+.player-neo h1,
+.player-neo h2 {
+  color: var(--text-color);
+  background: var(--gradient-primary);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-size: 200% 100%;
+  animation: slideGradient 10s ease-in-out infinite;
+  letter-spacing: 0.5px;
+}
+.player .updates-section h3,
+.player h3,
+.player-neo .updates-section h3,
+.player-neo h3 {
+  color: var(--sea-green);
+  border-left: 4px solid rgba(var(--sea-green-rgb), 0.2);
+  padding-left: 1rem;
+  font-weight: 600;
+}
+
+.player-neo .page {
+  background-color: var(--page-bg);
+  background-image: var(--player-wallpaper-overlay), var(--player-wallpaper-layer);
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+}
+
+.player h1::after,
+.player-neo h1::after {
+  content: '';
+  display: block;
+  width: 100%;
+  height: 4px;
+  margin-top: 0.8rem;
+  background: linear-gradient(90deg, rgba(var(--sea-green-rgb), 0.25), rgba(184, 134, 11, 0.2));
+  border-radius: 4px;
+  background-size: 200% 100%;
+  animation: slideGradient 10s ease-in-out infinite;
+}
+
+/* Dark mode: solid heading color, no animated gradient */
+body.player-dark .player h1,
+body.player-dark .player h2,
+body.player-dark .player-neo h1,
+body.player-dark .player-neo h2 {
+  color: var(--text-color);
+  background: none;
+  -webkit-text-fill-color: currentColor;
+  animation: none;
+}
+body.player-dark .player h1::after,
+body.player-dark .player-neo h1::after {
+  background: var(--sea-green);
+  animation: none;
+}
+
+/* Cards & sections */
+.player-neo .updates-section {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  color: var(--text-color);
+  border-radius: 16px;
+  padding: 1.6rem;
+  box-shadow: var(--card-shadow, none);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.player .updates-section,
+.player-neo .updates-section { position: relative; overflow: hidden; }
+.player .updates-section ul,
+.player-neo .updates-section ul { list-style: none; margin: 0; padding: 0; }
+.player .updates-section li,
+.player-neo .updates-section li {
+  padding: 1rem;
+  border-bottom: 1px solid rgba(var(--sea-green-rgb), 0.08);
+  background: transparent;
+  transition: all 0.2s ease;
+}
+.player .updates-section li:last-child,
+.player-neo .updates-section li:last-child { border-bottom: none; }
+.player .updates-section li:nth-child(odd),
+.player-neo .updates-section li:nth-child(odd) {
+  background: linear-gradient(90deg, rgba(var(--sea-green-rgb), 0.03), transparent);
+}
+body.player-dark .player-neo .updates-section li:nth-child(odd) { background: rgba(74, 124, 89, 0.04); }
+
+.empty-message,
+.help-text,
+.small-muted { color: var(--muted-text); }
+.notifications-content p { color: var(--muted-text); }
+
+.player .updates-section h3::before,
+.player-neo .updates-section h3::before { display: none; }
+
+/* Theme toggle */
+.theme-toggle-btn { transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease; }
+.theme-toggle-btn:hover { border-color: var(--sea-green); }
+body.player:not(.player-dark) .theme-toggle-btn:hover {
+  background: rgba(var(--sea-green-rgb), 0.12);
+}
+body.player-dark .theme-toggle-btn:hover {
+  background: rgba(var(--sea-green-rgb), 0.12);
+  border-color: var(--sea-green);
+}
+
+/* Nav dropdown */
+.dropdown-menu,
+.dropdown-menu-clean { position: relative; overflow: auto; }
+.dropdown-menu a,
+.dropdown-menu-clean a { position: relative; }
+.dropdown-menu a:focus,
+.dropdown-menu-clean a:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,0.08);
+}
+.player-neo .dropdown-menu,
+.player-neo .dropdown-menu-clean {
+  background: var(--sidebar-bg-solid, var(--sidebar-bg));
+  border: 1px solid var(--sidebar-border);
+}
+.player-neo .dropdown-menu a,
+.player-neo .dropdown-menu-clean a { color: var(--sidebar-text); }
+.player-neo .dropdown-menu a:hover,
+.player-neo .dropdown-menu-clean a:hover {
+  background: var(--sidebar-hover);
+  color: var(--link-hover);
+}
+
+body.player-dark .player-neo .dropdown-menu,
+body.player-dark .player-neo .dropdown-menu-clean {
+  background: var(--sidebar-bg-solid);
+  border: 1px solid var(--sidebar-border);
+}
+body.player-dark .player-neo .dropdown-menu a,
+body.player-dark .player-neo .dropdown-menu-clean a { color: var(--sidebar-text); }
+body.player-dark .player-neo .dropdown-menu a:hover,
+body.player-dark .player-neo .dropdown-menu-clean a:hover {
+  background: var(--sidebar-hover);
+  color: var(--link-hover);
+}
+
+/* Hamburger – use theme vars */
+.player-neo .hamburger-btn {
+  background: var(--hamburger-bg);
+  color: var(--hamburger-text);
+  border: 1px solid rgba(255,255,255,0.15);
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+.player-neo .hamburger-btn:hover { background: var(--hamburger-hover); }
+body.player-dark .player-neo .hamburger-btn { border-color: var(--sidebar-border); }
+
+/* Buttons, price-tag, notifications – theme vars */
+.player-neo .approve-btn {
+  background: var(--btn-primary, var(--sea-green));
+  color: var(--on-accent);
+  transition: all 0.2s ease;
+}
+.player-neo .approve-btn:hover { background: var(--btn-primary-hover, var(--sea-green-dark)); }
+.player-neo .approve-btn.reject { background: var(--error); color: #fff; }
+.player-neo .approve-btn.reject:hover { filter: brightness(1.1); }
+.player-neo .price-tag { background: var(--sea-green); color: var(--on-accent); }
+.player-neo .logout-box button {
+  background: var(--sea-green);
+  color: var(--on-accent);
+  border: 1px solid rgba(255,255,255,0.2);
+}
+.player-neo .logout-box button:hover { background: var(--sea-green-dark); }
+.player-neo .tournament-info strong { color: var(--text-color); }
+
+.player-neo #notifications-modal .notifications-content {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  color: var(--text-color);
+}
+.player-neo .notifications-list li {
+  background: rgba(var(--sea-green-rgb), 0.06);
+  border-left: 3px solid var(--sea-green);
+  color: var(--text-color);
+}
+.player-neo .notifications-list li:hover { background: rgba(var(--sea-green-rgb), 0.12); }
+body.player-dark .player-neo .notifications-list li {
+  background: rgba(var(--sea-green-rgb), 0.06);
+  border-left-color: var(--sea-green);
+}
+
+/* Player dark overrides – link hover, etc. */
+body.player-dark .player-neo .content,
+body.player-dark .player-neo .page,
+body.player-dark .player-neo p,
+body.player-dark .player-neo li,
+body.player-dark .player-neo .tournament-info,
+body.player-dark .player-neo .item-info,
+body.player-dark .player-neo .notifications-content { color: var(--text-color); }
+
+body.player-dark .player .dropdown-menu a:hover,
+body.player-dark .player .dropdown-menu a:focus,
+body.player-dark .player .dropdown-menu-clean a:hover,
+body.player-dark .player .dropdown-menu-clean a:focus { color: var(--link-hover); }
+body.player-dark .player .dropdown-menu,
+body.player-dark .player .dropdown-menu-clean { border-color: var(--card-border); }
+body.player-dark .player .nav-section a:hover,
+body.player-dark .player .nav-item:hover {
+  color: var(--link-hover);
+  background: rgba(var(--sea-green-rgb), 0.1);
+}
+.muted, small { color: var(--muted-text); }
+body.player-dark .player .muted,
+body.player-dark .player small,
+body.player-dark .player-neo .muted,
+body.player-dark .player-neo small { color: var(--muted-text); }
+
+/* Menu button */
+.player-neo .menu-btn {
+  background: var(--hamburger-bg);
+  color: var(--hamburger-text);
+  border-radius: 10px;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid rgba(255,255,255,0.15);
+}
+
+/* Dashboard checkerboard accent (subtle) */
+.chess-dash-checkerboard {
+  position: relative;
+  overflow: hidden;
+}
+.chess-dash-checkerboard::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(45deg, var(--chess-dark-square) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--chess-dark-square) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--chess-dark-square) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--chess-dark-square) 75%);
+  background-size: 24px 24px;
+  background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+  opacity: 0.05;
+  pointer-events: none;
+  animation: chessCheckerboard 24s linear infinite;
+}
+
+/* Product detail custom styles */
+.product-detail { padding: 0.5rem 2rem 2.5rem; }
+.product-analytics-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 14px; padding: 1.25rem; box-shadow: var(--card-shadow, none); }
+.product-analytics-card .stat-card { padding: 0.75rem 1rem; border-radius: 10px; background: linear-gradient(180deg, rgba(var(--sea-green-rgb),0.04), rgba(var(--sea-green-rgb),0.02)); border: 1px solid rgba(var(--sea-green-rgb),0.06); }
+.product-analytics-card .stat-label { font-size: 0.85rem; color: var(--sea-green); }
+.product-analytics-card .stat-val { font-weight: 700; font-size: 1.6rem; color: var(--text-color); }
+
+.product-edit-section { margin-top: 0.6rem; display: flex; flex-direction: column; gap: 0.8rem; }
+.product-edit-section .form-input { background: var(--card-bg); color: var(--text-color); border: 1px solid var(--card-border); padding: 0.75rem; border-radius: 8px; }
+.product-edit-section .form-input:focus { outline: none; box-shadow: 0 0 0 3px rgba(var(--sea-green-rgb), 0.06); border-color: var(--sea-green); }
+.product-edit-section .form-label { margin-bottom: 0.35rem; color: var(--sea-green); font-weight: 600; }
+
+/* Ensure tags/labels remain visible in dark mode */
+body.player-dark .product-edit-section .form-input { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); color: var(--text-color); }
+body.player-dark .product-analytics-card { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); }
+
+/* Responsive tweaks */
+@media (max-width: 960px) {
+  .product-detail { padding: 0.5rem 1rem 1.6rem; }
+  .product-analytics-card .stat-val { font-size: 1.25rem; }
+}

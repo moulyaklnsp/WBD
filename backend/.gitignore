@@ -1,0 +1,6 @@
+node_modules/
+.env
+public/uploads/profile-photos/*
+!public/uploads/profile-photos/.gitkeep
+logs/*
+!logs/.gitkeep
