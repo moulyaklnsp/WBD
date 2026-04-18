@@ -2,7 +2,9 @@ const { connectDB } = require('../../config/database');
 const { requireOrganizer } = require('./organizerUtils');
 const { getModel } = require('../../models');
 const MeetingsModel = getModel('meetingsdb');
+const { normalizeKey } = require('../../utils/mongo');
 
+const createError = (message, statusCode) => Object.assign(new Error(message), { statusCode });
 const resolveDb = async (db) => (db ? db : connectDB());
 
 const MeetingsService = {
@@ -17,7 +19,10 @@ const MeetingsService = {
       time: time.toString(),
       link: link.toString(),
       role: role.toString(),
-      name: meetingName.toString()
+      name: meetingName.toString(),
+      name_key: normalizeKey(meetingName),
+      created_by: user?.email || meetingName.toString(),
+      created_by_key: normalizeKey(user?.email || meetingName)
     };
 
     const result = await MeetingsModel.insertOne(database, meeting);

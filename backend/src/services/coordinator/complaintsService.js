@@ -2,6 +2,7 @@ const { connectDB } = require('../../config/database');
 const { ObjectId } = require('mongodb');
 const { safeTrim, getCoordinatorOwnerIdentifiers, requireCoordinator } = require('./coordinatorUtils');
 const { getModel } = require('../../models');
+const { normalizeKey } = require('../../utils/mongo');
 const TournamentModel = getModel('tournaments');
 const TournamentComplaintsModel = getModel('tournament_complaints');
 const ComplaintsModel = getModel('complaints');
@@ -49,38 +50,48 @@ const complaintModels = {
 
 async function findCoordinatorComplaint(db, user, complaintId) {
   const ownerIdentifiers = await getCoordinatorOwnerIdentifiers(db, user);
-  const ownerIdentifiersLower = new Set(ownerIdentifiers.map((v) => v.toLowerCase()));
-
+  const ownerKeys = ownerIdentifiers.map(normalizeKey).filter(Boolean);
   const objectId = new ObjectId(complaintId);
 
-  for (const collectionName of ['tournament_complaints', 'complaints']) {
-    const model = complaintModels[collectionName];
-    const complaint = await model.findOne(db, { _id: objectId });
-    if (!complaint) continue;
+  const [row] = await db.collection('tournament_complaints').aggregate([
+    { $match: { _id: objectId } },
+    { $addFields: { collectionName: { $literal: 'tournament_complaints' } } },
+    {
+      $unionWith: {
+        coll: 'complaints',
+        pipeline: [
+          { $match: { _id: objectId } },
+          { $addFields: { collectionName: { $literal: 'complaints' } } }
+        ]
+      }
+    },
+    { $limit: 1 },
+    {
+      $addFields: {
+        tournament_oid: {
+          $convert: { input: '$tournament_id', to: 'objectId', onError: null, onNull: null }
+        }
+      }
+    },
+    { $lookup: { from: 'tournaments', localField: 'tournament_oid', foreignField: '_id', as: 'tournament' } },
+    { $unwind: { path: '$tournament', preserveNullAndEmptyArrays: true } },
+    {
+      $addFields: {
+        coordinatorKey: { $ifNull: ['$tournament.coordinator_key', { $toLower: { $ifNull: ['$tournament.coordinator', ''] } }] }
+      }
+    },
+    { $match: { coordinatorKey: { $in: ownerKeys } } }
+  ]).toArray();
 
-    if (!complaint.tournament_id) {
-      return { error: 'Complaint tournament is missing', status: 404 };
-    }
+  if (!row) return { error: 'Complaint not found or access denied', status: 404 };
+  if (!row.tournament_oid) return { error: 'Complaint tournament is missing', status: 404 };
+  if (!row.tournament) return { error: 'Complaint tournament not found', status: 404 };
 
-    let tournamentId = complaint.tournament_id;
-    if (typeof tournamentId === 'string' && ObjectId.isValid(tournamentId)) {
-      tournamentId = new ObjectId(tournamentId);
-    }
-
-    const tournament = await TournamentModel.findOne(db, { _id: tournamentId });
-    if (!tournament) {
-      return { error: 'Complaint tournament not found', status: 404 };
-    }
-
-    const coordinatorValue = safeTrim(tournament.coordinator).toLowerCase();
-    if (!ownerIdentifiersLower.has(coordinatorValue)) {
-      return { error: 'Complaint not found or access denied', status: 404 };
-    }
-
-    return { collectionName, complaint, tournament };
-  }
-
-  return { error: 'Complaint not found or access denied', status: 404 };
+  return {
+    collectionName: row.collectionName,
+    complaint: row,
+    tournament: row.tournament
+  };
 }
 
 const ComplaintsService = {
@@ -88,66 +99,95 @@ const ComplaintsService = {
     requireCoordinator(user);
     const database = await resolveDb(db);
     const ownerIdentifiers = await getCoordinatorOwnerIdentifiers(database, user);
+    const ownerKeys = ownerIdentifiers.map(normalizeKey).filter(Boolean);
 
-    let tournaments = await TournamentModel.findMany(
+    const tournaments = await TournamentModel.findMany(
       database,
-      { coordinator: { $in: ownerIdentifiers } },
+      {
+        $or: [
+          { coordinator: { $in: ownerIdentifiers } },
+          { coordinator_key: { $in: ownerKeys } }
+        ]
+      },
       { projection: { _id: 1, name: 1, coordinator: 1 } }
     );
 
-    if (tournaments.length === 0) {
-      const ownerIdentifiersLower = new Set(ownerIdentifiers.map((v) => v.toLowerCase()));
-      const allTournaments = await TournamentModel.findMany(
-        database,
-        {},
-        { projection: { _id: 1, name: 1, coordinator: 1 } }
-      );
-      tournaments = allTournaments.filter((t) =>
-        ownerIdentifiersLower.has(safeTrim(t.coordinator).toLowerCase())
-      );
-    }
-
     const tournamentIds = tournaments.map((t) => t._id);
     const tournamentIdStrings = tournamentIds.map((t) => t.toString());
-    const tournamentsById = new Map(tournaments.map((t) => [t._id.toString(), t]));
-
     if (tournamentIds.length === 0) {
       return { complaints: [] };
     }
 
-    const [tournamentComplaints, legacyComplaints] = await Promise.all([
-      TournamentComplaintsModel.findMany(
-        database,
-        {
-          $or: [
-            { tournament_id: { $in: tournamentIds } },
-            { tournament_id: { $in: tournamentIdStrings } }
-          ]
-        },
-        { sort: { submitted_date: -1, created_at: -1 } }
-      ),
-      ComplaintsModel.findMany(
-        database,
-        {
-          $or: [
-            { tournament_id: { $in: tournamentIds } },
-            { tournament_id: { $in: tournamentIdStrings } }
-          ]
-        },
-        { sort: { created_at: -1, submitted_date: -1 } }
-      )
-    ]);
+    const matchByTournamentIds = {
+      $or: [
+        { tournament_id: { $in: tournamentIds } },
+        { tournament_id: { $in: tournamentIdStrings } }
+      ]
+    };
 
-    const complaints = [
-      ...(tournamentComplaints || []).map((c) => normalizeComplaintRecord(c, tournamentsById)),
-      ...(legacyComplaints || []).map((c) => normalizeComplaintRecord(c, tournamentsById))
-    ].sort((a, b) => {
-      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-      return bTime - aTime;
-    });
+    const normalizePipeline = [
+      { $match: matchByTournamentIds },
+      {
+        $addFields: {
+          tidObj: {
+            $cond: [
+              { $eq: [{ $type: '$tournament_id' }, 'objectId'] },
+              '$tournament_id',
+              { $convert: { input: '$tournament_id', to: 'objectId', onError: null, onNull: null } }
+            ]
+          },
+          createdAt: {
+            $ifNull: [
+              '$created_at',
+              { $ifNull: ['$submitted_date', { $ifNull: ['$createdAt', { $toDate: '$_id' }] }] }
+            ]
+          },
+          resolvedAt: {
+            $ifNull: ['$resolved_date', { $ifNull: ['$resolved_at', '$resolvedAt'] }]
+          },
+          statusVal: { $ifNull: ['$status', 'pending'] },
+          complaintVal: { $ifNull: ['$complaint', { $ifNull: ['$message', ''] }] },
+          responseVal: { $ifNull: ['$coordinator_response', { $ifNull: ['$response', { $ifNull: ['$reply', ''] }] }] },
+          submittedByVal: { $ifNull: ['$player_email', { $ifNull: ['$submitted_by', { $ifNull: ['$user_email', { $ifNull: ['$email', ''] }] }] }] }
+        }
+      },
+      {
+        $lookup: {
+          from: 'tournaments',
+          localField: 'tidObj',
+          foreignField: '_id',
+          pipeline: [{ $project: { name: 1, coordinator: 1, date: 1, status: 1, type: 1 } }, { $limit: 1 }],
+          as: 'tournament'
+        }
+      },
+      { $addFields: { tournament: { $first: '$tournament' } } },
+      {
+        $project: {
+          _id: { $toString: '$_id' },
+          tournament_id: { $toString: '$tournament_id' },
+          tournament: 1,
+          status: '$statusVal',
+          complaint: '$complaintVal',
+          coordinator_response: '$responseVal',
+          submitted_by: '$submittedByVal',
+          createdAt: 1,
+          resolvedAt: 1
+        }
+      }
+    ];
 
-    return { complaints };
+    const complaints = await database.collection('tournament_complaints').aggregate([
+      ...normalizePipeline,
+      {
+        $unionWith: {
+          coll: 'complaints',
+          pipeline: normalizePipeline
+        }
+      },
+      { $sort: { createdAt: -1 } }
+    ]).toArray();
+
+    return { complaints: complaints || [] };
   },
 
   async resolveComplaint(db, user, { complaintId, responseText }) {

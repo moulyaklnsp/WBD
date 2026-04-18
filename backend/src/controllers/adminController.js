@@ -5,6 +5,8 @@ const path = require('path');
 const crypto = require('crypto');
 const { sendContactStatusEmail, sendAdminInviteEmail } = require('../services/emailService');
 const { ObjectId } = require('mongodb');
+const AdminService = require('../services/admin/adminService');
+const { normalizeKey, parsePagination } = require('../utils/mongo');
 
 const normalizeEmail = (value) => (value == null ? '' : String(value).trim().toLowerCase());
 const isSelfDeletedUser = (user) => {
@@ -209,14 +211,17 @@ const getContactMessages = async (req, res) => {
       filter.status = status;
     }
     if (search) {
-      const rx = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-      filter.$or = [{ name: rx }, { email: rx }, { message: rx }];
+      filter.$text = { $search: search };
     }
 
-    const messages = await db.collection('contact')
-      .find(filter)
-      .sort({ submission_date: -1 })
-      .toArray();
+    const cursor = db.collection('contact').find(filter);
+    if (search) {
+      cursor.project({ score: { $meta: 'textScore' } });
+      cursor.sort({ score: { $meta: 'textScore' }, submission_date: -1 });
+    } else {
+      cursor.sort({ submission_date: -1 });
+    }
+    const messages = await cursor.limit(200).toArray();
 
     return res.json({ messages });
   } catch (error) {
@@ -367,50 +372,8 @@ const getTournamentDetails = async (req, res) => {
   try {
     const { id } = req.params;
     const db = await connectDB();
-    const { ObjectId } = require('mongodb');
-    
-    if (!ObjectId.isValid(id)) {
-      return res.status(400).json({ error: 'Invalid tournament ID' });
-    }
-    
-    const tournament = await db.collection('tournaments').findOne({ _id: new ObjectId(id) });
-    if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
-
-    // Fetch individual players with their emails
-    const rawPlayers = await db.collection('tournament_players').find({
-      tournament_id: { $in: [id, new ObjectId(id)] }
-    }).toArray();
-
-    const players = await Promise.all(rawPlayers.map(async (p) => {
-      const user = await db.collection('users').findOne({ name: p.username }) || await db.collection('users').findOne({ username: p.username });
-      return { username: p.username, name: p.username, email: user ? user.email : 'N/A', type: 'Individual' };
-    }));
-
-    // Fetch team enrollments with captain's email
-    const rawTeams = await db.collection('enrolledtournaments_team').find({
-      tournament_id: { $in: [id, new ObjectId(id)] }
-    }).toArray();
-
-    const teams = await Promise.all(rawTeams.map(async (t) => {
-      let captainId;
-      try { captainId = new ObjectId(t.captain_id); } catch(e) { captainId = null; }
-      const captain = captainId ? await db.collection('users').findOne({ _id: captainId }) : null;
-      const displayName = t.team_name ? t.team_name : (t.captain_name ? t.captain_name + "'s Team" : 'Team Entry');
-      return { name: displayName, email: captain ? captain.email : 'N/A', type: 'Team' };
-    }));
-
-    const allPlayers = [...players, ...teams];
-
-    const entryFee = Number(tournament.entry_fee || 0);
-    const moneyGenerated = (players.length * entryFee) + (teams.length * entryFee * 3); // Based on previous multiplication logic
-
-    res.json({
-      tournament,
-      conductedBy: tournament.added_by || 'Unknown',
-      approvedBy: tournament.approved_by || 'Unknown',
-      moneyGenerated,
-      players: allPlayers
-    });
+    const result = await AdminService.getTournamentDetails(db, req.session, id);
+    return res.json(result);
   } catch (error) {
     console.error('Error fetching tournament details:', error);
     res.status(500).json({ error: 'Failed to fetch tournament details' });
@@ -421,42 +384,8 @@ const getTournamentDetails = async (req, res) => {
 const getCoordinators = async (req, res) => {
   try {
     const db = await connectDB();
-    const coordinators = await db.collection('users')
-      .find({ role: 'coordinator' })
-      .project({ name: 1, email: 1, phone: 1, college: 1, isDeleted: 1, deleted_by: 1 })
-      .toArray();
-
-    const enrichedCoordinators = await Promise.all(coordinators.map(async (coord) => {
-      const identityRegexes = [
-        new RegExp(`^\$\{String(coord.name || '').replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}\$`, 'i'),
-        new RegExp(`^\$\{String(coord.email || '').replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}\$`, 'i')
-      ].filter(r => r.source !== '^$');
-      const tournamentsConducted = await db.collection('tournaments').countDocuments({
-        $or: [
-          { added_by: coord.name },
-          { added_by: coord.email },
-          { added_by: { $in: identityRegexes } }
-        ],
-        status: { $ne: 'Rejected' }
-      });
-
-      const tournamentsRejected = await db.collection('tournaments').countDocuments({
-        $or: [
-          { added_by: coord.name },
-          { added_by: coord.email },
-          { added_by: { $in: identityRegexes } }
-        ],
-        status: 'Rejected'
-      });
-
-      return {
-        ...coord,
-        tournamentsConducted,
-        tournamentsRejected
-      };
-    }));
-
-    res.json(enrichedCoordinators);
+    const result = await AdminService.getCoordinators(db, req.session, req.query);
+    return res.json(result.coordinators || []);
   } catch (error) {
     console.error('Error fetching coordinators:', error);
     res.status(500).json({ error: 'Failed to fetch coordinators' });
@@ -544,19 +473,17 @@ const getOrganizerDetails = async (req, res) => {
       return res.status(404).json({ error: 'Organizer not found' });
     }
 
-    const identityRegexes = [
-      new RegExp(`^${(organizer.name || '').replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}$`, 'i'),
-      new RegExp(`^${(organizer.email || '').replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}$`, 'i')
-    ].filter(r => r.source !== '^$');
+    const identityKeys = [
+      normalizeEmail(organizer.name),
+      normalizeEmail(organizer.email)
+    ].filter(Boolean);
 
     const tournamentsApproved = await db.collection('tournaments').find({
       $or: [
-        { approved_by: organizer.name },
-        { approved_by: organizer.email },
-        { approved_by: { $in: identityRegexes } },
-        { rejected_by: organizer.name },
-        { rejected_by: organizer.email },
-        { rejected_by: { $in: identityRegexes } }
+        { approved_by_key: { $in: identityKeys } },
+        { rejected_by_key: { $in: identityKeys } },
+        { approved_by: { $in: [organizer.name, organizer.email].filter(Boolean) } },
+        { rejected_by: { $in: [organizer.name, organizer.email].filter(Boolean) } }
       ]
     }).project({
       name: 1,
@@ -571,17 +498,17 @@ const getOrganizerDetails = async (req, res) => {
       status: 1,
       approved_by: 1,
       rejected_by: 1
-    }).sort({ date: -1, start_date: -1 }).toArray();
+    }).sort({ date: -1, start_date: -1 }).limit(500).toArray();
 
     // Get meetings scheduled/taken by this organizer
     const meetingsScheduled = await db.collection('meetingsdb').find({
       $or: [
-        { name: organizer.name },
-        { name: organizer.email },
-        { created_by: organizer.email },
-        { name: { $in: identityRegexes } }
+        { name_key: { $in: identityKeys } },
+        { created_by_key: normalizeEmail(organizer.email) },
+        { name: { $in: [organizer.name, organizer.email].filter(Boolean) } },
+        { created_by: organizer.email }
       ]
-    }).sort({ date: -1, time: -1 }).toArray();
+    }).sort({ date: -1, time: -1 }).limit(500).toArray();
 
     res.json({
       organizer: {
@@ -604,61 +531,8 @@ const getOrganizerDetails = async (req, res) => {
 const getOrganizers = async (req, res) => {
   try {
     const db = await connectDB();
-    const organizers = await db.collection('users')
-      .find({ role: 'organizer' })
-      .project({ name: 1, email: 1, phone: 1, college: 1, isDeleted: 1, deleted_by: 1 })
-      .toArray();
-
-    // Attach tournament counts and meeting counts for each organizer
-const enrichedOrganizers = [];
-      const BATCH_SIZE = 5;
-      
-      for (let i = 0; i < organizers.length; i += BATCH_SIZE) {
-        const chunk = organizers.slice(i, i + BATCH_SIZE);
-        
-        const chunkResults = await Promise.all(chunk.map(async (org) => {
-          const identityRegexes = [
-            new RegExp(`^${(org.name || '').replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}$`, 'i'),
-            new RegExp(`^${(org.email || '').replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}$`, 'i')
-          ].filter(r => r.source !== '^$');
-
-          const approvedTournamentsCount = await db.collection('tournaments').countDocuments({
-            $or: [
-              { approved_by: org.name },
-              { approved_by: org.email },
-              { approved_by: { $in: identityRegexes } }
-            ]
-          });
-
-          const rejectedTournamentsCount = await db.collection('tournaments').countDocuments({
-            $or: [
-              { rejected_by: org.name },
-              { rejected_by: org.email },
-              { rejected_by: { $in: identityRegexes } }
-            ]
-          });
-
-          const meetingsCount = await db.collection('meetingsdb').countDocuments({
-            $or: [
-              { name: org.name },
-              { name: org.email },
-              { created_by: org.email },
-              { name: { $in: identityRegexes } }
-            ]
-          });
-
-          return {
-            ...org,
-            tournamentsApproved: approvedTournamentsCount,
-            tournamentsRejected: rejectedTournamentsCount,
-            meetingsScheduled: meetingsCount
-          };
-        }));
-        
-        enrichedOrganizers.push(...chunkResults);
-      }
-
-    res.json(enrichedOrganizers);
+    const result = await AdminService.getOrganizers(db, req.session, req.query);
+    return res.json(result.organizers || []);
   } catch (error) {
     console.error('Error fetching organizers:', error);
     res.status(500).json({ error: 'Failed to fetch organizers' });
@@ -738,73 +612,8 @@ const restoreOrganizer = async (req, res) => {
 const getPlayers = async (req, res) => {
   try {
     const db = await connectDB();
-    const players = await db.collection('users')
-      .find({ role: 'player' })
-      .project({ name: 1, email: 1, phone: 1, college: 1, isDeleted: 1, deleted_by: 1 })
-      .toArray();
-
-    // Fetch products bought by each player
-const playersWithProducts = [];
-      const BATCH_SIZE = 5;
-
-      for (let i = 0; i < players.length; i += BATCH_SIZE) {
-        const chunk = players.slice(i, i + BATCH_SIZE);
-
-        const chunkResults = await Promise.all(chunk.map(async (player) => {
-          const sales = await db.collection('sales').find({
-            $or: [
-              { buyer_id: player._id },
-              { buyer: player.name },
-              { buyer: player.email }
-            ]
-          }).toArray();
-
-          const productMap = new Map();
-          let totalSpent = 0;
-
-          for (const s of sales) {
-            const quantity = Math.max(1, Number(s?.quantity || 1));
-            const saleTotal = Number(s?.price || 0);
-            if (Number.isFinite(saleTotal)) totalSpent += saleTotal;
-
-            let productName = s?.product || s?.product_name || '';
-            if (!productName && s?.product_id) {
-              const p = await db.collection('products').findOne({ _id: s.product_id }, { projection: { name: 1 } });
-              productName = p?.name || 'Unknown Product';
-            }
-            if (!productName) productName = 'Unknown Product';
-
-            const key = `${productName}`;
-            if (!productMap.has(key)) {
-              productMap.set(key, {
-                name: productName,
-                quantity: 0,
-                totalPrice: 0
-              });
-            }
-            const row = productMap.get(key);
-            row.quantity += quantity;
-            row.totalPrice += saleTotal;
-          }
-
-          const boughtProductsDetailed = Array.from(productMap.values()).map((row) => ({
-            ...row,
-            unitPrice: row.quantity > 0 ? Number((row.totalPrice / row.quantity).toFixed(2)) : 0,
-            totalPrice: Number(row.totalPrice.toFixed(2))
-          })).sort((a, b) => b.totalPrice - a.totalPrice);
-
-          return {
-            ...player,
-            boughtProducts: boughtProductsDetailed.map((p) => p.name),
-            boughtProductsDetailed,
-            totalSpent: Number(totalSpent.toFixed(2))
-          };
-        }));
-        
-        playersWithProducts.push(...chunkResults);
-      }
-
-    res.json(playersWithProducts);
+    const result = await AdminService.getPlayers(db, req.session, req.query);
+    return res.json(result.players || []);
   } catch (error) {
     console.error('Error fetching players:', error);
     res.status(500).json({ error: 'Failed to fetch players' });
@@ -886,110 +695,139 @@ const getPayments = async (req, res) => {
     const db = await connectDB();
     const startDate = toDateOrNull(req.query?.startDate);
     const endDate = toDateOrNull(req.query?.endDate);
-    const college = (req.query?.college || '').toString().trim().toLowerCase();
-    const coordinator = (req.query?.coordinator || '').toString().trim().toLowerCase();
+    const collegeKey = normalizeKey(req.query?.college);
+    const coordinatorKey = normalizeKey(req.query?.coordinator);
+    const { limit, skip } = parsePagination(req.query, { defaultLimit: 200, maxLimit: 500 });
 
-    const inDateRange = (dateValue) => {
-      const d = toDateOrNull(dateValue);
-      if (!d) return false;
-      if (startDate && d < startDate) return false;
-      if (endDate && d > endDate) return false;
-      return true;
+    const buildDateMatch = (fieldName) => {
+      const range = {};
+      if (startDate) range.$gte = startDate;
+      if (endDate) range.$lte = endDate;
+      return Object.keys(range).length ? { [fieldName]: range } : {};
     };
 
     // 1. Wallet Recharges
       // We look at the 'payments' collection where purpose='topup', or 'wallet_transactions' where type='credit' and it's not a refund
       // The payments collection seems to better hold topups done via Razorpay:
-      const rawWalletRecharges = await db.collection('payments').aggregate([
-        { $match: { purpose: 'topup' } },
+    const [walletRecharges, subscriptions, tournaments, store] = await Promise.all([
+      db.collection('payments').aggregate([
+        { $match: { purpose: 'topup', ...buildDateMatch('createdAt') } },
         { $lookup: { from: 'users', localField: 'user_id', foreignField: '_id', as: 'user' } },
         { $unwind: { path: '$user', preserveNullAndEmptyArrays: true } },
-        { $project: {
+        ...(collegeKey ? [{ $match: { 'user.college_key': collegeKey } }] : []),
+        {
+          $project: {
             playerName: { $ifNull: ['$user.name', 'Unknown'] },
             playerEmail: '$user.email',
+            college: '$user.college',
             amount: 1,
-            date: '$createdAt',
-      }},
-      { $sort: { date: -1 } }
-    ]).toArray();
+            date: '$createdAt'
+          }
+        },
+        { $sort: { date: -1, _id: -1 } },
+        { $skip: skip },
+        { $limit: limit }
+      ]).toArray(),
 
-    // 2. Subscriptions
-    const rawSubscriptions = await db.collection('subscriptionstable').aggregate([
-      { $lookup: { from: 'users', localField: 'username', foreignField: 'email', as: 'user' } },
-      { $unwind: { path: '$user', preserveNullAndEmptyArrays: true } },
-      { $project: {
-          playerName: { $ifNull: ['$user.name', 'Unknown'] },
-          playerEmail: '$username',
-          plan: 1,
-          start_date: 1,
-          college: '$user.college'
-      }},
-      { $sort: { start_date: -1 } }
-    ]).toArray();
+      db.collection('subscriptionstable').aggregate([
+        ...(Object.keys(buildDateMatch('start_date')).length ? [{ $match: buildDateMatch('start_date') }] : []),
+        {
+          $lookup: {
+            from: 'users',
+            let: { email: '$username' },
+            pipeline: [
+              { $match: { $expr: { $eq: ['$email', '$$email'] } } },
+              ...(collegeKey ? [{ $match: { college_key: collegeKey } }] : []),
+              { $project: { name: 1, email: 1, college: 1 } }
+            ],
+            as: 'user'
+          }
+        },
+        { $unwind: { path: '$user', preserveNullAndEmptyArrays: !collegeKey } },
+        ...(collegeKey ? [{ $match: { user: { $ne: null } } }] : []),
+        {
+          $project: {
+            playerName: { $ifNull: ['$user.name', 'Unknown'] },
+            playerEmail: '$username',
+            plan: 1,
+            start_date: 1,
+            end_date: 1,
+            college: '$user.college'
+          }
+        },
+        { $sort: { start_date: -1, _id: -1 } },
+        { $skip: skip },
+        { $limit: limit }
+      ]).toArray(),
 
-    // 3. Tournaments
-    const rawTournaments = await db.collection('tournaments').aggregate([
-      { $lookup: { from: 'tournament_players', localField: '_id', foreignField: 'tournament_id', as: 'individual_enrollments' } },
-      { $lookup: { from: 'enrolledtournaments_team', localField: '_id', foreignField: 'tournament_id', as: 'team_enrollments' } },
-      { $project: {
-          conductedBy: '$coordinator',
-          name: 1,
-          entry_fee: 1,
-          type: 1,
-          date: 1,
-          college: 1,
-          individual_enrollments: { $size: '$individual_enrollments' },
-          team_enrollments: { $size: { $filter: { input: '$team_enrollments', as: 'team', cond: { $eq: ['$$team.approved', 1] } } } }
-      }},
-      { $facet: {
-          individual: [
-            { $match: { type: 'Individual', individual_enrollments: { $gt: 0 } } },
-            { $project: { conductedBy: 1, name: 1, entry_fee: 1, type: 1, college: 1, total_enrollments: '$individual_enrollments', totalRevenue: { $multiply: ['$entry_fee', '$individual_enrollments'] }, date: 1 } }
-          ],
-          team: [
-            { $match: { type: 'Team', team_enrollments: { $gt: 0 } } },
-            { $project: { conductedBy: 1, name: 1, entry_fee: 1, type: 1, college: 1, total_enrollments: '$team_enrollments', totalRevenue: { $multiply: ['$entry_fee', '$team_enrollments'] }, date: 1 } }
-          ]
-      }},
-      { $project: { combined: { $concatArrays: ['$individual', '$team'] } } },
-      { $unwind: '$combined' },
-      { $replaceRoot: { newRoot: '$combined' } },
-      { $sort: { date: -1 } }
-    ]).toArray();
+      db.collection('tournaments').aggregate([
+        {
+          $match: {
+            status: { $nin: ['Removed', 'Rejected'] },
+            ...buildDateMatch('date'),
+            ...(collegeKey ? { college_key: collegeKey } : {}),
+            ...(coordinatorKey ? { coordinator_key: coordinatorKey } : {})
+          }
+        },
+        {
+          $addFields: {
+            total_enrollments: {
+              $cond: [
+                { $eq: ['$type', 'Individual'] },
+                { $ifNull: ['$individual_enrollment_count', 0] },
+                { $ifNull: ['$team_approved_count', 0] }
+              ]
+            }
+          }
+        },
+        { $match: { total_enrollments: { $gt: 0 } } },
+        {
+          $project: {
+            conductedBy: '$coordinator',
+            name: 1,
+            entry_fee: 1,
+            type: 1,
+            date: 1,
+            college: 1,
+            total_enrollments: 1,
+            totalRevenue: {
+              $ifNull: [
+                '$revenue_total',
+                { $multiply: ['$entry_fee', '$total_enrollments'] }
+              ]
+            }
+          }
+        },
+        { $sort: { date: -1, _id: -1 } },
+        { $skip: skip },
+        { $limit: limit }
+      ]).toArray(),
 
-    // 4. Store
-    const rawStore = await db.collection('sales').aggregate([
-      { $lookup: { from: 'products', localField: 'product_id', foreignField: '_id', as: 'product' } },
-      { $unwind: { path: '$product', preserveNullAndEmptyArrays: true } },
-      { $project: { 
-          item: { $ifNull: ['$product.name', 'Unknown Item'] },
-          price: 1, 
-          soldBy: { $ifNull: ['$product.coordinator', 'Admin'] },
-          boughtBy: '$buyer',
-          college: 1,
-          purchase_date: 1 
-      }},
-      { $sort: { purchase_date: -1 } }
-    ]).toArray();
-
-    // Filtering
-    const filterData = (data, dateField) => {
-      return data.filter(row => {
-        const rowCollege = String(row?.college || '').toLowerCase();
-        const rowCoordinator = String(row?.conductedBy || row?.soldBy || '').toLowerCase();
-        
-        const collegeOk = !college || rowCollege.includes(college);
-        const coordinatorOk = !coordinator || rowCoordinator.includes(coordinator);
-        const dateOk = (!startDate && !endDate) ? true : inDateRange(row[dateField]);
-        
-        return collegeOk && coordinatorOk && dateOk;
-      });
-    };
-
-    const walletRecharges = filterData(rawWalletRecharges, 'date');
-    const subscriptions = filterData(rawSubscriptions, 'start_date');
-    const tournaments = filterData(rawTournaments, 'date');
-    const store = filterData(rawStore, 'purchase_date');
+      db.collection('sales').aggregate([
+        {
+          $match: {
+            ...buildDateMatch('purchase_date'),
+            ...(collegeKey ? { college_key: collegeKey } : {})
+          }
+        },
+        { $lookup: { from: 'products', localField: 'product_id', foreignField: '_id', as: 'product' } },
+        { $unwind: { path: '$product', preserveNullAndEmptyArrays: true } },
+        ...(coordinatorKey ? [{ $match: { 'product.coordinator_key': coordinatorKey } }] : []),
+        {
+          $project: {
+            item: { $ifNull: ['$product.name', 'Unknown Item'] },
+            price: 1,
+            soldBy: { $ifNull: ['$product.coordinator', 'Admin'] },
+            boughtBy: '$buyer',
+            college: 1,
+            purchase_date: 1
+          }
+        },
+        { $sort: { purchase_date: -1, _id: -1 } },
+        { $skip: skip },
+        { $limit: limit }
+      ]).toArray()
+    ]);
 
     res.json({
       success: true,
@@ -1004,6 +842,10 @@ const getPayments = async (req, res) => {
         endDate: endDate || null,
         college: req.query?.college || '',
         coordinator: req.query?.coordinator || ''
+      },
+      pagination: {
+        limit,
+        skip
       }
     });
   } catch (error) {
@@ -1015,71 +857,8 @@ const getPayments = async (req, res) => {
 const getOrganizerAnalytics = async (req, res) => {
   try {
     const db = await connectDB();
-    const organizers = await db.collection('users')
-      .find({ role: 'organizer', isDeleted: { $ne: 1 } })
-      .project({ name: 1, email: 1, college: 1 })
-      .toArray();
-
-    const now = new Date();
-    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
-
-    const rows = [];
-    for (const org of organizers) {
-      const identityRegexes = [
-        new RegExp(`^${String(org?.name || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'),
-        new RegExp(`^${String(org?.email || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i')
-      ];
-
-      const approvedCount = await db.collection('tournaments').countDocuments({
-        $or: [{ approved_by: { $in: [org?.name, org?.email] } }, { approved_by: { $in: identityRegexes } }],
-        status: 'Approved'
-      });
-      const rejectedCount = await db.collection('tournaments').countDocuments({
-        $or: [{ rejected_by: { $in: [org?.name, org?.email] } }, { rejected_by: { $in: identityRegexes } }],
-        status: 'Rejected'
-      });
-      const meetingsScheduled = await db.collection('meetingsdb').countDocuments({
-        role: 'organizer',
-        $or: [{ name: org?.name }, { name: org?.email }, { name: { $in: identityRegexes } }]
-      });
-
-      const monthApprovedCurrent = await db.collection('tournaments').countDocuments({
-        approved_date: { $gte: currentMonthStart },
-        $or: [{ approved_by: org?.name }, { approved_by: org?.email }, { approved_by: { $in: identityRegexes } }]
-      });
-      const monthApprovedPrev = await db.collection('tournaments').countDocuments({
-        approved_date: { $gte: prevMonthStart, $lte: prevMonthEnd },
-        $or: [{ approved_by: org?.name }, { approved_by: org?.email }, { approved_by: { $in: identityRegexes } }]
-      });
-      const growthPercentage = monthApprovedPrev > 0
-        ? Math.round(((monthApprovedCurrent - monthApprovedPrev) / monthApprovedPrev) * 100)
-        : (monthApprovedCurrent > 0 ? 100 : 0);
-
-      rows.push({
-        name: org?.name || 'Organizer',
-        email: org?.email || '',
-        college: org?.college || '',
-        approvedCount,
-        rejectedCount,
-        decisions: approvedCount + rejectedCount,
-        meetingsScheduled,
-        growthPercentage
-      });
-    }
-
-    rows.sort((a, b) => b.decisions - a.decisions || b.approvedCount - a.approvedCount);
-    rows.forEach((r, i) => { r.rank = i + 1; });
-
-    const totals = rows.reduce((acc, row) => ({
-      organizers: acc.organizers + 1,
-      approvedCount: acc.approvedCount + row.approvedCount,
-      rejectedCount: acc.rejectedCount + row.rejectedCount,
-      meetingsScheduled: acc.meetingsScheduled + row.meetingsScheduled
-    }), { organizers: 0, approvedCount: 0, rejectedCount: 0, meetingsScheduled: 0 });
-
-    return res.json({ totals, organizers: rows });
+    const result = await AdminService.getOrganizerAnalytics(db, req.session);
+    return res.json(result);
   } catch (error) {
     console.error('Error fetching organizer analytics:', error);
     return res.status(500).json({ error: 'Failed to fetch organizer analytics' });
@@ -1089,84 +868,8 @@ const getOrganizerAnalytics = async (req, res) => {
 const getGrowthAnalytics = async (req, res) => {
   try {
     const db = await connectDB();
-    const { range, start, end, granularity } = getRangeConfig(req.query?.range);
-    const buckets = buildBuckets(start, end, granularity);
-    const bucketMap = {};
-    buckets.forEach((bucket) => {
-      bucketMap[bucket.key] = {
-        label: bucket.label,
-        tournamentsCreated: 0,
-        completedTournaments: 0,
-        ongoingTournaments: 0,
-        rejectedTournaments: 0,
-        revenue: 0,
-        transactions: 0
-      };
-    });
-
-    const [users, sales, tournaments] = await Promise.all([
-      db.collection('users').find({ isDeleted: { $ne: 1 } }).project({ role: 1 }).toArray(),
-      db.collection('sales').find({}).project({ price: 1, purchase_date: 1, created_date: 1, created_at: 1, createdAt: 1 }).toArray(),
-      db.collection('tournaments').find({ status: { $ne: 'Removed' } }).project({ status: 1, submitted_date: 1, created_date: 1, created_at: 1, added_date: 1 }).toArray()
-    ]);
-
-    tournaments.forEach((tournament) => {
-      const created = inferCreatedDate(tournament, ['submitted_date', 'created_date', 'created_at', 'added_date']);
-      if (!created || created < start || created > end) return;
-      const key = toBucketKey(created, granularity);
-      if (!bucketMap[key]) return;
-      bucketMap[key].tournamentsCreated += 1;
-      const status = String(tournament?.status || '').toLowerCase();
-      if (status === 'completed') bucketMap[key].completedTournaments += 1;
-      if (status === 'ongoing') bucketMap[key].ongoingTournaments += 1;
-      if (status === 'rejected') bucketMap[key].rejectedTournaments += 1;
-    });
-
-    sales.forEach((sale) => {
-      const purchaseDate = inferCreatedDate(sale, ['purchase_date', 'created_date', 'created_at', 'createdAt']);
-      if (!purchaseDate || purchaseDate < start || purchaseDate > end) return;
-      const key = toBucketKey(purchaseDate, granularity);
-      if (!bucketMap[key]) return;
-      bucketMap[key].revenue += Number(sale?.price || 0);
-      bucketMap[key].transactions += 1;
-    });
-
-    const tournamentsTimeline = buckets.map((bucket) => ({
-      label: bucket.label,
-      totalCreated: bucketMap[bucket.key]?.tournamentsCreated || 0,
-      completed: bucketMap[bucket.key]?.completedTournaments || 0,
-      ongoing: bucketMap[bucket.key]?.ongoingTournaments || 0,
-      rejected: bucketMap[bucket.key]?.rejectedTournaments || 0
-    }));
-    const salesTimeline = buckets.map((bucket) => ({
-      label: bucket.label,
-      revenue: Number((bucketMap[bucket.key]?.revenue || 0).toFixed(2)),
-      transactions: bucketMap[bucket.key]?.transactions || 0
-    }));
-
-    const playersCount = users.filter((u) => u.role === 'player').length;
-    const coordinatorsCount = users.filter((u) => u.role === 'coordinator').length;
-    const organizersCount = users.filter((u) => u.role === 'organizer').length;
-    const totalUsers = playersCount + coordinatorsCount + organizersCount;
-
-    const summary = {
-      totalRevenue: Number(salesTimeline.reduce((sum, row) => sum + Number(row.revenue || 0), 0).toFixed(2)),
-      totalUsers,
-      totalTournaments: tournamentsTimeline.reduce((sum, row) => sum + Number(row.totalCreated || 0), 0)
-    };
-
-    return res.json({
-      range,
-      granularity,
-      summary,
-      userTotals: {
-        players: playersCount,
-        coordinators: coordinatorsCount,
-        organizers: organizersCount
-      },
-      tournamentsTimeline,
-      salesTimeline
-    });
+    const result = await AdminService.getGrowthAnalytics(db, req.session, req.query?.range);
+    return res.json(result);
   } catch (error) {
     console.error('Error fetching admin growth analytics:', error);
     return res.status(500).json({ error: 'Failed to fetch growth analytics' });
@@ -1177,92 +880,8 @@ const getCoordinatorDetails = async (req, res) => {
   try {
     const { email } = req.params;
     const db = await connectDB();
-
-    // Get the coordinator
-    const coordinator = await db.collection('users').findOne({ email: email, role: 'coordinator' });
-    if (!coordinator) {
-      return res.status(404).json({ error: 'Coordinator not found' });
-    }
-
-    const identityRegexes = [
-      new RegExp(`^${(coordinator.name || '').replace(/[-/\\^$*+?.()|[\\]{}]/g, '\\$&')}$`, 'i'),
-      new RegExp(`^${(coordinator.email || '').replace(/[-/\\^$*+?.()|[\\]{}]/g, '\\$&')}$`, 'i')
-    ].filter(r => r.source !== '^$');
-
-    // Students under him (players in the same college)
-    let students = [];
-    if (coordinator.college) {
-      students = await db.collection('users').find({
-        role: 'player',
-        college: coordinator.college
-      }).project({ name: 1, email: 1, FIDE_ID: 1 }).toArray();
-    }
-
-    // Tournaments conducted by this coordinator
-    const tournaments = await db.collection('tournaments').find({
-      $or: [
-        { added_by: coordinator.name },
-        { added_by: coordinator.email },
-        { added_by: { $in: identityRegexes } }
-      ]
-    }).project({ name: 1, type: 1, date: 1, entry_fee: 1, status: 1 }).sort({ date: -1 }).toArray();
-
-    // Products and Sales
-    const products = await db.collection('products').find({
-      $or: [
-        { coordinator: coordinator.name },
-        { coordinator: coordinator.email },
-        { coordinator: { $in: identityRegexes } }
-      ]
-    }).toArray();
-
-    const productIds = products.map(p => p._id);
-    let sales = [];
-    let totalEarnings = 0;
-
-    if (productIds.length > 0) {
-      sales = await db.collection('sales').aggregate([
-        { $match: { product_id: { $in: productIds } } },
-        { $lookup: { from: 'products', localField: 'product_id', foreignField: '_id', as: 'product' } },
-        { $unwind: { path: '$product', preserveNullAndEmptyArrays: true } },
-        { $project: { product_name: '$product.name', buyer: 1, college: 1, price: 1, purchase_date: 1, quantity: 1 } },
-        { $sort: { purchase_date: -1 } }
-      ]).toArray();
-      
-      totalEarnings = sales.reduce((sum, sale) => sum + (Number(sale.price) || 0), 0);
-    }
-
-    // Get meetings scheduled/taken by this coordinator
-    const meetings = await db.collection('meetingsdb').find({
-      $or: [
-        { name: coordinator.name },
-        { name: coordinator.email },
-        { created_by: coordinator.email },
-        { name: { $in: identityRegexes } }
-      ]
-    }).sort({ date: -1, time: -1 }).toArray();
-
-    const status = coordinator.isDeleted 
-      ? (coordinator.deleted_by && coordinator.deleted_by.toLowerCase() === coordinator.email.toLowerCase() ? 'Left Platform' : 'Removed')
-      : 'Active';
-
-    res.json({
-      coordinator: {
-        name: coordinator.name,
-        email: coordinator.email,
-        college: coordinator.college,
-        isDeleted: coordinator.isDeleted,
-        status: status
-      },
-      students,
-      tournaments,
-      productsStats: {
-        productsListed: products.length,
-        sales,
-        totalEarnings
-      },
-      meetings
-    });
+    const result = await AdminService.getCoordinatorDetails(db, req.session, email, req.query);
+    return res.json(result);
 
   } catch (error) {
     console.error('Error fetching coordinator details:', error);
@@ -1287,149 +906,8 @@ const getPlayerDetails = async (req, res) => {
   try {
     const { email } = req.params;
     const db = await connectDB();
-
-    const player = await db.collection('users').findOne({ email: email, role: 'player' });
-    if (!player) return res.status(404).json({ error: 'Player not found' });
-
-    const identityRegexes = [
-      new RegExp(`^${(player.name || '').replace(/[-/\\^$*+?.()|[\\]{}]/g, '\\$&')}$`, 'i'),
-      new RegExp(`^${(player.email || '').replace(/[-/\\^$*+?.()|[\\]{}]/g, '\\$&')}$`, 'i')
-    ].filter(r => r.source !== '^$');
-
-    // Wallet recharges
-    const walletDoc = await db.collection('user_balances').findOne({ user_id: player._id });
-    const topups = await db.collection('payments').find({
-      user_id: player._id,
-      purpose: 'topup'
-    }).sort({ createdAt: -1 }).toArray();
-
-    const totalRecharged = topups.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
-
-    // Tournaments participated
-    const ptournaments = await db.collection('tournament_players').find({
-      $or: [
-        { username: player.name },
-        { username: { $in: identityRegexes } }
-      ]
-    }).toArray();
-
-    // The frontend/backend usually passes ObjectId or string.
-    const { ObjectId } = require('mongodb');
-    const tournamentIds = ptournaments.map(t => {
-       try { return typeof t.tournament_id === 'string' ? new ObjectId(t.tournament_id) : t.tournament_id; }
-       catch(e) { return t.tournament_id; }
-    });
-    
-    let tournaments = [];
-    if(tournamentIds.length > 0) {
-      const tData = await db.collection('tournaments').find({ _id: { $in: tournamentIds } }).project({ name: 1, title: 1, type: 1, start_date: 1, date: 1, entry_fee: 1, status: 1 }).toArray();
-      const resolvePosition = async (tournamentId, pRecord) => {
-        const directPosition = pRecord?.rank ?? pRecord?.position;
-        if (directPosition != null) return directPosition;
-
-        let tid;
-        try { tid = typeof tournamentId === 'string' ? new ObjectId(tournamentId) : tournamentId; }
-        catch (e) { tid = tournamentId; }
-
-        const storedPairings = await db.collection('tournament_pairings').findOne({ tournament_id: tid });
-        if (!storedPairings || !Array.isArray(storedPairings.rounds)) return 'N/A';
-
-        const players = await db.collection('tournament_players')
-          .find({ tournament_id: tid })
-          .project({ _id: 1, username: 1 })
-          .toArray();
-        if (players.length === 0) return 'N/A';
-
-        const playersMap = new Map(players.map((p) => [String(p._id), { id: String(p._id), username: p.username, score: 0 }]));
-        storedPairings.rounds.forEach((round) => {
-          (round?.pairings || []).forEach((pairing) => {
-            const p1 = playersMap.get(String(pairing?.player1?.id));
-            const p2 = playersMap.get(String(pairing?.player2?.id));
-            if (p1) p1.score = Number(pairing?.player1?.score || 0);
-            if (p2) p2.score = Number(pairing?.player2?.score || 0);
-          });
-          if (round?.byePlayer) {
-            const byePlayer = playersMap.get(String(round.byePlayer.id));
-            if (byePlayer) byePlayer.score = Number(round.byePlayer.score || 0);
-          }
-        });
-
-        const rankings = Array.from(playersMap.values())
-          .sort((a, b) => b.score - a.score)
-          .map((p, index) => ({ rank: index + 1, username: p.username }));
-
-        const playerName = String(pRecord?.username || player.name || '').trim().toLowerCase();
-        const rankRow = rankings.find((r) => String(r.username || '').trim().toLowerCase() === playerName);
-        return rankRow ? rankRow.rank : 'N/A';
-      };
-
-      tournaments = await Promise.all(tData.map(async (t) => {
-        const pRecord = ptournaments.find(pt => String(pt.tournament_id) === String(t._id));
-        return {
-          ...t,
-          position: await resolvePosition(t._id, pRecord)
-        };
-      }));
-    }
-
-    // Subscriptions
-    const subscriptions = await db.collection('subscriptionstable').find({
-      $or: [
-        { email: player.email },
-        { username: player.email },
-        { name: player.name },
-        { username: player.name },
-        { email: { $in: identityRegexes } },
-        { username: { $in: identityRegexes } }
-      ]
-    }).sort({ _id: -1 }).toArray();
-
-    // Products bought
-    const sales = await db.collection('sales').aggregate([
-      { $match: { 
-          $or: [
-            { buyer_id: player._id },
-            { buyer: player.name },
-            { buyer: player.email }
-          ]
-        }
-      },
-      { $lookup: { from: 'products', localField: 'product_id', foreignField: '_id', as: 'product' } },
-      { $unwind: { path: '$product', preserveNullAndEmptyArrays: true } },
-      { $project: { product_name: '$product.name', coordinator: '$product.coordinator', price: 1, purchase_date: 1, quantity: 1 } },
-      { $sort: { purchase_date: -1 } }
-    ]).toArray();
-
-    const stats = {
-      walletBalance: Number(walletDoc?.wallet_balance || 0),
-      totalRecharged,
-      fideId: player.FIDE_ID || 'N/A',
-      aicfId: player.AICF_ID || 'N/A'
-    };
-
-    const status = player.isDeleted 
-      ? (player.deleted_by && player.deleted_by.toLowerCase() === player.email.toLowerCase() ? 'Left Platform' : 'Removed')
-      : 'Active';
-
-    const playerId = String(player._id);
-
-    res.json({
-      player: {
-        _id: playerId,
-        playerId,
-        name: player.name,
-        email: player.email,
-        college: player.college,
-        dob: player.dob,
-        isDeleted: player.isDeleted,
-        status: status
-      },
-      stats,
-      topups,
-      tournaments,
-      subscriptions,
-      sales
-    });
+    const result = await AdminService.getPlayerDetails(db, req.session, email);
+    return res.json(result);
   } catch(error) {
     console.error('Error fetching player details:', error);
     res.status(500).json({ error: 'Failed to fetch player details' });

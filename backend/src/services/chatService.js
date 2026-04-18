@@ -23,34 +23,53 @@ const ChatService = {
   async getContacts(db, username) {
     if (!username) throw Object.assign(new Error('username required'), { statusCode: 400 });
 
-    const recent = await db.collection('chat_messages').find({
-      $or: [
-        { room: 'global' },
-        { room: { $regex: '^pm:' } }
-      ],
-      $or: [
-        { sender: username },
-        { receiver: username },
-        { room: { $regex: username } }
-      ]
-    }).sort({ timestamp: -1 }).limit(500).toArray();
-
-    const contactsMap = new Map();
-    for (const m of recent) {
-      if (m.room === 'global') {
-        if (!contactsMap.has('All')) {
-          contactsMap.set('All', { contact: 'All', lastMessage: m.message, timestamp: m.timestamp, room: 'global' });
+    // Prefer indexed fields (participants/sender/receiver) and avoid regex scans.
+    // For legacy docs without participants, sender/receiver are still available for PM messages.
+    const pipeline = [
+      {
+        $match: {
+          $or: [
+            { room: 'global' },
+            { participants: username },
+            { sender: username },
+            { receiver: username }
+          ]
         }
-        continue;
+      },
+      { $sort: { timestamp: -1 } },
+      { $limit: 2000 },
+      {
+        $addFields: {
+          contact: {
+            $cond: [
+              { $eq: ['$room', 'global'] },
+              'All',
+              { $cond: [{ $eq: ['$sender', username] }, '$receiver', '$sender'] }
+            ]
+          }
+        }
+      },
+      {
+        $group: {
+          _id: '$contact',
+          lastMessage: { $first: '$message' },
+          timestamp: { $first: '$timestamp' },
+          room: { $first: '$room' }
+        }
+      },
+      { $sort: { timestamp: -1 } },
+      {
+        $project: {
+          _id: 0,
+          contact: '$_id',
+          lastMessage: 1,
+          timestamp: 1,
+          room: 1
+        }
       }
-      const parts = (m.room || '').replace(/^pm:/, '').split(':');
-      const other = parts.find(p => p !== username) || parts[0] || 'Unknown';
-      if (!contactsMap.has(other)) {
-        contactsMap.set(other, { contact: other, lastMessage: m.message, timestamp: m.timestamp, room: m.room });
-      }
-    }
+    ];
 
-    return Array.from(contactsMap.values()).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    return db.collection('chat_messages').aggregate(pipeline).toArray();
   },
 
   /**

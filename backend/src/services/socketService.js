@@ -74,6 +74,7 @@ function initSocketHandlers(io) {
             room: 'global',
             sender: actualSender,
             message,
+            participants: [],
             timestamp: new Date()
           });
         } else {
@@ -92,6 +93,7 @@ function initSocketHandlers(io) {
             sender: actualSender,
             receiver,
             message,
+            participants: [actualSender, receiver].filter(Boolean).sort(),
             timestamp: new Date()
           });
         }

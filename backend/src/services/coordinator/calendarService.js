@@ -2,6 +2,7 @@ const { connectDB } = require('../../config/database');
 const { ObjectId } = require('mongodb');
 const { safeTrim, parseDateValue, isPastDate, isAllowedMeetingLink, getCoordinatorOwnerIdentifiers, requireCoordinator } = require('./coordinatorUtils');
 const { getModel } = require('../../models');
+const { normalizeKey, parsePagination } = require('../../utils/mongo');
 const TournamentModel = getModel('tournaments');
 const MeetingsModel = getModel('meetingsdb');
 const AnnouncementsModel = getModel('announcements');
@@ -17,8 +18,9 @@ const CalendarService = {
     const database = await resolveDb(db);
     const { all, year, month } = query || {};
     const ownerIdentifiers = await getCoordinatorOwnerIdentifiers(database, user);
-    const ownerIdentifiersLower = ownerIdentifiers.map((v) => v.toLowerCase());
     const includeAll = all === 'true';
+    const ownerKeys = ownerIdentifiers.map(normalizeKey).filter(Boolean);
+    const { limit, skip } = parsePagination(query, { defaultLimit: 500, maxLimit: 2000 });
 
     const yearNum = Number.parseInt(year, 10);
     const monthNum = Number.parseInt(month, 10);
@@ -29,202 +31,219 @@ const CalendarService = {
       rangeEnd = new Date(yearNum, monthNum, 1);
     }
 
-    const tournamentQuery = {
-      status: { $nin: ['Removed', 'Rejected'] }
-    };
-    if (rangeStart && rangeEnd) {
-      tournamentQuery.date = { $gte: rangeStart, $lt: rangeEnd };
-    }
-    if (!includeAll) {
-      tournamentQuery.coordinator = { $in: ownerIdentifiers };
-    }
+    const buildRangeMatch = (fieldName) => (
+      rangeStart && rangeEnd ? { [fieldName]: { $gte: rangeStart, $lt: rangeEnd } } : {}
+    );
 
-    const meetingQuery = { role: 'coordinator' };
-    if (rangeStart && rangeEnd) {
-      meetingQuery.date = { $gte: rangeStart, $lt: rangeEnd };
-    }
-    if (!includeAll) {
-      meetingQuery.$or = [
-        { name: { $in: ownerIdentifiers } },
-        { created_by: { $in: ownerIdentifiers } }
-      ];
-    }
-
-    const announcementQuery = { is_active: { $ne: false } };
-    if (rangeStart && rangeEnd) {
-      announcementQuery.posted_date = { $gte: rangeStart, $lt: rangeEnd };
-    }
-    if (!includeAll) {
-      announcementQuery.posted_by = { $in: ownerIdentifiers };
-    }
-
-    const calendarQuery = { role: 'coordinator' };
-    if (rangeStart && rangeEnd) {
-      calendarQuery.date = { $gte: rangeStart, $lt: rangeEnd };
-    }
-    if (!includeAll) {
-      calendarQuery.created_by = { $in: ownerIdentifiers };
-    }
-
-    const [tournaments, meetings, announcements, chessEvents, calendarEvents] = await Promise.all([
-      TournamentModel.findMany(
-        database,
-        tournamentQuery,
-        {
-          projection: {
-            name: 1,
-            date: 1,
-            time: 1,
-            location: 1,
-            description: 1,
-            status: 1,
-            type: 1,
-            coordinator: 1
-          }
+    const [result] = await database.collection('tournaments').aggregate([
+      {
+        $match: {
+          status: { $nin: ['Removed', 'Rejected'] },
+          ...buildRangeMatch('date'),
+          ...(!includeAll
+            ? {
+              $or: [
+                { coordinator: { $in: ownerIdentifiers } },
+                { coordinator_key: { $in: ownerKeys } }
+              ]
+            }
+            : {})
         }
-      ),
-      MeetingsModel.findMany(
-        database,
-        meetingQuery,
-        {
-          projection: {
-            title: 1,
-            description: 1,
-            date: 1,
-            time: 1,
-            link: 1,
-            type: 1,
-            name: 1,
-            created_by: 1
-          }
+      },
+      {
+        $project: {
+          date: { $ifNull: ['$date', '$$NOW'] },
+          time: { $ifNull: ['$time', ''] },
+          title: { $ifNull: ['$name', 'Tournament'] },
+          description: {
+            $ifNull: [
+              '$description',
+              {
+                $cond: [
+                  { $gt: [{ $strLenCP: { $ifNull: ['$location', ''] } }, 0] },
+                  { $concat: ['Location: ', '$location'] },
+                  ''
+                ]
+              }
+            ]
+          },
+          type: { $literal: 'tournament' },
+          source: { $literal: 'tournament' },
+          link: { $literal: '' },
+          status: 1,
+          tournamentType: '$type',
+          location: 1,
+          coordinator: 1,
+          ownerKey: { $ifNull: ['$coordinator_key', { $toLower: { $ifNull: ['$coordinator', ''] } }] }
         }
-      ),
-      AnnouncementsModel.findMany(
-        database,
-        announcementQuery,
-        {
-          projection: {
-            title: 1,
-            message: 1,
-            posted_date: 1,
-            posted_by: 1,
-            target_role: 1,
-            is_active: 1
-          }
+      },
+      {
+        $unionWith: {
+          coll: 'meetingsdb',
+          pipeline: [
+            {
+              $match: {
+                role: 'coordinator',
+                ...buildRangeMatch('date'),
+                ...(!includeAll
+                  ? {
+                    $or: [
+                      { name: { $in: ownerIdentifiers } },
+                      { created_by: { $in: ownerIdentifiers } },
+                      { name_key: { $in: ownerKeys } },
+                      { created_by_key: { $in: ownerKeys } }
+                    ]
+                  }
+                  : {})
+              }
+            },
+            {
+              $project: {
+                date: { $ifNull: ['$date', '$$NOW'] },
+                time: { $ifNull: ['$time', ''] },
+                title: { $ifNull: ['$title', 'Meeting'] },
+                description: { $ifNull: ['$description', ''] },
+                type: { $toLower: { $ifNull: ['$type', 'meeting'] } },
+                source: { $literal: 'meeting' },
+                link: { $ifNull: ['$link', ''] },
+                name: 1,
+                created_by: 1,
+                ownerKey: {
+                  $ifNull: [
+                    '$created_by_key',
+                    { $ifNull: ['$name_key', { $toLower: { $ifNull: ['$created_by', { $ifNull: ['$name', ''] }] } }] }
+                  ]
+                }
+              }
+            }
+          ]
         }
-      ),
-      ChessEventsModel.findMany(
-        database,
-        rangeStart && rangeEnd ? { date: { $gte: rangeStart, $lt: rangeEnd } } : {},
-        {
-          projection: {
-            title: 1,
-            description: 1,
-            date: 1,
-            category: 1,
-            location: 1,
-            link: 1,
-            coordinatorName: 1,
-            coordinatorId: 1,
-            active: 1
-          }
+      },
+      {
+        $unionWith: {
+          coll: 'announcements',
+          pipeline: [
+            {
+              $match: {
+                is_active: { $ne: false },
+                ...buildRangeMatch('posted_date'),
+                ...(!includeAll ? { posted_by: { $in: ownerIdentifiers } } : {})
+              }
+            },
+            {
+              $project: {
+                date: { $ifNull: ['$posted_date', '$$NOW'] },
+                time: { $literal: '' },
+                title: { $ifNull: ['$title', 'Announcement'] },
+                description: { $ifNull: ['$message', ''] },
+                type: { $literal: 'announcement' },
+                source: { $literal: 'announcement' },
+                link: { $literal: '' },
+                posted_by: 1,
+                target_role: 1,
+                ownerKey: { $toLower: { $ifNull: ['$posted_by', ''] } }
+              }
+            }
+          ]
         }
-      ),
-      CalendarEventsModel.findMany(
-        database,
-        calendarQuery,
-        {
-          projection: {
-            title: 1,
-            description: 1,
-            date: 1,
-            time: 1,
-            link: 1,
-            type: 1,
-            name: 1,
-            created_by: 1,
-            created_date: 1
-          }
+      },
+      {
+        $unionWith: {
+          coll: 'chess_events',
+          pipeline: [
+            {
+              $match: {
+                active: { $ne: false },
+                ...buildRangeMatch('date')
+              }
+            },
+            {
+              $project: {
+                date: { $ifNull: ['$date', '$$NOW'] },
+                time: { $literal: '' },
+                title: { $ifNull: ['$title', 'Chess Event'] },
+                description: { $ifNull: ['$description', ''] },
+                type: { $literal: 'chess event' },
+                source: { $literal: 'chess_event' },
+                link: { $ifNull: ['$link', ''] },
+                category: 1,
+                location: 1,
+                coordinatorName: 1,
+                coordinatorId: 1,
+                ownerKey: {
+                  $toLower: {
+                    $ifNull: ['$coordinatorName', { $ifNull: ['$coordinatorId', ''] }]
+                  }
+                }
+              }
+            }
+          ]
         }
-      )
-    ]);
-
-    const mappedTournaments = tournaments.map((t) => ({
-      ...t,
-      _id: t._id.toString(),
-      title: t.name || 'Tournament',
-      description: t.description || (t.location ? `Location: ${t.location}` : ''),
-      type: 'tournament',
-      source: 'tournament',
-      isMine: ownerIdentifiersLower.includes(String(t.coordinator || '').trim().toLowerCase())
-    }));
-
-    const mappedMeetings = meetings.map((m) => ({
-      ...m,
-      _id: m._id.toString(),
-      type: safeTrim(m.type || 'meeting').toLowerCase() || 'meeting',
-      source: 'meeting',
-      isMine: ownerIdentifiersLower.includes(String(m.name || m.created_by || '').trim().toLowerCase())
-    }));
-
-    const mappedAnnouncements = (announcements || []).map((a) => ({
-      ...a,
-      _id: a._id.toString(),
-      title: safeTrim(a.title) || 'Announcement',
-      description: safeTrim(a.message),
-      date: a.posted_date || new Date(),
-      type: 'announcement',
-      source: 'announcement',
-      isMine: ownerIdentifiersLower.includes(String(a.posted_by || '').trim().toLowerCase())
-    }));
-
-    const mappedChessEvents = (chessEvents || [])
-      .filter((ev) => ev?.active !== false)
-      .map((ev) => {
-        const ownerKey = String(ev.coordinatorName || ev.coordinatorId || '').trim().toLowerCase();
-        return {
-          ...ev,
-          _id: ev._id.toString(),
-          date: ev.date || new Date(),
-          time: ev.time || '',
-          type: 'chess event',
-          source: 'chess_event',
-          isMine: ownerIdentifiersLower.includes(ownerKey)
-        };
-      });
-
-    const mappedCalendarEvents = (calendarEvents || []).map((ev) => {
-      const ownerKey = String(ev.created_by || ev.name || '').trim().toLowerCase();
-      return {
-        ...ev,
-        _id: ev._id.toString(),
-        title: safeTrim(ev.title) || 'Event',
-        description: safeTrim(ev.description),
-        date: ev.date || new Date(),
-        time: ev.time || '',
-        type: safeTrim(ev.type || 'other').toLowerCase() || 'other',
-        source: 'calendar',
-        isMine: ownerIdentifiersLower.includes(ownerKey)
-      };
-    });
-
-    const events = [
-      ...mappedTournaments,
-      ...mappedMeetings,
-      ...mappedAnnouncements,
-      ...mappedChessEvents,
-      ...mappedCalendarEvents
-    ]
-      .filter((event) => includeAll || event.isMine)
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      },
+      {
+        $unionWith: {
+          coll: 'calendar_events',
+          pipeline: [
+            {
+              $match: {
+                role: 'coordinator',
+                ...buildRangeMatch('date'),
+                ...(!includeAll
+                  ? {
+                    $or: [
+                      { created_by: { $in: ownerIdentifiers } },
+                      { created_by_key: { $in: ownerKeys } }
+                    ]
+                  }
+                  : {})
+              }
+            },
+            {
+              $project: {
+                date: { $ifNull: ['$date', '$$NOW'] },
+                time: { $ifNull: ['$time', ''] },
+                title: { $ifNull: ['$title', 'Event'] },
+                description: { $ifNull: ['$description', ''] },
+                type: { $toLower: { $ifNull: ['$type', 'other'] } },
+                source: { $literal: 'calendar' },
+                link: { $ifNull: ['$link', ''] },
+                name: 1,
+                created_by: 1,
+                created_date: 1,
+                ownerKey: {
+                  $ifNull: [
+                    '$created_by_key',
+                    { $toLower: { $ifNull: ['$created_by', { $ifNull: ['$name', ''] }] } }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      },
+      { $addFields: { _id: { $toString: '$_id' }, isMine: { $in: ['$ownerKey', ownerKeys] } } },
+      ...(!includeAll ? [{ $match: { isMine: true } }] : []),
+      { $sort: { date: 1, time: 1, source: 1, _id: 1 } },
+      {
+        $facet: {
+          events: [{ $skip: skip }, { $limit: limit }],
+          tournaments: [{ $match: { source: 'tournament' } }, { $skip: skip }, { $limit: limit }],
+          meetings: [{ $match: { source: 'meeting' } }, { $skip: skip }, { $limit: limit }],
+          announcements: [{ $match: { source: 'announcement' } }, { $skip: skip }, { $limit: limit }],
+          chessEvents: [{ $match: { source: 'chess_event' } }, { $skip: skip }, { $limit: limit }],
+          calendarEvents: [{ $match: { source: 'calendar' } }, { $skip: skip }, { $limit: limit }]
+        }
+      }
+    ]).toArray();
 
     return {
-      events,
-      tournaments: mappedTournaments,
-      meetings: mappedMeetings,
-      announcements: mappedAnnouncements,
-      chessEvents: mappedChessEvents,
-      calendarEvents: mappedCalendarEvents
+      events: result?.events || [],
+      tournaments: result?.tournaments || [],
+      meetings: result?.meetings || [],
+      announcements: result?.announcements || [],
+      chessEvents: result?.chessEvents || [],
+      calendarEvents: result?.calendarEvents || [],
+      pagination: { limit, skip }
     };
   },
 

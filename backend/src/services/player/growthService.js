@@ -202,8 +202,6 @@ const GrowthService = {
       }
 
       const username = playerUser.name;
-      const pairingDocs = await TournamentPairingsModel.findMany(database, {});
-      const teamPairingDocs = await TournamentTeamPairingsModel.findMany(database, {});
       const gameHistory = [];
       let realWins = 0, realLosses = 0, realDraws = 0;
       let whiteWins = 0, whiteLosses = 0, whiteDraws = 0;
@@ -211,36 +209,114 @@ const GrowthService = {
       let currentStreak = 0, winStreak = 0, loseStreak = 0, currentLoseStreak = 0;
       const rawGames = [];
 
+      const teamMatchOr = [
+        { 'rounds.pairings.team1.captainName': username },
+        { 'rounds.pairings.team1.player1': username },
+        { 'rounds.pairings.team1.player2': username },
+        { 'rounds.pairings.team1.player3': username },
+        { 'rounds.pairings.team2.captainName': username },
+        { 'rounds.pairings.team2.player1': username },
+        { 'rounds.pairings.team2.player2': username },
+        { 'rounds.pairings.team2.player3': username }
+      ];
+
+      const [teamPairingDocs, pairingDocs] = await Promise.all([
+        TournamentTeamPairingsModel.aggregate(database, [
+          { $match: { $or: teamMatchOr } },
+          { $lookup: { from: 'tournaments', localField: 'tournament_id', foreignField: '_id', as: 'tournament' } },
+          { $unwind: { path: '$tournament', preserveNullAndEmptyArrays: true } },
+          {
+            $project: {
+              rounds: 1,
+              tournamentName: { $ifNull: ['$tournament.name', 'Team Tournament'] },
+              tournamentDate: { $ifNull: ['$tournament.date', '$$NOW'] }
+            }
+          }
+        ]),
+        TournamentPairingsModel.aggregate(database, [
+          {
+            $match: {
+              $or: [
+                { 'rounds.pairings.player1.username': username },
+                { 'rounds.pairings.player2.username': username }
+              ]
+            }
+          },
+          { $lookup: { from: 'tournaments', localField: 'tournament_id', foreignField: '_id', as: 'tournament' } },
+          { $unwind: { path: '$tournament', preserveNullAndEmptyArrays: true } },
+          {
+            $project: {
+              rounds: 1,
+              tournamentName: { $ifNull: ['$tournament.name', 'Tournament'] },
+              tournamentDate: { $ifNull: ['$tournament.date', '$$NOW'] }
+            }
+          }
+        ])
+      ]);
+
+      function teamHasPlayer(team, name) {
+        if (!team || !name) return false;
+        return (
+          team.captainName === name ||
+          team.player1 === name ||
+          team.player2 === name ||
+          team.player3 === name
+        );
+      }
+
+      function parseTeamOutcome(pairing, name) {
+        const isT1 = teamHasPlayer(pairing.team1, name);
+        const isT2 = teamHasPlayer(pairing.team2, name);
+        if (!isT1 && !isT2) return null;
+
+        const resultText = (pairing.result || '').toString().trim();
+        if (!resultText || resultText.toLowerCase() === 'pending') return null;
+
+        let outcome;
+        if (resultText.toLowerCase() === 'draw') {
+          outcome = 'draw';
+        } else if (resultText.toLowerCase().endsWith(' wins')) {
+          const winnerName = resultText.slice(0, -5).trim();
+          const myTeamName = isT1 ? pairing.team1?.teamName : pairing.team2?.teamName;
+          outcome = winnerName === myTeamName ? 'win' : 'loss';
+        }
+
+        if (!outcome) return null;
+
+        return {
+          outcome,
+          color: isT1 ? 'white' : 'black',
+          opponentName: isT1 ? (pairing.team2?.teamName || 'Opponent') : (pairing.team1?.teamName || 'Opponent'),
+          opponentScore: isT1 ? (pairing.team2?.score || 0) : (pairing.team1?.score || 0)
+        };
+      }
+
       for (const doc of teamPairingDocs || []) {
-        const tournament = await TournamentModel.findOne(database, { _id: doc.tournament_id });
-        const tournamentName = tournament?.name || 'Team Tournament';
-        const tournamentDate = tournament?.date ? new Date(tournament.date) : new Date();
+        const tournamentName = doc?.tournamentName || 'Team Tournament';
+        const tournamentDate = doc?.tournamentDate ? new Date(doc.tournamentDate) : new Date();
 
         for (const round of (doc.rounds || [])) {
-          for (const match of (round.matches || round.pairings || [])) {
-            for (const pairing of (match.boards || [])) {
-              const parsed = parseOutcome(pairing, username);
-              if (!parsed) continue;
+          for (const pairing of (round.pairings || [])) {
+            const parsed = parseTeamOutcome(pairing, username);
+            if (!parsed) continue;
 
-              const gameDate = new Date(tournamentDate);
-              gameDate.setHours(gameDate.getHours() + (round.round || 1));
+            const gameDate = new Date(tournamentDate);
+            gameDate.setHours(gameDate.getHours() + (round.round || 1));
 
-              rawGames.push({
-                date: gameDate,
-                dateStr: gameDate.toISOString().split('T')[0],
-                ...parsed,
-                tournamentName,
-                round: round.round || 1
-              });
-            }
+            rawGames.push({
+              date: gameDate,
+              dateStr: gameDate.toISOString().split('T')[0],
+              ...parsed,
+              tournamentName,
+              round: round.round || 1
+            });
           }
         }
       }
 
-      for (const doc of pairingDocs) {
-        const tournament = await TournamentModel.findOne(database, { _id: doc.tournament_id });
-        const tournamentName = tournament?.name || 'Tournament';
-        const tournamentDate = tournament?.date ? new Date(tournament.date) : new Date();
+      for (const doc of pairingDocs || []) {
+        const tournamentName = doc?.tournamentName || 'Tournament';
+        const tournamentDate = doc?.tournamentDate ? new Date(doc.tournamentDate) : new Date();
 
         for (const round of (doc.rounds || [])) {
           for (const pairing of (round.pairings || [])) {

@@ -22,16 +22,40 @@ const SalesModel = getModel('sales');
 const ReviewsModel = getModel('reviews');
 const OrderComplaintsModel = getModel('order_complaints');
 const OtpsModel = getModel('otps');
+const { normalizeKey, parsePagination } = require('../../utils/mongo');
 
 const createError = (message, statusCode, extra) => Object.assign(new Error(message), { statusCode, ...extra });
 const resolveDb = async (db) => (db ? db : connectDB());
 
 const StoreService = {
-  async getProducts(db, user) {
+  async getProducts(db, user, query = {}) {
     requireCoordinator(user);
     const database = await resolveDb(db);
     const college = user?.college || user?.collegeName;
-    const products = await ProductsModel.findMany(database, { college: college });
+    const { limit, skip } = parsePagination(query, { defaultLimit: 50, maxLimit: 200 });
+    const onlyAvailable = String(query?.available || '').toLowerCase() === 'true';
+
+    const filter = {
+      college: college,
+      ...(onlyAvailable ? { availability: { $gt: 0 } } : {})
+    };
+
+    const { items: products, total } = await ProductsModel.findManyPaginated(database, filter, {
+      projection: {
+        name: 1,
+        category: 1,
+        price: 1,
+        image_url: 1,
+        image_urls: 1,
+        availability: 1,
+        coordinator: 1,
+        college: 1,
+        comments_enabled: 1
+      },
+      sort: { added_date: -1, _id: -1 },
+      limit,
+      skip
+    });
 
     const normalized = (products || []).map((p) => ({
       ...p,
@@ -49,7 +73,7 @@ const StoreService = {
       comments_enabled: !!p.comments_enabled
     }));
 
-    return { products: normalized };
+    return { products: normalized, totalProducts: total || 0, pagination: { limit, skip } };
   },
 
   async addProduct(db, user, { body, files }) {
@@ -120,7 +144,9 @@ const StoreService = {
       image_public_ids: uploadedPublicIds.length > 0 ? uploadedPublicIds : undefined,
       availability: availNum || 0,
       college: college.toString(),
+      college_key: normalizeKey(college),
       coordinator: username.toString(),
+      coordinator_key: normalizeKey(username),
       added_date: new Date()
     };
 
@@ -144,8 +170,8 @@ const StoreService = {
 
     const ownerIdentifiers = await getCoordinatorOwnerIdentifiers(database, user);
     const productOwner = String(product.coordinator || '').trim();
-    const ownerSet = new Set((ownerIdentifiers || []).map((v) => String(v).trim()));
-    if (!ownerSet.has(productOwner) && !ownerSet.has(productOwner.toLowerCase())) {
+    const ownerKeys = (ownerIdentifiers || []).map(normalizeKey).filter(Boolean);
+    if (!ownerKeys.includes(normalizeKey(productOwner))) {
       throw createError('Access denied', 403);
     }
 
@@ -290,14 +316,19 @@ const StoreService = {
     requireCoordinator(user);
     const database = await resolveDb(db);
     const ownerIdentifiers = await getCoordinatorOwnerIdentifiers(database, user);
-    const ownerRegexes = ownerIdentifiers.map((value) => new RegExp(`^${escapeRegExp(value)}$`, 'i'));
-    if (ownerRegexes.length === 0) {
+    const ownerKeys = ownerIdentifiers.map(normalizeKey).filter(Boolean);
+    if (ownerKeys.length === 0 && ownerIdentifiers.length === 0) {
       return { orders: [] };
     }
 
     const products = await ProductsModel.findMany(
       database,
-      { coordinator: { $in: ownerRegexes } },
+      {
+        $or: [
+          { coordinator_key: { $in: ownerKeys } },
+          { coordinator: { $in: ownerIdentifiers } }
+        ]
+      },
       { projection: { _id: 1 } }
     );
 
@@ -383,13 +414,16 @@ const StoreService = {
       .map((pid) => new ObjectId(pid));
 
     const ownerIdentifiers = await getCoordinatorOwnerIdentifiers(database, user);
-    const ownerRegexes = ownerIdentifiers.map((value) => new RegExp(`^${escapeRegExp(value)}$`, 'i'));
+    const ownerKeys = ownerIdentifiers.map(normalizeKey).filter(Boolean);
 
     const coordinatorProducts = await ProductsModel.findMany(
       database,
       {
         _id: { $in: productObjectIds },
-        coordinator: { $in: ownerRegexes }
+        $or: [
+          { coordinator_key: { $in: ownerKeys } },
+          { coordinator: { $in: ownerIdentifiers } }
+        ]
       }
     );
 
@@ -465,14 +499,19 @@ const StoreService = {
     };
 
     const ownerIdentifiers = await getCoordinatorOwnerIdentifiers(database, user);
-    const ownerRegexes = ownerIdentifiers.map((value) => new RegExp(`^${escapeRegExp(value)}$`, 'i'));
-    if (ownerRegexes.length === 0) {
+    const ownerKeys = ownerIdentifiers.map(normalizeKey).filter(Boolean);
+    if (ownerKeys.length === 0 && ownerIdentifiers.length === 0) {
       return emptyAnalytics;
     }
 
     const products = await ProductsModel.findMany(
       database,
-      { coordinator: { $in: ownerRegexes } },
+      {
+        $or: [
+          { coordinator_key: { $in: ownerKeys } },
+          { coordinator: { $in: ownerIdentifiers } }
+        ]
+      },
       { projection: { _id: 1 } }
     );
 
@@ -658,12 +697,18 @@ const StoreService = {
     if (!order) throw createError('Order not found', 404);
 
     const ownerIdentifiers = await getCoordinatorOwnerIdentifiers(database, user);
-    const ownerRegexes = ownerIdentifiers.map((v) => new RegExp(`^${escapeRegExp(v)}$`, 'i'));
+    const ownerKeys = ownerIdentifiers.map(normalizeKey).filter(Boolean);
     const productIds = (order.items || []).map(i => i.productId).filter(Boolean).map(String);
     const productObjectIds = productIds.filter(pid => ObjectId.isValid(pid)).map(pid => new ObjectId(pid));
     const coordinatorProducts = await ProductsModel.findMany(
       database,
-      { _id: { $in: productObjectIds }, coordinator: { $in: ownerRegexes } }
+      {
+        _id: { $in: productObjectIds },
+        $or: [
+          { coordinator_key: { $in: ownerKeys } },
+          { coordinator: { $in: ownerIdentifiers } }
+        ]
+      }
     );
     if ((coordinatorProducts || []).length === 0) throw createError('Access denied', 403);
 
@@ -686,162 +731,75 @@ const StoreService = {
 
     const database = await resolveDb(db);
     const ownerIdentifiers = await getCoordinatorOwnerIdentifiers(database, user);
-    const ownerRegexes = ownerIdentifiers.map((value) => new RegExp(`^${escapeRegExp(value)}$`, 'i'));
+    const ownerKeys = ownerIdentifiers.map(normalizeKey).filter(Boolean);
 
     const product = await ProductsModel.findOne(database, {
       _id: new ObjectId(productId),
-      coordinator: { $in: ownerRegexes }
+      $or: [
+        { coordinator_key: { $in: ownerKeys } },
+        { coordinator: { $in: ownerIdentifiers } }
+      ]
     });
     if (!product) throw createError('Product not found or access denied', 404);
 
     const productObjectId = new ObjectId(productId);
 
-    const orderRows = await OrdersModel.aggregate(database, [
+    const [orderAggRows, salesAggRows] = await Promise.all([
+      database.collection('orders').aggregate([
         { $unwind: { path: '$items', preserveNullAndEmptyArrays: false } },
+        { $match: { 'items.productId': productObjectId } },
         {
-          $match: {
-            $or: [
-              { 'items.productId': productObjectId },
-              { 'items.productId': productId },
-              {
-                $expr: {
-                  $eq: [{ $toString: '$items.productId' }, productId]
-                }
-              }
-            ]
+          $project: {
+            orderDate: { $convert: { input: { $ifNull: ['$createdAt', '$created_date'] }, to: 'date', onError: null, onNull: null } },
+            quantity: { $convert: { input: { $ifNull: ['$items.quantity', 1] }, to: 'double', onError: 0, onNull: 0 } },
+            unitPrice: { $convert: { input: { $ifNull: ['$items.price', 0] }, to: 'double', onError: 0, onNull: 0 } }
           }
         },
         {
-          $project: {
-            orderDate: { $ifNull: ['$createdAt', '$created_date'] },
-            quantity: {
-              $convert: {
-                input: { $ifNull: ['$items.quantity', 1] },
-                to: 'double',
-                onError: 0,
-                onNull: 0
-              }
-            },
-            unitPrice: {
-              $convert: {
-                input: { $ifNull: ['$items.price', 0] },
-                to: 'double',
-                onError: 0,
-                onNull: 0
-              }
-            }
-          }
-        }
-      ]);
-
-    const salesRows = await SalesModel.aggregate(database, [
-        {
-          $match: {
-            $or: [
-              { product_id: productObjectId },
-              { product_id: productId },
-              { productId: productObjectId },
-              { productId: productId },
-              {
-                $expr: {
-                  $eq: [{ $toString: { $ifNull: ['$product_id', '$productId'] } }, productId]
-                }
-              }
-            ]
+          $addFields: {
+            revenue: { $multiply: ['$quantity', '$unitPrice'] },
+            dateKey: { $dateToString: { format: '%Y-%m-%d', date: '$orderDate' } }
           }
         },
+        { $group: { _id: '$dateKey', unitsSold: { $sum: '$quantity' }, revenue: { $sum: '$revenue' } } },
+        { $sort: { _id: 1 } },
+        {
+          $group: {
+            _id: null,
+            dateWiseSales: { $push: { date: '$_id', unitsSold: { $round: ['$unitsSold', 2] }, revenue: { $round: ['$revenue', 2] } } },
+            unitsSold: { $sum: '$unitsSold' },
+            totalRevenue: { $sum: '$revenue' }
+          }
+        },
+        { $project: { _id: 0, dateWiseSales: 1, unitsSold: { $round: ['$unitsSold', 2] }, totalRevenue: { $round: ['$totalRevenue', 2] } } }
+      ]).toArray(),
+      database.collection('sales').aggregate([
+        { $match: { product_id: productObjectId } },
         {
           $project: {
-            quantity: {
-              $convert: {
-                input: { $ifNull: ['$quantity', 1] },
-                to: 'double',
-                onError: 1,
-                onNull: 1
-              }
-            },
-            revenue: {
-              $convert: {
-                input: { $ifNull: ['$price', 0] },
-                to: 'double',
-                onError: 0,
-                onNull: 0
-              }
-            },
-            saleDate: {
-              $convert: {
-                input: { $ifNull: ['$purchase_date', '$createdAt'] },
-                to: 'date',
-                onError: null,
-                onNull: null
-              }
-            }
+            quantity: { $convert: { input: { $ifNull: ['$quantity', 1] }, to: 'double', onError: 1, onNull: 1 } },
+            revenue: { $convert: { input: { $ifNull: ['$price', 0] }, to: 'double', onError: 0, onNull: 0 } },
+            saleDate: { $convert: { input: { $ifNull: ['$purchase_date', '$createdAt'] }, to: 'date', onError: null, onNull: null } }
           }
-        }
-      ]);
+        },
+        { $addFields: { dateKey: { $dateToString: { format: '%Y-%m-%d', date: '$saleDate' } } } },
+        { $group: { _id: '$dateKey', unitsSold: { $sum: '$quantity' }, revenue: { $sum: '$revenue' } } },
+        { $sort: { _id: 1 } },
+        {
+          $group: {
+            _id: null,
+            dateWiseSales: { $push: { date: '$_id', unitsSold: { $round: ['$unitsSold', 2] }, revenue: { $round: ['$revenue', 2] } } },
+            unitsSold: { $sum: '$unitsSold' },
+            totalRevenue: { $sum: '$revenue' }
+          }
+        },
+        { $project: { _id: 0, dateWiseSales: 1, unitsSold: { $round: ['$unitsSold', 2] }, totalRevenue: { $round: ['$totalRevenue', 2] } } }
+      ]).toArray()
+    ]);
 
-    const totals = { unitsSold: 0, totalRevenue: 0 };
-    const dateWiseMap = {};
-
-    orderRows.forEach((row) => {
-      const qty = Number(row?.quantity || 0);
-      const price = Number(row?.unitPrice || 0);
-      const revenue = qty * price;
-      totals.unitsSold += qty;
-      totals.totalRevenue += revenue;
-
-      const rowDate = row?.orderDate ? new Date(row.orderDate) : null;
-      const dateKey = rowDate && !Number.isNaN(rowDate.getTime())
-        ? rowDate.toISOString().split('T')[0]
-        : 'Unknown';
-
-      if (!dateWiseMap[dateKey]) {
-        dateWiseMap[dateKey] = {
-          date: dateKey,
-          unitsSold: 0,
-          revenue: 0
-        };
-      }
-      dateWiseMap[dateKey].unitsSold += qty;
-      dateWiseMap[dateKey].revenue += revenue;
-    });
-
-    if (Object.keys(dateWiseMap).length === 0) {
-      salesRows.forEach((row) => {
-        const qty = Number(row?.quantity || 0);
-        const revenue = Number(row?.revenue || 0);
-        totals.unitsSold += qty;
-        totals.totalRevenue += revenue;
-
-        const rowDate = row?.saleDate ? new Date(row.saleDate) : null;
-        const dateKey = rowDate && !Number.isNaN(rowDate.getTime())
-          ? rowDate.toISOString().split('T')[0]
-          : 'Unknown';
-
-        if (!dateWiseMap[dateKey]) {
-          dateWiseMap[dateKey] = {
-            date: dateKey,
-            unitsSold: 0,
-            revenue: 0
-          };
-        }
-        dateWiseMap[dateKey].unitsSold += qty;
-        dateWiseMap[dateKey].revenue += revenue;
-      });
-    } else {
-      if ((salesRows || []).length > 0) {
-        totals.unitsSold = salesRows.reduce((sum, row) => sum + Number(row?.quantity || 0), 0);
-        totals.totalRevenue = salesRows.reduce((sum, row) => sum + Number(row?.revenue || 0), 0);
-      }
-    }
-
-    const dateWiseSales = Object.values(dateWiseMap)
-      .sort((a, b) => a.date.localeCompare(b.date))
-      .map((entry) => ({
-        ...entry,
-        unitsSold: Number(entry.unitsSold.toFixed(2)),
-        revenue: Number(entry.revenue.toFixed(2))
-      }));
+    const orderAgg = orderAggRows?.[0] || null;
+    const salesAgg = salesAggRows?.[0] || null;
+    const preferred = orderAgg?.dateWiseSales?.length ? orderAgg : (salesAgg || { dateWiseSales: [], unitsSold: 0, totalRevenue: 0 });
 
     return {
       product: {
@@ -851,10 +809,10 @@ const StoreService = {
         price: Number(product.price || 0)
       },
       productName: product.name || 'Product',
-      unitsSold: Number(totals.unitsSold.toFixed(2)),
-      totalSales: Number(totals.unitsSold.toFixed(2)),
-      totalRevenue: Number(totals.totalRevenue.toFixed(2)),
-      dateWiseSales
+      unitsSold: Number((preferred.unitsSold || 0).toFixed(2)),
+      totalSales: Number((preferred.unitsSold || 0).toFixed(2)),
+      totalRevenue: Number((preferred.totalRevenue || 0).toFixed(2)),
+      dateWiseSales: preferred.dateWiseSales || []
     };
   },
 
@@ -881,40 +839,73 @@ const StoreService = {
     };
   },
 
-  async getOrderComplaints(db, user) {
+  async getOrderComplaints(db, user, query = {}) {
     requireCoordinator(user);
     const database = await resolveDb(db);
-    const coordinatorEmail = user?.email;
+    const ownerIdentifiers = await getCoordinatorOwnerIdentifiers(database, user);
+    const ownerKeys = ownerIdentifiers.map(normalizeKey).filter(Boolean);
+    const { limit, skip } = parsePagination(query, { defaultLimit: 100, maxLimit: 300 });
 
-    const products = await ProductsModel.findMany(
-      database,
-      { coordinator: coordinatorEmail },
-      { projection: { _id: 1 } }
-    );
-    const productIds = products.map(p => p._id);
-
-    const orders = await OrdersModel.findMany(
-      database,
-      { 'items.productId': { $in: productIds } },
-      { projection: { _id: 1 } }
-    );
-    const orderIds = orders.map(o => o._id);
-
-    const complaints = await OrderComplaintsModel.aggregate(database, [
-        { $match: { order_id: { $in: orderIds } } },
-        {
-          $lookup: {
-            from: 'orders',
-            localField: 'order_id',
-            foreignField: '_id',
-            as: 'order'
+    const complaints = await database.collection('order_complaints').aggregate([
+      { $lookup: { from: 'orders', localField: 'order_id', foreignField: '_id', as: 'order' } },
+      { $unwind: { path: '$order', preserveNullAndEmptyArrays: true } },
+      { $unwind: { path: '$order.items', preserveNullAndEmptyArrays: true } },
+      {
+        $addFields: {
+          product_oid: {
+            $convert: { input: '$order.items.productId', to: 'objectId', onError: null, onNull: null }
           }
-        },
-        { $unwind: '$order' },
-        { $sort: { submitted_date: -1 } }
-      ]);
+        }
+      },
+      { $lookup: { from: 'products', localField: 'product_oid', foreignField: '_id', as: 'product' } },
+      { $unwind: { path: '$product', preserveNullAndEmptyArrays: true } },
+      {
+        $match: {
+          $or: [
+            { 'product.coordinator': { $in: ownerIdentifiers } },
+            { 'product.coordinator_key': { $in: ownerKeys } }
+          ]
+        }
+      },
+      {
+        $group: {
+          _id: '$_id',
+          complaint: { $first: '$$ROOT' },
+          order: { $first: '$order' },
+          products: {
+            $addToSet: {
+              _id: '$product._id',
+              name: '$product.name'
+            }
+          }
+        }
+      },
+      { $sort: { 'complaint.submitted_date': -1, _id: -1 } },
+      { $skip: skip },
+      { $limit: limit },
+      {
+        $project: {
+          _id: { $toString: '$_id' },
+          order_id: { $toString: '$complaint.order_id' },
+          user_email: '$complaint.user_email',
+          complaint: '$complaint.complaint',
+          status: '$complaint.status',
+          coordinator_response: '$complaint.coordinator_response',
+          submitted_date: '$complaint.submitted_date',
+          resolved_date: '$complaint.resolved_date',
+          order: {
+            _id: { $toString: '$order._id' },
+            user_email: '$order.user_email',
+            status: '$order.status',
+            createdAt: '$order.createdAt',
+            items: '$order.items'
+          },
+          products: 1
+        }
+      }
+    ]).toArray();
 
-    return { complaints };
+    return { complaints: complaints || [], pagination: { limit, skip } };
   },
 
   async resolveOrderComplaint(db, { complaintId, response }) {

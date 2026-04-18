@@ -3,6 +3,7 @@ const { ObjectId } = require('mongodb');
 const { insertWalletTransaction, normalizeProductImages, requirePlayer } = require('./playerUtils');
 const { getModel } = require('../../models');
 const Cache = require('../../utils/cache');
+const { normalizeKey, parsePagination, parseSort } = require('../../utils/mongo');
 const UserModel = getModel('users');
 const UserBalancesModel = getModel('user_balances');
 const SubscriptionsModel = getModel('subscriptionstable');
@@ -15,81 +16,137 @@ const createError = (message, statusCode) => Object.assign(new Error(message), {
 const resolveDb = async (db) => (db ? db : connectDB());
 
 const StoreService = {
-  async getStore(db, user) {
+  async getStore(db, user, query = {}) {
     requirePlayer(user);
     const database = await resolveDb(db);
-    const rowResults = await UserModel.aggregate(database, [
+
+    const [row] = await UserModel.aggregate(database, [
       { $match: { email: user?.email, role: 'player', isDeleted: 0 } },
       { $lookup: { from: 'user_balances', localField: '_id', foreignField: 'user_id', as: 'balance' } },
       { $unwind: { path: '$balance', preserveNullAndEmptyArrays: true } },
-      { $project: { _id: 1, name: 1, college: 1, wallet_balance: '$balance.wallet_balance' } }
+      { $lookup: { from: 'subscriptionstable', localField: 'email', foreignField: 'username', as: 'subscription' } },
+      { $unwind: { path: '$subscription', preserveNullAndEmptyArrays: true } },
+      { $project: { _id: 1, name: 1, email: 1, college: 1, wallet_balance: '$balance.wallet_balance', subscription: 1 } }
     ]);
-    const row = rowResults?.[0];
 
-    if (!row) {
-      throw createError('User not found', 404);
-    }
+    if (!row) throw createError('User not found', 404);
 
-    const subscription = await SubscriptionsModel.findOne(database, { username: user?.email });
+    const subscription = row.subscription || null;
     let discountPercentage = 0;
     if (subscription) {
       if (subscription.plan === 'Basic') discountPercentage = 10;
       else if (subscription.plan === 'Premium') discountPercentage = 20;
     }
 
-    const [products, userSales, userOrders] = await Promise.all([
-      ProductsModel.findMany(database, {}),
-      SalesModel.findMany(
-        database,
-        {
-          $or: [
-            { buyer_id: row._id },
-            { buyer: row.name }
+    const { limit, skip } = parsePagination(query, { defaultLimit: 40, maxLimit: 100 });
+    const sort = parseSort(query, ['name', 'price', 'availability'], { _id: -1 }) || { _id: -1 };
+    const onlyAvailable = String(query?.available || '').toLowerCase() === 'true';
+    const searchKey = normalizeKey(query?.q || query?.search);
+
+    const productMatch = {
+      ...(onlyAvailable ? { availability: { $gt: 0 } } : {}),
+      ...(searchKey ? { $text: { $search: String(query?.q || query?.search) } } : {})
+    };
+
+    const buyerKey = normalizeKey(row.name || row.email);
+    const userEmail = String(row.email || user?.email || '').trim();
+
+    const [productPage] = await database.collection('products').aggregate([
+      { $match: productMatch },
+      {
+        $facet: {
+          total: [{ $count: 'count' }],
+          items: [
+            { $sort: sort },
+            { $skip: skip },
+            { $limit: limit },
+            {
+              $lookup: {
+                from: 'sales',
+                let: { pid: '$_id' },
+                pipeline: [
+                  {
+                    $match: {
+                      $expr: {
+                        $and: [
+                          { $eq: ['$product_id', '$$pid'] },
+                          {
+                            $or: [
+                              { $eq: ['$buyer_id', row._id] },
+                              { $eq: ['$buyer_key', buyerKey] }
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  { $limit: 1 },
+                  { $project: { _id: 1 } }
+                ],
+                as: 'mySales'
+              }
+            },
+            {
+              $lookup: {
+                from: 'orders',
+                let: { pid: '$_id' },
+                pipeline: [
+                  {
+                    $match: {
+                      user_email: userEmail,
+                      status: { $ne: 'cancelled' },
+                      $expr: { $in: ['$$pid', '$items.productId'] }
+                    }
+                  },
+                  { $limit: 1 },
+                  { $project: { _id: 1 } }
+                ],
+                as: 'myOrders'
+              }
+            },
+            {
+              $addFields: {
+                canReview: {
+                  $gt: [
+                    { $add: [{ $size: '$mySales' }, { $size: '$myOrders' }] },
+                    0
+                  ]
+                }
+              }
+            },
+            {
+              $project: {
+                mySales: 0,
+                myOrders: 0
+              }
+            }
           ]
-        },
-        { projection: { product_id: 1 } }
-      ),
-      OrdersModel.findMany(
-        database,
-        {
-          user_email: user?.email,
-          status: { $ne: 'cancelled' }
-        },
-        { projection: { items: 1 } }
-      )
-    ]);
+        }
+      },
+      { $project: { total: { $ifNull: [{ $first: '$total.count' }, 0] }, items: 1 } }
+    ]).toArray();
 
-    const purchasedProductIds = new Set();
-    for (const s of userSales || []) {
-      if (s?.product_id) purchasedProductIds.add(String(s.product_id));
-    }
-    for (const o of userOrders || []) {
-      for (const item of (o?.items || [])) {
-        if (item?.productId) purchasedProductIds.add(String(item.productId));
-      }
-    }
-
-    const normalizedProducts = (products || []).map((p) => {
+    const normalizedProducts = (productPage?.items || []).map((p) => {
       const imageUrls = normalizeProductImages(p);
-      const pid = String(p._id || '');
       return {
         ...p,
-        _id: pid,
+        _id: p?._id ? String(p._id) : '',
         image: imageUrls[0] || '',
         image_url: p.image_url || imageUrls[0] || '',
         image_urls: imageUrls,
-        comments_enabled: !!p.comments_enabled,
-        canReview: purchasedProductIds.has(pid)
+        comments_enabled: !!p.comments_enabled
       };
     });
 
     return {
       products: normalizedProducts,
+      totalProducts: productPage?.total || 0,
       walletBalance: row.wallet_balance || 0,
       playerName: row.name,
       playerCollege: row.college,
-      subscription: subscription || null,
-      discountPercentage
+      subscription,
+      discountPercentage,
+      pagination: { limit, skip }
     };
   },
 
@@ -148,8 +205,10 @@ const StoreService = {
         $inc: { quantity: 1, price: Number(numericPrice) },
         $set: {
           buyer: String(buyer),
+          buyer_key: normalizeKey(buyer),
           buyer_id: userDoc._id,
           college: String(college),
+          college_key: normalizeKey(college),
           purchase_date: new Date()
         },
         $setOnInsert: { product_id: new ObjectId(productId) }
@@ -158,14 +217,13 @@ const StoreService = {
     );
 
     try {
-      const prod = await ProductsModel.findOne(database, { _id: new ObjectId(productId) });
       const orderItem = {
         productId: new ObjectId(productId),
-        name: prod ? prod.name : '',
+        name: product ? product.name : '',
         price: Number(numericPrice),
         quantity: 1,
-        coordinator: prod ? (prod.coordinator || '') : '',
-        college: prod ? (prod.college || '') : ''
+        coordinator: product ? (product.coordinator || '') : '',
+        college: product ? (product.college || '') : ''
       };
       await OrdersModel.insertOne(database, {
         user_email: user?.email,

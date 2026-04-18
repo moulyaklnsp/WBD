@@ -59,60 +59,94 @@ const SalesService = {
 
   async getStoreRevenue(db) {
     const database = await resolveDb(db);
-    const sales = await SalesModel.aggregate(database, [
+
+    const [row] = await database.collection('sales').aggregate([
       {
-        $lookup: {
-          from: 'products',
-          localField: 'product_id',
-          foreignField: '_id',
-          as: 'product'
+        $facet: {
+          totals: [
+            { $group: { _id: null, totalRevenue: { $sum: { $ifNull: ['$price', 0] } }, totalSales: { $sum: 1 } } }
+          ],
+          monthly: [
+            {
+              $group: {
+                _id: { $dateToString: { format: '%Y-%m', date: '$purchase_date' } },
+                revenue: { $sum: { $ifNull: ['$price', 0] } }
+              }
+            },
+            { $sort: { _id: 1 } }
+          ],
+          yearly: [
+            {
+              $group: {
+                _id: { $toString: { $year: '$purchase_date' } },
+                revenue: { $sum: { $ifNull: ['$price', 0] } }
+              }
+            },
+            { $sort: { _id: 1 } }
+          ],
+          product: [
+            {
+              $group: {
+                _id: '$product_id',
+                revenue: { $sum: { $ifNull: ['$price', 0] } }
+              }
+            },
+            { $sort: { revenue: -1 } },
+            { $lookup: { from: 'products', localField: '_id', foreignField: '_id', as: 'product' } },
+            { $unwind: { path: '$product', preserveNullAndEmptyArrays: true } },
+            { $project: { _id: 0, name: { $ifNull: ['$product.name', 'Unknown'] }, revenue: 1 } }
+          ]
         }
       },
-      { $unwind: { path: '$product', preserveNullAndEmptyArrays: true } }
-    ]);
+      {
+        $project: {
+          totals: { $ifNull: [{ $first: '$totals' }, { totalRevenue: 0, totalSales: 0 }] },
+          monthly: 1,
+          yearly: 1,
+          product: 1
+        }
+      }
+    ]).toArray();
 
-    const totalRevenue = sales.reduce((sum, s) => sum + (s.price || 0), 0);
+    const totals = row?.totals || { totalRevenue: 0, totalSales: 0 };
+    const monthlyRevenue = Object.fromEntries((row?.monthly || []).map((m) => [m._id, m.revenue]));
+    const yearlyRevenue = Object.fromEntries((row?.yearly || []).map((y) => [y._id, y.revenue]));
+    const productRevenue = Object.fromEntries((row?.product || []).map((p) => [p.name, p.revenue]));
 
-    const monthlyRevenue = {};
-    sales.forEach(s => {
-      const d = new Date(s.purchase_date);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      monthlyRevenue[key] = (monthlyRevenue[key] || 0) + (s.price || 0);
-    });
-
-    const yearlyRevenue = {};
-    sales.forEach(s => {
-      const year = new Date(s.purchase_date).getFullYear().toString();
-      yearlyRevenue[year] = (yearlyRevenue[year] || 0) + (s.price || 0);
-    });
-
-    const productRevenue = {};
-    sales.forEach(s => {
-      const name = s.product?.name || 'Unknown';
-      productRevenue[name] = (productRevenue[name] || 0) + (s.price || 0);
-    });
-
-    return { totalRevenue, monthlyRevenue, yearlyRevenue, productRevenue, totalSales: sales.length };
+    return {
+      totalRevenue: totals.totalRevenue || 0,
+      monthlyRevenue,
+      yearlyRevenue,
+      productRevenue,
+      totalSales: totals.totalSales || 0
+    };
   },
 
   async getRevenueInsights(db) {
     const database = await resolveDb(db);
-    const sales = await SalesModel.findMany(database, {});
 
+    const monthlyRows = await SalesModel.aggregate(database, [
+      {
+        $group: {
+          _id: { $dateToString: { format: '%Y-%m', date: '$purchase_date' } },
+          revenue: { $sum: { $ifNull: ['$price', 0] } },
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
+
+    let peakMonth = null;
+    let lowestMonth = null;
+    const months = [];
     const monthlyStats = {};
-    sales.forEach(s => {
-      const d = new Date(s.purchase_date);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      if (!monthlyStats[key]) monthlyStats[key] = { revenue: 0, count: 0 };
-      monthlyStats[key].revenue += (s.price || 0);
-      monthlyStats[key].count += 1;
-    });
+    for (const row of monthlyRows || []) {
+      months.push(row._id);
+      monthlyStats[row._id] = { revenue: row.revenue || 0, count: row.count || 0 };
+      if (!peakMonth || (row.revenue || 0) > peakMonth.revenue) peakMonth = { month: row._id, revenue: row.revenue || 0, count: row.count || 0 };
+      if (!lowestMonth || (row.revenue || 0) < lowestMonth.revenue) lowestMonth = { month: row._id, revenue: row.revenue || 0, count: row.count || 0 };
+    }
 
-    const sortedMonths = Object.entries(monthlyStats).sort((a, b) => b[1].revenue - a[1].revenue);
-    const peakMonth = sortedMonths.length > 0 ? { month: sortedMonths[0][0], ...sortedMonths[0][1] } : null;
-    const lowestMonth = sortedMonths.length > 0 ? { month: sortedMonths[sortedMonths.length - 1][0], ...sortedMonths[sortedMonths.length - 1][1] } : null;
-
-    const months = Object.keys(monthlyStats).sort();
     let growthPercentage = 0;
     const insights = [];
 

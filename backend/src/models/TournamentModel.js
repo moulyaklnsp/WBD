@@ -15,8 +15,8 @@ const TournamentModel = {
     let cursor = db.collection('tournaments').find(filter);
     if (projection) cursor = cursor.project(projection);
     if (sort) cursor = cursor.sort(sort);
-    if (skip) cursor = cursor.skip(skip);
-    if (limit) cursor = cursor.limit(limit);
+    if (skip !== undefined && skip !== null) cursor = cursor.skip(skip);
+    if (limit !== undefined && limit !== null) cursor = cursor.limit(limit);
     return cursor.toArray();
   },
 

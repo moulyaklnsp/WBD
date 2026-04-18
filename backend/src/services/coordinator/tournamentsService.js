@@ -18,9 +18,24 @@ const TeamEnrollmentsModel = getModel('enrolledtournaments_team');
 const FeedbacksModel = getModel('feedbacks');
 const TournamentComplaintsModel = getModel('tournament_complaints');
 const TournamentFilesModel = getModel('tournament_files');
+const { normalizeKey } = require('../../utils/mongo');
 
 const createError = (message, statusCode) => Object.assign(new Error(message), { statusCode });
 const resolveDb = async (db) => (db ? db : connectDB());
+
+function computeTournamentWindow(dateValue, timeValue) {
+  if (!dateValue) return null;
+  const dateOnly = new Date(dateValue);
+  if (Number.isNaN(dateOnly.getTime())) return null;
+
+  const timeStr = (timeValue || '00:00').toString();
+  const [hh, mm] = timeStr.match(/^\d{2}:\d{2}$/) ? timeStr.split(':') : ['00', '00'];
+
+  const start = new Date(dateOnly);
+  start.setHours(parseInt(hh, 10) || 0, parseInt(mm, 10) || 0, 0, 0);
+  const end = new Date(start.getTime() + 60 * 60 * 1000);
+  return { start_at: start, end_at: end };
+}
 
 const TournamentsService = {
   async getTournaments(db, user) {
@@ -69,13 +84,17 @@ const TournamentsService = {
     }
 
     const tid = new ObjectId(id);
-    const individualCount = await TournamentPlayersModel.countDocuments(database, { tournament_id: tid });
-    const approvedTeamCount = await TeamEnrollmentsModel.countDocuments(database, {
-      tournament_id: tid,
-      approved: 1
-    });
-    const feedbackCount = await FeedbacksModel.countDocuments(database, { tournament_id: tid });
-    const complaintsCount = await TournamentComplaintsModel.countDocuments(database, { tournament_id: tid });
+    const [feedbackCount, complaintsCount] = await Promise.all([
+      FeedbacksModel.countDocuments(database, { tournament_id: tid }),
+      TournamentComplaintsModel.countDocuments(database, { tournament_id: tid })
+    ]);
+
+    const individualCount = Number.isFinite(Number(tournament.individual_enrollment_count))
+      ? Number(tournament.individual_enrollment_count)
+      : await TournamentPlayersModel.countDocuments(database, { tournament_id: tid });
+    const approvedTeamCount = Number.isFinite(Number(tournament.team_approved_count))
+      ? Number(tournament.team_approved_count)
+      : await TeamEnrollmentsModel.countDocuments(database, { tournament_id: tid, approved: 1 });
     const entryFee = Number(tournament.entry_fee || 0);
     const totalEnrollments = (tournament.type || '').toLowerCase() === 'team' ? approvedTeamCount : individualCount;
     const totalAmountReceived = entryFee * totalEnrollments;
@@ -124,10 +143,14 @@ const TournamentsService = {
       entry_fee: parseFloat(entryFee),
       type: type.toString().trim(),
       coordinator: coordinatorName.toString(),
+      coordinator_key: normalizeKey(coordinatorName),
       status: 'Pending',
       added_by: coordinatorName.toString(),
+      added_by_key: normalizeKey(coordinatorName),
       submitted_date: new Date()
     };
+    const window = computeTournamentWindow(tournament.date, tournament.time);
+    if (window) Object.assign(tournament, window);
     if (!Number.isNaN(roundsNum)) {
       tournament.no_of_rounds = roundsNum;
     }
@@ -201,6 +224,13 @@ const TournamentsService = {
 
     if (Object.keys($set).length === 0) {
       throw createError('No valid fields provided to update', 400);
+    }
+
+    if ($set.date || $set.time) {
+      const nextDate = $set.date || existing.date;
+      const nextTime = $set.time || existing.time;
+      const window = computeTournamentWindow(nextDate, nextTime);
+      if (window) Object.assign($set, window);
     }
 
     const result = await TournamentModel.updateOne(

@@ -144,6 +144,12 @@ const TournamentsService = {
       gender: userDoc.gender || ''
     });
 
+    await TournamentModel.updateOne(
+      database,
+      { _id: new ObjectId(tournamentId) },
+      { $inc: { individual_enrollment_count: 1, revenue_total: fee }, $set: { updated_at: new Date() } }
+    );
+
     const newBal = await UserBalancesModel.findOne(database, { user_id: userDoc._id });
     return {
       success: true,
@@ -259,6 +265,14 @@ const TournamentsService = {
 
     await TeamEnrollmentsModel.insertOne(database, enrollment);
 
+    const tournamentInc = { team_enrollment_count: 1, revenue_total: entryFee };
+    if (allApproved) tournamentInc.team_approved_count = 1;
+    await TournamentModel.updateOne(
+      database,
+      { _id: new ObjectId(tournamentId) },
+      { $inc: tournamentInc, $set: { updated_at: new Date() } }
+    );
+
     const newBalance = (await UserBalancesModel.findOne(database, { user_id: userDoc._id }))?.wallet_balance || 0;
     const pendingPlayers = [p1, p2, p3].filter(p => p !== username);
 
@@ -313,6 +327,14 @@ const TournamentsService = {
       { $set: { ...update, approved: updatedRequest.approved, status: updatedStatus } }
     );
 
+    if (updatedRequest.approved === 1 && teamRequest.approved !== 1 && teamRequest.tournament_id) {
+      await TournamentModel.updateOne(
+        database,
+        { _id: new ObjectId(teamRequest.tournament_id) },
+        { $inc: { team_approved_count: 1 }, $set: { updated_at: new Date() } }
+      );
+    }
+
     return { success: true, message: 'Team request approved' };
   },
 
@@ -358,11 +380,22 @@ const TournamentsService = {
       }
     }
 
-    await TeamEnrollmentsModel.updateOne(
+    const updateResult = await TeamEnrollmentsModel.updateOne(
       database,
       { _id: new ObjectId(requestId) },
       { $set: { status: 'rejected', approved: -1 } }
     );
+
+    if (updateResult.modifiedCount > 0 && teamRequest.tournament_id) {
+      const entryFee = Number(tournament?.entry_fee || 0);
+      const inc = { team_enrollment_count: -1, revenue_total: -entryFee };
+      if (teamRequest.approved === 1) inc.team_approved_count = -1;
+      await TournamentModel.updateOne(
+        database,
+        { _id: new ObjectId(teamRequest.tournament_id) },
+        { $inc: inc, $set: { updated_at: new Date() } }
+      );
+    }
 
     return { success: true, message: 'Team request rejected' };
   },
@@ -406,11 +439,22 @@ const TournamentsService = {
       );
     }
 
-    await TeamEnrollmentsModel.updateOne(
+    const updateResult = await TeamEnrollmentsModel.updateOne(
       database,
       { _id: new ObjectId(requestId) },
       { $set: { status: 'cancelled', approved: -1 } }
     );
+
+    if (updateResult.modifiedCount > 0 && teamRequest.tournament_id) {
+      const entryFee = Number(tournament?.entry_fee || 0);
+      const inc = { team_enrollment_count: -1, revenue_total: -entryFee };
+      if (teamRequest.approved === 1) inc.team_approved_count = -1;
+      await TournamentModel.updateOne(
+        database,
+        { _id: new ObjectId(teamRequest.tournament_id) },
+        { $inc: inc, $set: { updated_at: new Date() } }
+      );
+    }
 
     return { success: true, message: 'Team request cancelled' };
   },

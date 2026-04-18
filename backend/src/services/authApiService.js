@@ -5,6 +5,7 @@
 const bcrypt = require('bcryptjs');
 const { sendOtpEmail, sendForgotPasswordOtp } = require('./emailService');
 const { generateTokenPair } = require('../utils/jwt');
+const { normalizeKey } = require('../utils/mongo');
 
 const BCRYPT_ROUNDS = 12;
 const isBcryptHash = (value) => typeof value === 'string' && /^\$2[aby]\$/.test(value);
@@ -52,19 +53,19 @@ const AuthApiService = {
       throw createError('Email already registered', 409);
     }
     if (role === 'coordinator' && college) {
-      const trimmedCollege = college.trim();
-      const collegeRegex = new RegExp('^' + trimmedCollege.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&') + '$', 'i');
+      const collegeKey = normalizeKey(college);
       
       const activeCoordinator = await db.collection('users').findOne({
         role: 'coordinator',
-        college: { $regex: collegeRegex }
+        isDeleted: { $ne: 1 },
+        college_key: collegeKey
       });
       if (activeCoordinator) {
         throw createError('Already a coordinator exists from this college', 409);
       }
 
       const pendingCoordinatorReq = await db.collection('pending_coordinators').findOne({
-        'data.college': { $regex: collegeRegex },
+        'data.college_key': collegeKey,
         status: 'pending'
       });
       if (pendingCoordinatorReq) {
@@ -77,6 +78,7 @@ const AuthApiService = {
       dob: new Date(dob),
       gender,
       college,
+      college_key: normalizeKey(college),
       email,
       phone,
       password: hashedPassword,
@@ -357,6 +359,7 @@ const AuthApiService = {
       })
       .sort({ submission_date: -1 })
       .project({ name: 1, email: 1, message: 1, submission_date: 1, status: 1, internal_note: 1, status_updated_at: 1 })
+      .limit(200)
       .toArray();
 
     return { queries };

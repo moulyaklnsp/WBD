@@ -6,11 +6,26 @@ const { uploadImageBuffer } = require('../utils/cloudinary');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const AuthApiService = require('../services/authApiService');
+const { normalizeKey } = require('../utils/mongo');
 
 let multer;
 try { multer = require('multer'); } catch (e) { multer = null; }
 
 const BCRYPT_ROUNDS = 12;
+
+function computeTournamentWindow(dateValue, timeValue) {
+  if (!dateValue) return null;
+  const dateOnly = new Date(dateValue);
+  if (Number.isNaN(dateOnly.getTime())) return null;
+
+  const timeStr = (timeValue || '00:00').toString();
+  const [hh, mm] = timeStr.match(/^\d{2}:\d{2}$/) ? timeStr.split(':') : ['00', '00'];
+
+  const start = new Date(dateOnly);
+  start.setHours(parseInt(hh, 10) || 0, parseInt(mm, 10) || 0, 0, 0);
+  const end = new Date(start.getTime() + 60 * 60 * 1000);
+  return { start_at: start, end_at: end };
+}
 
 module.exports = {
   // ===================== API SIGNUP =====================
@@ -89,6 +104,7 @@ module.exports = {
       dob: new Date(dob),
       gender,
       college,
+      college_key: normalizeKey(college),
       email,
       phone,
       password: hashedPassword,
@@ -106,11 +122,6 @@ module.exports = {
       await db.collection('user_balances').insertOne({ user_id: userId, wallet_balance: 0 });
       console.log('Initialized wallet balance for player:', userId);
     }
-
-    const users = await db.collection('users').find().toArray();
-    console.log("\n=== Current Users Table Contents ===");
-    console.table(users);
-    console.log("=====================================\n");
 
     res.redirect("/login");
   },
@@ -161,13 +172,6 @@ module.exports = {
       status: 'pending'
     });
     console.log('Contact message submitted:', { name, email });
-
-    // Log current contact table contents
-    const contacts = await db.collection('contact').find().toArray();
-    console.log("\n=== Current Contact Table Contents ===");
-    console.log("Total rows:", contacts.length);
-    console.table(contacts);
-    console.log("=====================================\n");
 
     // Redirect with success message
     res.redirect('/contactus?success-message=Message sent successfully!');
@@ -306,7 +310,12 @@ module.exports = {
     const db = await connectDB();
     if (Object.keys(errors).length > 0) {
       console.log('Tournament addition failed due to validation errors:', errors);
-      const tournaments = await db.collection('tournaments').find().toArray();
+      const tournaments = await db.collection('tournaments')
+        .find({ added_by: name })
+        .project({ name: 1, date: 1, time: 1, location: 1, entry_fee: 1, status: 1, type: 1, no_of_rounds: 1 })
+        .sort({ date: -1 })
+        .limit(200)
+        .toArray();
       return res.render('coordinator/tournament_management', {
         errors,
         tournamentName,
@@ -322,21 +331,26 @@ module.exports = {
       });
     }
 
-    await db.collection('tournaments').insertOne({
+    const dateValue = new Date(tournamentDate);
+    const doc = {
       name: tournamentName,
-      date: new Date(tournamentDate),
+      date: dateValue,
+      time: tournamentTime,
       location: tournamentLocation,
       entry_fee: parseFloat(entryFee),
-      status: 'Pending',
-      added_by: name,
       type,
       no_of_rounds: parseInt(noOfRounds),
-      time: tournamentTime
-    });
+      status: 'Pending',
+      coordinator: name,
+      coordinator_key: normalizeKey(name),
+      added_by: name,
+      added_by_key: normalizeKey(name),
+      submitted_date: new Date()
+    };
+    const window = computeTournamentWindow(doc.date, doc.time);
+    if (window) Object.assign(doc, window);
+    await db.collection('tournaments').insertOne(doc);
     console.log('Tournament added:', { tournamentName, added_by: name });
-
-    const tournaments = await db.collection('tournaments').find().toArray();
-    console.table(tournaments);
     res.redirect("/coordinator/tournament_management?success-message=Tournament added successfully");
   },
 
@@ -361,7 +375,7 @@ module.exports = {
     const db = await connectDB();
     await db.collection('tournaments').updateOne(
       { _id: new ObjectId(tournamentId) },
-      { $set: { status: 'Approved', approved_by: name } }
+      { $set: { status: 'Approved', approved_by: name, approved_by_key: normalizeKey(name), approved_date: new Date() } }
     );
     console.log(`Tournament ${tournamentId} approved by ${name}`);
     res.redirect('/organizer/organizer_tournament?success-message=Tournament approved successfully');
@@ -379,7 +393,7 @@ module.exports = {
     const db = await connectDB();
     await db.collection('tournaments').updateOne(
       { _id: new ObjectId(tournamentId) },
-      { $set: { status: 'Rejected' } }
+      { $set: { status: 'Rejected', rejected_by: req.session?.username || req.session?.userEmail || '', rejected_by_key: normalizeKey(req.session?.username || req.session?.userEmail || ''), rejected_date: new Date() } }
     );
     console.log(`Tournament ${tournamentId} rejected`);
     res.redirect('/organizer/organizer_tournament?success-message=Tournament rejected successfully');
@@ -455,6 +469,10 @@ module.exports = {
         player3_approved: 0,
         approved: 0
       });
+      await db.collection('tournaments').updateOne(
+        { _id: new ObjectId(tournamentId) },
+        { $inc: { team_enrollment_count: 1, revenue_total: entryFee }, $set: { updated_at: new Date() } }
+      );
       console.log(`Team enrolled for tournament ${tournamentId} by captain ${user._id}`);
       res.redirect("/player/player_tournament?success-message=Team enrolled successfully");
     } else {
@@ -469,10 +487,15 @@ module.exports = {
         college: user.college,
         gender: user.gender
       });
+      await db.collection('tournaments').updateOne(
+        { _id: new ObjectId(tournamentId) },
+        { $inc: { individual_enrollment_count: 1, revenue_total: entryFee }, $set: { updated_at: new Date() } }
+      );
       console.log(`Player ${user.email} joined tournament ${tournamentId}`);
 
       const updatedPlayers = await db.collection('tournament_players')
         .find({ tournament_id: new ObjectId(tournamentId) })
+        .project({ _id: 1, username: 1, college: 1, gender: 1 })
         .toArray();
 
       const totalRounds = tournament.no_of_rounds || 5;
@@ -556,10 +579,20 @@ module.exports = {
 
       const updatedRequest = await db.collection('enrolledtournaments_team').findOne({ _id: new ObjectId(requestId) });
       if (updatedRequest.player1_approved && updatedRequest.player2_approved && updatedRequest.player3_approved) {
-        await db.collection('enrolledtournaments_team').updateOne(
-          { _id: new ObjectId(requestId) },
+        const approvalResult = await db.collection('enrolledtournaments_team').updateOne(
+          { _id: new ObjectId(requestId), approved: { $ne: 1 } },
           { $set: { approved: 1 } }
         );
+        if (approvalResult.modifiedCount > 0 && updatedRequest.tournament_id) {
+          let tid = updatedRequest.tournament_id;
+          try {
+            if (typeof tid === 'string' && ObjectId.isValid(tid)) tid = new ObjectId(tid);
+          } catch (e) { /* ignore */ }
+          await db.collection('tournaments').updateOne(
+            { _id: tid },
+            { $inc: { team_approved_count: 1 }, $set: { updated_at: new Date() } }
+          );
+        }
         console.log(`Team fully approved for request: ${requestId}`);
       }
 
@@ -629,14 +662,12 @@ module.exports = {
       image_url: productImageUrl,
       image_public_id: imagePublicId || undefined,
       coordinator: coordinatorName,
+      coordinator_key: normalizeKey(coordinatorName),
       college: collegeName,
+      college_key: normalizeKey(collegeName),
       availability: parseInt(availability)
     });
     console.log('Product added:', { productName, coordinator: coordinatorName });
-
-    const products = await db.collection('products').find().toArray();
-    console.log("Current Products Table Entries:");
-    console.table(products);
     res.redirect('/coordinator/store_management');
   },
 
@@ -716,6 +747,7 @@ module.exports = {
           $inc: { quantity: 1, price: finalPrice },
           $set: {
             buyer,
+            buyer_key: normalizeKey(buyer),
             college,
             purchase_date: new Date(),
             buyer_id: new ObjectId(userId)
@@ -743,12 +775,12 @@ module.exports = {
       time,
       link,
       role: req.session.userRole,
-      name: req.session.username
+      name: req.session.username,
+      name_key: normalizeKey(req.session.username),
+      created_by: req.session.userEmail,
+      created_by_key: normalizeKey(req.session.userEmail)
     });
     console.log('Meeting scheduled by coordinator:', { title, date });
-
-    const meetings = await db.collection('meetingsdb').find().toArray();
-    console.log('Current Meetings in DB:', meetings);
     res.redirect('/coordinator/coordinator_meetings');
   },
 
@@ -762,12 +794,12 @@ module.exports = {
       time,
       link,
       role: req.session.userRole,
-      name: req.session.username
+      name: req.session.username,
+      name_key: normalizeKey(req.session.username),
+      created_by: req.session.userEmail,
+      created_by_key: normalizeKey(req.session.userEmail)
     });
     console.log('Meeting scheduled by organizer:', { title, date });
-
-    const meetings = await db.collection('meetingsdb').find().toArray();
-    console.log('Current Meetings in DB:', meetings);
     res.redirect('/organizer/meetings');
   },
 
@@ -781,12 +813,12 @@ module.exports = {
       time,
       link,
       role: req.session.userRole,
-      name: req.session.username
+      name: req.session.username,
+      name_key: normalizeKey(req.session.username),
+      created_by: req.session.userEmail,
+      created_by_key: normalizeKey(req.session.userEmail)
     });
     console.log('Meeting scheduled by admin:', { title, date });
-
-    const meetings = await db.collection('meetingsdb').find().toArray();
-    console.log('Current Meetings in DB:', meetings);
     res.redirect('/admin/admin_meetings');
   },
 

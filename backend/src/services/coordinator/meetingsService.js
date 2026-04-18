@@ -3,6 +3,7 @@ const moment = require('moment');
 const { safeTrim, parseDateValue, isPastDate, isAllowedMeetingLink, requireCoordinator } = require('./coordinatorUtils');
 const { getModel } = require('../../models');
 const MeetingsModel = getModel('meetingsdb');
+const { normalizeKey } = require('../../utils/mongo');
 
 const createError = (message, statusCode) => Object.assign(new Error(message), { statusCode });
 const resolveDb = async (db) => (db ? db : connectDB());
@@ -40,7 +41,9 @@ const MeetingsService = {
       source: 'meeting',
       role: 'coordinator',
       name: userName.toString(),
-      created_by: user?.email || userName.toString()
+      name_key: normalizeKey(userName),
+      created_by: user?.email || userName.toString(),
+      created_by_key: normalizeKey(user?.email || userName)
     };
 
     const database = await resolveDb(db);

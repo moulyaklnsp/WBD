@@ -152,7 +152,12 @@ const UsersService = {
 
   async listPendingCoordinators(db) {
     const database = await resolveDb(db);
-    return database.collection('pending_coordinators').find({ status: 'pending' }).toArray();
+    return database.collection('pending_coordinators')
+      .find({ status: 'pending' })
+      .project({ email: 1, data: 1, created_at: 1, status: 1 })
+      .sort({ created_at: -1 })
+      .limit(200)
+      .toArray();
   },
 
   async approvePendingCoordinator(email, approved) {

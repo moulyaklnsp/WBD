@@ -10,6 +10,7 @@ const UserBalancesModel = getModel('user_balances');
 const SalesModel = getModel('sales');
 const OrdersModel = getModel('orders');
 const OtpsModel = getModel('otps');
+const { normalizeKey } = require('../../utils/mongo');
 
 const createError = (message, statusCode) => Object.assign(new Error(message), { statusCode });
 const resolveDb = async (db) => (db ? db : connectDB());
@@ -121,46 +122,61 @@ const OrdersService = {
     await UserBalancesModel.updateOne(database, { user_id: userDoc._id }, { $inc: { wallet_balance: -total } });
     await insertWalletTransaction(database, userDoc._id, user?.email, 'debit', total, 'Store Purchase: Cart Order');
 
+    const now = new Date();
+    const productIds = (cart.items || []).map((i) => i.productId).filter(Boolean);
+
+    // Fetch product metadata once (avoids N+1).
+    const productDocs = productIds.length
+      ? await ProductsModel.findMany(database, { _id: { $in: productIds } }, { projection: { coordinator: 1, college: 1 } })
+      : [];
+    const productMap = new Map((productDocs || []).map((p) => [String(p._id), p]));
+
+    // Bulk stock decrement + sales upserts (reduce round trips).
+    const productOps = [];
+    const salesOps = [];
     for (const item of cart.items) {
-      await ProductsModel.updateOne(
-        database,
-        { _id: item.productId },
-        { $inc: { availability: -item.quantity } }
-      );
-      await SalesModel.updateOne(
-        database,
-        { product_id: item.productId, buyer_id: userDoc._id },
-        {
-          $inc: { quantity: item.quantity, price: item.price * item.quantity },
-          $set: {
-            buyer: userDoc.name,
-            buyer_id: userDoc._id,
-            college: userDoc.college || '',
-            purchase_date: new Date()
+      productOps.push({
+        updateOne: {
+          filter: { _id: item.productId },
+          update: { $inc: { availability: -item.quantity } }
+        }
+      });
+      salesOps.push({
+        updateOne: {
+          filter: { product_id: item.productId, buyer_id: userDoc._id },
+          update: {
+            $inc: { quantity: item.quantity, price: item.price * item.quantity },
+            $set: {
+              buyer: userDoc.name,
+              buyer_key: (userDoc.name || '').toString().trim().toLowerCase(),
+              buyer_id: userDoc._id,
+              college: userDoc.college || '',
+              college_key: normalizeKey(userDoc.college || ''),
+              purchase_date: now
+            },
+            $setOnInsert: { product_id: item.productId }
           },
-          $setOnInsert: { product_id: item.productId }
-        },
-        { upsert: true }
-      );
+          upsert: true
+        }
+      });
     }
 
-    const enrichedItems = [];
-    for (const item of cart.items) {
-      let prod = null;
-      try {
-        prod = await ProductsModel.findOne(database, { _id: item.productId });
-      } catch (e) {
-        prod = null;
-      }
-      enrichedItems.push({
+    await Promise.all([
+      productOps.length ? database.collection('products').bulkWrite(productOps, { ordered: false }) : Promise.resolve(),
+      salesOps.length ? database.collection('sales').bulkWrite(salesOps, { ordered: false }) : Promise.resolve()
+    ]);
+
+    const enrichedItems = (cart.items || []).map((item) => {
+      const prod = productMap.get(String(item.productId)) || {};
+      return {
         productId: item.productId,
         name: item.name,
         price: item.price,
         quantity: item.quantity,
-        coordinator: prod ? (prod.coordinator || '') : '',
-        college: prod ? (prod.college || '') : ''
-      });
-    }
+        coordinator: prod.coordinator || '',
+        college: prod.college || ''
+      };
+    });
 
     await OrdersModel.insertOne(database, {
       user_email: user?.email,
@@ -213,8 +229,14 @@ const OrdersService = {
 
     await UserBalancesModel.updateOne(database, { user_id: userDoc._id }, { $inc: { wallet_balance: order.total } }, { upsert: true });
 
-    for (const item of (order.items || [])) {
-      await ProductsModel.updateOne(database, { _id: item.productId }, { $inc: { availability: item.quantity } });
+    const restoreOps = (order.items || []).map((item) => ({
+      updateOne: {
+        filter: { _id: item.productId },
+        update: { $inc: { availability: item.quantity } }
+      }
+    }));
+    if (restoreOps.length) {
+      await database.collection('products').bulkWrite(restoreOps, { ordered: false });
     }
 
     await OrdersModel.updateOne(database, { _id: new ObjectId(orderId) }, { $set: { status: 'cancelled', cancelledAt: new Date() } });

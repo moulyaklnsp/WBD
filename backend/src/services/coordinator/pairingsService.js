@@ -74,27 +74,61 @@ const PairingsService = {
         }
       }
 
-      for (const [username, delta] of Object.entries(playerStatsMap)) {
-        const playerUser = await UserModel.findOne(database, { name: username, role: 'player' });
-        if (!playerUser) continue;
-        await PlayerStatsModel.updateOne(
+      const usernames = Object.keys(playerStatsMap);
+      const playerUsers = usernames.length
+        ? await UserModel.findMany(
           database,
-          { player_id: playerUser._id },
-          {
-            $inc: { wins: delta.wins, losses: delta.losses, draws: delta.draws, gamesPlayed: delta.wins + delta.losses + delta.draws },
-            $setOnInsert: { rating: 500, winRate: 0 }
-          },
-          { upsert: true }
-        );
-        const updatedStats = await PlayerStatsModel.findOne(database, { player_id: playerUser._id });
-        if (updatedStats && updatedStats.gamesPlayed > 0) {
-          const newWinRate = Math.round((updatedStats.wins / updatedStats.gamesPlayed) * 100);
-          await PlayerStatsModel.updateOne(
-            database,
-            { player_id: playerUser._id },
-            { $set: { winRate: newWinRate } }
-          );
-        }
+          { role: 'player', name: { $in: usernames } },
+          { projection: { _id: 1, name: 1 } }
+        )
+        : [];
+      const usersByName = new Map((playerUsers || []).map((u) => [u.name, u]));
+
+      const ops = [];
+      for (const [uname, delta] of Object.entries(playerStatsMap)) {
+        const playerUser = usersByName.get(uname);
+        if (!playerUser?._id) continue;
+        const deltaGames = (delta.wins || 0) + (delta.losses || 0) + (delta.draws || 0);
+
+        ops.push({
+          updateOne: {
+            filter: { player_id: playerUser._id },
+            update: [
+              {
+                $set: {
+                  rating: { $ifNull: ['$rating', 500] },
+                  wins: { $add: [{ $ifNull: ['$wins', 0] }, delta.wins || 0] },
+                  losses: { $add: [{ $ifNull: ['$losses', 0] }, delta.losses || 0] },
+                  draws: { $add: [{ $ifNull: ['$draws', 0] }, delta.draws || 0] },
+                  gamesPlayed: { $add: [{ $ifNull: ['$gamesPlayed', 0] }, deltaGames] }
+                }
+              },
+              {
+                $set: {
+                  winRate: {
+                    $cond: [
+                      { $gt: ['$gamesPlayed', 0] },
+                      {
+                        $toInt: {
+                          $round: [
+                            { $multiply: [{ $divide: ['$wins', '$gamesPlayed'] }, 100] },
+                            0
+                          ]
+                        }
+                      },
+                      0
+                    ]
+                  }
+                }
+              }
+            ],
+            upsert: true
+          }
+        });
+      }
+
+      if (ops.length) {
+        await database.collection('player_stats').bulkWrite(ops, { ordered: false });
       }
     } else {
       allRounds = storedPairings.rounds.map(round => {

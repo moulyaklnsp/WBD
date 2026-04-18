@@ -113,10 +113,9 @@ const PlayerStatsService = {
       safeTrim((playerUser.email || '').split('@')[0])
     ].filter(Boolean)));
     const playerIdentifierSet = new Set(playerIdentifiers.map((value) => value.toLowerCase()));
+    const playerKeys = Array.from(playerIdentifierSet);
 
-    const exactRegexes = playerIdentifiers.map((value) => new RegExp(`^${escapeRegExp(value)}$`, 'i'));
-
-    const [statsDoc, ratingDoc, individualEntries, teamEntries, pairingDocs] = await Promise.all([
+    const [statsDoc, ratingDoc, individualEntries, teamEntries] = await Promise.all([
       PlayerStatsModel.findOne(database, {
         $or: [
           { player_id: playerObjectId },
@@ -131,27 +130,50 @@ const PlayerStatsService = {
       }),
       TournamentPlayersModel.findMany(
         database,
-        exactRegexes.length > 0 ? { $or: exactRegexes.map((rx) => ({ username: rx })) } : { _id: null },
+        playerKeys.length > 0
+          ? {
+            $expr: {
+              $in: [
+                { $toLower: { $ifNull: ['$username', ''] } },
+                playerKeys
+              ]
+            }
+          }
+          : { _id: null },
         { projection: { tournament_id: 1 } }
       ),
       TeamEnrollmentsModel.findMany(
         database,
-        exactRegexes.length > 0 ? {
-          $or: exactRegexes.flatMap((rx) => ([
-            { captain_name: rx },
-            { player1_name: rx },
-            { player2_name: rx },
-            { player3_name: rx }
-          ]))
-        } : { _id: null },
+        playerKeys.length > 0
+          ? {
+            $expr: {
+              $or: [
+                { $in: [{ $toLower: { $ifNull: ['$captain_name', ''] } }, playerKeys] },
+                { $in: [{ $toLower: { $ifNull: ['$player1_name', ''] } }, playerKeys] },
+                { $in: [{ $toLower: { $ifNull: ['$player2_name', ''] } }, playerKeys] },
+                { $in: [{ $toLower: { $ifNull: ['$player3_name', ''] } }, playerKeys] }
+              ]
+            }
+          }
+          : { _id: null },
         { projection: { tournament_id: 1 } }
-      ),
-      TournamentPairingsModel.findMany(
-        database,
-        {},
-        { projection: { tournament_id: 1, rounds: 1 } }
       )
     ]);
+
+    const tournamentIds = Array.from(new Set([
+      ...(individualEntries || []).map((e) => e?.tournament_id).filter(Boolean).map(String),
+      ...(teamEntries || []).map((e) => e?.tournament_id).filter(Boolean).map(String)
+    ]))
+      .filter((id) => ObjectId.isValid(id))
+      .map((id) => new ObjectId(id));
+
+    const pairingDocs = tournamentIds.length > 0
+      ? await TournamentPairingsModel.findMany(
+        database,
+        { tournament_id: { $in: tournamentIds } },
+        { projection: { tournament_id: 1, rounds: 1 } }
+      )
+      : [];
 
     const summary = {
       gamesPlayed: Number(statsDoc?.gamesPlayed || 0),

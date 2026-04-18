@@ -242,7 +242,7 @@ const getStore = async (req, res) => {
   try {
     const user = getSessionUser(req, res);
     if (!user) return;
-    const data = await AnalyticsService.getStoreSummary();
+    const data = await AnalyticsService.getStoreSummary(null, req.query);
     return res.status(200).json(data);
   } catch (error) {
     console.error('Error fetching store data:', error);

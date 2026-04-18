@@ -563,7 +563,7 @@ const getProducts = async (req, res) => {
   try {
     const user = getSessionUser(req, res);
     if (!user) return;
-    const data = await StoreService.getProducts(null, user);
+    const data = await StoreService.getProducts(null, user, req.query);
     return res.status(200).json(data);
   } catch (error) {
     console.error('Error fetching products:', error);
@@ -739,7 +739,7 @@ const getOrderComplaints = async (req, res) => {
   try {
     const user = getSessionUser(req, res);
     if (!user) return;
-    const data = await StoreService.getOrderComplaints(null, user);
+    const data = await StoreService.getOrderComplaints(null, user, req.query);
     return res.status(200).json(data);
   } catch (error) {
     console.error('Error fetching order complaints:', error);

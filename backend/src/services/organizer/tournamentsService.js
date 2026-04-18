@@ -3,6 +3,7 @@ const { ObjectId } = require('mongodb');
 const { getModel } = require('../../models');
 const Cache = require('../../utils/cache');
 const TournamentModel = getModel('tournaments');
+const { normalizeKey } = require('../../utils/mongo');
 
 const createError = (message, statusCode) => Object.assign(new Error(message), { statusCode });
 const resolveDb = async (db) => (db ? db : connectDB());
@@ -24,6 +25,7 @@ const TournamentsService = {
         $set: {
           status: 'Approved',
           approved_by: approvedBy,
+          approved_by_key: normalizeKey(approvedBy),
           approved_date: new Date()
         }
       }
@@ -45,6 +47,7 @@ const TournamentsService = {
         $set: {
           status: 'Rejected',
           rejected_by: rejectedBy,
+          rejected_by_key: normalizeKey(rejectedBy),
           rejected_date: new Date()
         }
       }
