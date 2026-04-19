@@ -18,7 +18,7 @@ const options = {
         'Authenticate via Bearer token (JWT) or session cookie.'
     },
     servers: [
-      { url: 'http://localhost:3001', description: 'Development server' }
+      { url: 'https://wbd-production.up.railway.app', description: 'Development server' }
     ],
     components: {
       securitySchemes: {
