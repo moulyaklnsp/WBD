@@ -51,6 +51,7 @@ export const signup = createAsyncThunk('auth/signup', async (signupData, thunkAP
 	try {
 		const res = await fetch('/api/signup', {
 			method: 'POST',
+			credentials: 'include',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify(signupData),
 		});
