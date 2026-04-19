@@ -7,6 +7,7 @@ export const login = createAsyncThunk('auth/login', async (credentials, thunkAPI
 	try {
 		const res = await fetch('/api/login', {
 			method: 'POST',
+			credentials: 'include',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify(credentials),
 		});
