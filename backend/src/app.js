@@ -145,7 +145,12 @@ if (!IS_TEST) {
 }
 
 // ─── Global middleware ────────────────────────────────────────────────────────
-app.use(cors({ origin: ['http://localhost:3000', 'http://localhost:3001'], credentials: true }));
+// app.use(cors({ origin: ['http://localhost:3000', 'http://localhost:3001'], credentials: true }));
+
+app.use(cors({
+  origin: process.env.CLIENT_ORIGIN || true,
+  credentials: true
+}));
 
 if (!IS_TEST) {
   app.use(morgan('combined', { stream: backendAccessStream }));
@@ -160,7 +165,13 @@ app.use(session({
   saveUninitialized: false,
   rolling: true,
   store: sessionStore,
-  cookie: { secure: false, sameSite: 'lax', httpOnly: true, maxAge: 24 * 60 * 60 * 1000 }
+  // cookie: { secure: false, sameSite: 'lax', httpOnly: true, maxAge: 24 * 60 * 60 * 1000 }
+  cookie: {
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'lax',
+  httpOnly: true,
+  maxAge: 24 * 60 * 60 * 1000
+}
 }));
 
 app.use(express.urlencoded({ extended: true }));
@@ -266,11 +277,9 @@ if (!IS_TEST) {
 // ─── Start server ─────────────────────────────────────────────────────────────
   connectDB().catch(err => console.error('Database connection failed:', err));
   Cache.ensureRedisConnected().catch(() => null);
-  server.listen(PORT, () =>
-    console.log(
-      `ChessHive server running on port ${PORT} | Swagger UI: http://localhost:${PORT}/api-docs | GraphQL: http://localhost:${PORT}/graphql`
-    )
-  );
+  server.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server running on port ${PORT}`);
+  });
 }
 
 module.exports = { app, server, io };
