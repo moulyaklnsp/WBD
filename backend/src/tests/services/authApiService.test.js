@@ -18,7 +18,7 @@ function loadAuthApiServiceWithMocks(overrides = {}) {
   };
   const emailService = {
     sendOtpEmail: jest.fn(async () => ({ sent: true })),
-    sendForgotPasswordOtp: jest.fn(async () => ({})),
+    sendForgotPasswordOtp: jest.fn(async () => ({ sent: true })),
     ...overrides.emailService
   };
   const jwt = {

@@ -46,14 +46,14 @@ describe('authController', () => {
   test('apiSignup success + error formatting', async () => {
     const db = createDbMock();
     const authApiService = {
-      apiSignup: jest.fn(async () => ({ message: 'OTP sent', pendingApproval: false }))
+      apiSignup: jest.fn(async () => ({ message: 'OTP sent', pendingApproval: false, emailSent: true }))
     };
     const { authController } = loadAuthControllerWithMocks({ db, authApiService, authService: {} });
 
     const req1 = createReq({ body: { email: 'a@example.com' }, session: {} });
     const res1 = createRes();
     await authController.apiSignup(req1, res1);
-    expect(res1.json).toHaveBeenCalledWith({ success: true, message: 'OTP sent', pendingApproval: false });
+    expect(res1.json).toHaveBeenCalledWith({ success: true, message: 'OTP sent', pendingApproval: false, emailSent: true });
 
     authApiService.apiSignup.mockRejectedValueOnce(Object.assign(new Error('Validation failed'), { statusCode: 400, errors: { email: 'bad' } }));
     const req2 = createReq({ body: {}, session: {} });

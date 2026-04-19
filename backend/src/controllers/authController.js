@@ -37,7 +37,12 @@ module.exports = {
     try {
       const db = await connectDB();
       const result = await AuthApiService.apiSignup(db, req.body || {});
-      return res.json({ success: true, message: result.message, pendingApproval: result.pendingApproval });
+      return res.json({
+        success: true,
+        message: result.message,
+        pendingApproval: result.pendingApproval,
+        emailSent: result.emailSent
+      });
     } catch (err) {
       console.error('Signup API error:', err);
       const status = err.statusCode || 500;
@@ -851,7 +856,7 @@ module.exports = {
     try {
       const db = await connectDB();
       const result = await AuthApiService.forgotPassword(db, { email });
-      return res.json({ success: true, message: result.message });
+      return res.json({ success: true, message: result.message, emailSent: result.emailSent });
     } catch (err) {
       console.error('Forgot password error:', err);
       const status = err.statusCode || 500;

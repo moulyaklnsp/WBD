@@ -185,7 +185,8 @@ const UsersService = {
       });
 
       const { sendOtpEmail } = require('../emailService');
-      await sendOtpEmail(pending.email, otp);
+      const mailResult = await sendOtpEmail(pending.email, otp);
+      const emailSent = Boolean(mailResult?.sent);
       
       const io = require('../socketService').getIO();
       if (io) {
@@ -196,7 +197,11 @@ const UsersService = {
         { _id: pending._id },
         { $set: { status: 'approved', approvedAt: new Date() } }
       );
-      return { success: true, message: 'Coordinator approved. OTP sent.' };
+      return {
+        success: true,
+        message: emailSent ? 'Coordinator approved. OTP sent.' : 'Coordinator approved. OTP generated but email failed.',
+        emailSent
+      };
     } else {
       // Reject
       await database.collection('pending_coordinators').updateOne(

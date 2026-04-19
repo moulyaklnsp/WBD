@@ -862,9 +862,14 @@ const StoreService = {
 
     await OtpsModel.insertOne(database, { email: playerEmail, otp, type: 'delivery', expires_at: expiresAt, used: false, orderId: order._id });
 
-    await sendOtpEmail(playerEmail, otp, `Delivery OTP for Order ${String(order._id).slice(-8)}`);
+    const mailResult = await sendOtpEmail(playerEmail, otp, `Delivery OTP for Order ${String(order._id).slice(-8)}`);
+    const emailSent = Boolean(mailResult?.sent);
 
-    return { success: true, message: 'OTP sent to player email' };
+    return {
+      success: true,
+      message: emailSent ? 'OTP sent to player email' : 'OTP generated but email failed',
+      emailSent
+    };
   },
 
   async getProductAnalyticsDetails(db, user, { productId }) {

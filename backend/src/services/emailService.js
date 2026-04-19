@@ -1,74 +1,105 @@
-let nodemailer;
-try { nodemailer = require('nodemailer'); } catch (e) { nodemailer = null; }
+let sgMail;
+try { sgMail = require('@sendgrid/mail'); } catch (e) { sgMail = null; }
 
-async function sendOtpEmail(to, otp, subject = 'Your ChessHive OTP') {
-  console.log(`Generated OTP for ${to}: ${otp}`);
+const SENDGRID_TIMEOUT_MS = 7000;
 
-  if (!nodemailer) {
-    console.log(`nodemailer not installed. OTP for ${to}: ${otp}`);
-    return { previewUrl: null, messageId: null, info: null };
+let sendgridInitialized = false;
+
+function initSendgrid() {
+  if (sendgridInitialized) return true;
+  if (!sgMail) {
+    console.error('[email] @sendgrid/mail not installed');
+    return false;
+  }
+  const apiKey = process.env.SENDGRID_API_KEY?.trim();
+  if (!apiKey) {
+    console.error('[email] SENDGRID_API_KEY is missing');
+    return false;
+  }
+  sgMail.setApiKey(apiKey);
+  sendgridInitialized = true;
+  return true;
+}
+
+function withTimeout(promise, timeoutMs, label) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`${label || 'operation'} timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+    Promise.resolve(promise)
+      .then((value) => {
+        clearTimeout(timer);
+        resolve(value);
+      })
+      .catch((err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+  });
+}
+
+function extractSendgridMessageId(sendResult) {
+  const response = Array.isArray(sendResult) ? sendResult[0] : sendResult;
+  const headers = response?.headers || {};
+  return headers['x-message-id'] || headers['X-Message-Id'] || headers['x-message-id'.toLowerCase()] || null;
+}
+
+async function sendEmail({ to, subject, text, html }) {
+  const safeTo = String(to || '').trim();
+  if (!safeTo) return { attempted: false, sent: false, success: false, emailSent: false, messageId: null, reason: 'missing-recipient', provider: 'sendgrid' };
+
+  if (!initSendgrid()) {
+    return { attempted: true, sent: false, success: false, emailSent: false, messageId: null, reason: 'sendgrid-not-configured', provider: 'sendgrid' };
   }
 
-  if (!process.env.SMTP_HOST) {
-    try {
-      const testAccount = await nodemailer.createTestAccount();
-      const transporter = nodemailer.createTransport({
-        host: testAccount.smtp.host,
-        port: testAccount.smtp.port,
-        secure: testAccount.smtp.secure,
-        auth: { user: testAccount.user, pass: testAccount.pass }
-      });
-      const info = await transporter.sendMail({
-        from: process.env.SMTP_FROM || '',
-        to,
-        subject,
-        text: `Your OTP is: ${otp}. It expires in 5 minutes.`
-      });
-      const previewUrl = nodemailer.getTestMessageUrl(info);
-      console.log(`Ethereal OTP preview for ${to}: ${previewUrl}`);
-      return { previewUrl, messageId: info && info.messageId, info };
-    } catch (err) {
-      console.error('Failed to send via Ethereal, falling back to console:', err);
-      console.log(`OTP for ${to}: ${otp}`);
-      return { previewUrl: null, messageId: null, info: null };
-    }
-  }
+  const msg = {
+    to: safeTo,
+    from: process.env.SMTP_FROM || 'noreply@chesshive.com',
+    subject: subject || '',
+    text: text || ''
+  };
+  if (html) msg.html = html;
 
   try {
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: parseInt(process.env.SMTP_PORT || '587', 10),
-      secure: (process.env.SMTP_SECURE === 'true'),
-      auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } : undefined
-    });
-    try {
-      await transporter.verify();
-      console.log('SMTP transporter verified');
-    } catch (verErr) {
-      console.warn('SMTP transporter verification failed:', verErr);
+    const sendResult = await withTimeout(sgMail.send(msg), SENDGRID_TIMEOUT_MS, 'SendGrid send');
+    const messageId = extractSendgridMessageId(sendResult);
+    return { attempted: true, sent: true, success: true, emailSent: true, messageId, provider: 'sendgrid' };
+  } catch (err) {
+    console.error('[email] SendGrid send failed:', err?.message || err);
+    if (err?.response?.body) {
+      console.error('[email] SendGrid error response body:', err.response.body);
     }
-    const info = await transporter.sendMail({
-      from: process.env.SMTP_FROM || '',
-      to,
+    return { attempted: true, sent: false, success: false, emailSent: false, messageId: null, reason: 'sendgrid-failed', provider: 'sendgrid', error: err?.message || String(err) };
+  }
+}
+
+async function sendOtpEmail(to, otp, subject = 'Your ChessHive OTP') {
+  const safeTo = String(to || '').trim();
+  console.log(`Generated OTP for ${safeTo}: ${otp}`);
+
+  try {
+    const result = await sendEmail({
+      to: safeTo,
       subject,
       text: `Your OTP is: ${otp}. It expires in 5 minutes.`
     });
-    console.log('OTP email sent:', info && info.messageId, 'envelope:', info && info.envelope);
-    return { previewUrl: null, messageId: info && info.messageId, info };
+
+    if (!result?.sent) {
+      console.log(`OTP for ${safeTo}: ${otp}`);
+    }
+
+    // Keep legacy fields for callers/tests that may read them.
+    return { ...result, previewUrl: null, info: null };
   } catch (err) {
-    console.error('Failed to send OTP email, falling back to console:', err);
-    console.log(`OTP for ${to}: ${otp}`);
-    return { previewUrl: null, messageId: null, info: null };
+    console.error('[email] Unexpected sendOtpEmail error:', err);
+    console.log(`OTP for ${safeTo}: ${otp}`);
+    return { attempted: true, sent: false, success: false, emailSent: false, messageId: null, reason: 'unexpected-error', provider: 'sendgrid', previewUrl: null, info: null };
   }
 }
 
 async function sendForgotPasswordOtp(to, otp) {
-  console.log(`Generated Forgot Password OTP for ${to}: ${otp}`);
-
-  if (!nodemailer) {
-    console.log(`nodemailer not installed. OTP for ${to}: ${otp}`);
-    return;
-  }
+  const safeTo = String(to || '').trim();
+  console.log(`Generated Forgot Password OTP for ${safeTo}: ${otp}`);
 
   const htmlTemplate = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #071327; color: #FFFDD0;">
@@ -83,52 +114,29 @@ async function sendForgotPasswordOtp(to, otp) {
     </div>
   `;
 
-  if (!process.env.SMTP_HOST) {
-    try {
-      const testAccount = await nodemailer.createTestAccount();
-      const transporter = nodemailer.createTransport({
-        host: testAccount.smtp.host,
-        port: testAccount.smtp.port,
-        secure: testAccount.smtp.secure,
-        auth: { user: testAccount.user, pass: testAccount.pass }
-      });
-      const info = await transporter.sendMail({
-        from: process.env.SMTP_FROM || '"ChessHive" <noreply@chesshive.com>',
-        to,
-        subject: 'ChessHive Password Reset OTP',
-        text: `Your password reset OTP is: ${otp}\n\nThis OTP is valid for 10 minutes.\n\nIf you did not request this, please ignore this email.`,
-        html: htmlTemplate
-      });
-      const previewUrl = nodemailer.getTestMessageUrl(info);
-      console.log(`Ethereal OTP preview for ${to}: ${previewUrl}`);
-    } catch (err) {
-      console.error('Failed to send via Ethereal:', err);
+  try {
+    const result = await sendEmail({
+      to: safeTo,
+      subject: 'ChessHive Password Reset OTP',
+      text: `Your password reset OTP is: ${otp}\n\nThis OTP is valid for 10 minutes.\n\nIf you did not request this, please ignore this email.`,
+      html: htmlTemplate
+    });
+
+    if (!result?.sent) {
+      console.log(`OTP for ${safeTo}: ${otp}`);
     }
-  } else {
-    try {
-      const transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST,
-        port: parseInt(process.env.SMTP_PORT || '587', 10),
-        secure: (process.env.SMTP_SECURE === 'true'),
-        auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } : undefined
-      });
-      const info = await transporter.sendMail({
-        from: process.env.SMTP_FROM || '"ChessHive" <noreply@chesshive.com>',
-        to,
-        subject: 'ChessHive Password Reset OTP',
-        text: `Your password reset OTP is: ${otp}\n\nThis OTP is valid for 10 minutes.\n\nIf you did not request this, please ignore this email.`,
-        html: htmlTemplate
-      });
-      console.log('Password reset OTP email sent:', info && info.messageId);
-    } catch (err) {
-      console.error('Failed to send OTP email:', err);
-    }
+
+    return result;
+  } catch (err) {
+    console.error('[email] Unexpected sendForgotPasswordOtp error:', err);
+    console.log(`OTP for ${safeTo}: ${otp}`);
+    return { attempted: true, sent: false, success: false, emailSent: false, messageId: null, reason: 'unexpected-error', provider: 'sendgrid' };
   }
 }
 
 async function sendContactStatusEmail(to, payload = {}) {
   const safeTo = String(to || '').trim();
-  if (!safeTo) return { sent: false, reason: 'missing-recipient' };
+  if (!safeTo) return { attempted: false, sent: false, success: false, emailSent: false, messageId: null, reason: 'missing-recipient', provider: 'sendgrid' };
 
   const status = String(payload.status || 'pending').replace('_', ' ');
   const adminMessage = String(payload.adminMessage || '').trim();
@@ -152,71 +160,13 @@ async function sendContactStatusEmail(to, payload = {}) {
     </div>
   `;
 
-  if (!nodemailer) {
-    console.log(`Contact status update for ${safeTo}:`, { status, adminMessage });
-    return { sent: false, reason: 'nodemailer-missing' };
-  }
-
-  const smtpHost = String(process.env.SMTP_HOST || '').trim();
-  const smtpUser = String(process.env.SMTP_USER || '').trim();
-  const smtpPass = String(process.env.SMTP_PASS || '').trim();
-  const smtpFrom = String(process.env.SMTP_FROM || '').trim() || '"ChessHive" <noreply@chesshive.com>';
-
-  if (!smtpHost && !(smtpUser && smtpPass)) {
-    try {
-      const testAccount = await nodemailer.createTestAccount();
-      const transporter = nodemailer.createTransport({
-        host: testAccount.smtp.host,
-        port: testAccount.smtp.port,
-        secure: testAccount.smtp.secure,
-        auth: { user: testAccount.user, pass: testAccount.pass }
-      });
-      const info = await transporter.sendMail({
-        from: smtpFrom,
-        to: safeTo,
-        subject,
-        text,
-        html
-      });
-      const previewUrl = nodemailer.getTestMessageUrl(info);
-      console.log(`Ethereal contact update preview for ${safeTo}: ${previewUrl}`);
-      return { sent: true, previewUrl, messageId: info?.messageId };
-    } catch (err) {
-      console.error('Failed to send contact update via Ethereal:', err);
-      return { sent: false, reason: 'ethereal-failed' };
-    }
-  }
-
-  try {
-    const transporter = smtpHost
-      ? nodemailer.createTransport({
-          host: smtpHost,
-          port: parseInt(process.env.SMTP_PORT || '587', 10),
-          secure: (process.env.SMTP_SECURE === 'true'),
-          auth: smtpUser ? { user: smtpUser, pass: smtpPass } : undefined
-        })
-      : nodemailer.createTransport({
-          service: 'gmail',
-          auth: { user: smtpUser, pass: smtpPass }
-        });
-    const info = await transporter.sendMail({
-      from: smtpFrom,
-      to: safeTo,
-      subject,
-      text,
-      html
-    });
-    console.log('Contact status update email sent:', info?.messageId);
-    return { sent: true, messageId: info?.messageId };
-  } catch (err) {
-    console.error('Failed to send contact status email:', err);
-    return { sent: false, reason: 'smtp-failed' };
-  }
+  const result = await sendEmail({ to: safeTo, subject, text, html });
+  return { ...result, previewUrl: null };
 }
 
 async function sendAdminInviteEmail(to, inviteUrl, invitedBy) {
   const safeTo = String(to || '').trim();
-  if (!safeTo) return { sent: false, reason: 'missing-recipient' };
+  if (!safeTo) return { attempted: false, sent: false, success: false, emailSent: false, messageId: null, reason: 'missing-recipient', provider: 'sendgrid' };
 
   const inviter = String(invitedBy || 'ChessHive Admin').trim();
   const subject = 'ChessHive Admin Invite';
@@ -238,66 +188,8 @@ async function sendAdminInviteEmail(to, inviteUrl, invitedBy) {
     </div>
   `;
 
-  if (!nodemailer) {
-    console.log(`Admin invite for ${safeTo}: ${inviteUrl}`);
-    return { sent: false, reason: 'nodemailer-missing' };
-  }
-
-  const smtpHost = String(process.env.SMTP_HOST || '').trim();
-  const smtpUser = String(process.env.SMTP_USER || '').trim();
-  const smtpPass = String(process.env.SMTP_PASS || '').trim();
-  const smtpFrom = String(process.env.SMTP_FROM || '').trim() || '"ChessHive" <noreply@chesshive.com>';
-
-  if (!smtpHost && !(smtpUser && smtpPass)) {
-    try {
-      const testAccount = await nodemailer.createTestAccount();
-      const transporter = nodemailer.createTransport({
-        host: testAccount.smtp.host,
-        port: testAccount.smtp.port,
-        secure: testAccount.smtp.secure,
-        auth: { user: testAccount.user, pass: testAccount.pass }
-      });
-      const info = await transporter.sendMail({
-        from: smtpFrom,
-        to: safeTo,
-        subject,
-        text,
-        html
-      });
-      const previewUrl = nodemailer.getTestMessageUrl(info);
-      console.log(`Ethereal admin invite preview for ${safeTo}: ${previewUrl}`);
-      return { sent: true, previewUrl, messageId: info?.messageId };
-    } catch (err) {
-      console.error('Failed to send admin invite via Ethereal:', err);
-      return { sent: false, reason: 'ethereal-failed' };
-    }
-  }
-
-  try {
-    const transporter = smtpHost
-      ? nodemailer.createTransport({
-          host: smtpHost,
-          port: parseInt(process.env.SMTP_PORT || '587', 10),
-          secure: (process.env.SMTP_SECURE === 'true'),
-          auth: smtpUser ? { user: smtpUser, pass: smtpPass } : undefined
-        })
-      : nodemailer.createTransport({
-          service: 'gmail',
-          auth: { user: smtpUser, pass: smtpPass }
-        });
-    const info = await transporter.sendMail({
-      from: smtpFrom,
-      to: safeTo,
-      subject,
-      text,
-      html
-    });
-    console.log('Admin invite email sent:', info?.messageId);
-    return { sent: true, messageId: info?.messageId };
-  } catch (err) {
-    console.error('Failed to send admin invite email:', err);
-    return { sent: false, reason: 'smtp-failed' };
-  }
+  const result = await sendEmail({ to: safeTo, subject, text, html });
+  return { ...result, previewUrl: null };
 }
 
 module.exports = { sendOtpEmail, sendForgotPasswordOtp, sendContactStatusEmail, sendAdminInviteEmail };

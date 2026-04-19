@@ -125,9 +125,13 @@ const AuthApiService = {
     });
 
     console.log(`Generated OTP for ${email}: ${otp}`);
-    await sendOtpEmail(email, otp);
+    const mailResult = await sendOtpEmail(email, otp);
+    const emailSent = Boolean(mailResult?.sent);
 
-    return { message: 'OTP sent to your email for verification' };
+    return {
+      message: emailSent ? 'OTP sent to your email for verification' : 'OTP generated but email failed',
+      emailSent
+    };
   },
 
   async verifySignupOtp(db, { email, otp }, session) {
@@ -247,9 +251,13 @@ const AuthApiService = {
     });
 
     console.log(`Generated Forgot Password OTP for ${email}: ${otp}`);
-    await sendForgotPasswordOtp(email.toLowerCase(), otp);
+    const mailResult = await sendForgotPasswordOtp(email.toLowerCase(), otp);
+    const emailSent = Boolean(mailResult?.sent);
 
-    return { message: 'OTP sent to your email address' };
+    return {
+      message: emailSent ? 'OTP sent to your email address' : 'OTP generated but email failed',
+      emailSent
+    };
   },
 
   async verifyForgotPasswordOtp(db, { email, otp }) {
