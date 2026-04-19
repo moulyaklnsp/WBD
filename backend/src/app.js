@@ -102,7 +102,22 @@ if (!IS_TEST) {
 
 // ─── Express + HTTP + Socket.IO ───────────────────────────────────────────────
 const app    = express();
+if (process.env.TRUST_PROXY === '1' || process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
 const server = http.createServer({ maxHeaderSize: 1048576 }, app);
+
+function parseOrigins(value) {
+  return String(value || '')
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean);
+}
+
+const defaultClientOrigins = ['http://localhost:3000', 'http://localhost:3001'];
+const socketCorsOrigin = process.env.CLIENT_ORIGIN
+  ? parseOrigins(process.env.CLIENT_ORIGIN)
+  : ((process.env.NODE_ENV || 'development') === 'production' ? true : defaultClientOrigins);
 const io = IS_TEST
   ? {
       emit() {},
@@ -112,7 +127,7 @@ const io = IS_TEST
     }
   : new Server(server, {
       cors: {
-        origin: ['http://localhost:3000', 'http://localhost:3001'],
+        origin: socketCorsOrigin,
         methods: ['GET', 'POST'],
         credentials: true
       }

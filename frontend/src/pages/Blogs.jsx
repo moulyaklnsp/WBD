@@ -5,6 +5,7 @@ import { GlobalLoader } from '../components/ChessTransformation';
 import ChessBackground from '../components/ChessBackground';
 import AnimatedSidebar from '../components/AnimatedSidebar';
 import { GlassCard } from '../components/AnimatedCard';
+import { getBackendBase } from '../utils/backendBase';
 
 
 function resolveBlogImage(blog) {
@@ -29,7 +30,7 @@ function resolveBlogImage(blog) {
 
   if (trimmed.startsWith('/')) {
     if (trimmed.startsWith('/uploads') || trimmed.startsWith('/public/uploads')) {
-      const apiBase = process.env.REACT_APP_API_BASE_URL || `${window.location.protocol}//${window.location.hostname}:3001`;
+      const apiBase = getBackendBase() || window.location.origin;
       return `${apiBase}${trimmed}`;
     }
     return trimmed;

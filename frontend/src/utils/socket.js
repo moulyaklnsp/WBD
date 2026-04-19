@@ -4,6 +4,9 @@ export function getSocketServerUrl() {
   const explicit = (process.env.REACT_APP_SOCKET_URL || '').toString().trim();
   if (explicit) return explicit;
 
+  const apiBase = (process.env.REACT_APP_API_URL || process.env.REACT_APP_API_BASE_URL || '').toString().trim();
+  if (apiBase) return apiBase.replace(/\/+$/, '');
+
   const { protocol, hostname, port } = window.location;
 
   // Use same-origin (works with CRA proxy in dev and direct backend in prod).

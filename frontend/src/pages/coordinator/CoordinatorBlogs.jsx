@@ -7,6 +7,7 @@ import usePlayerTheme from '../../hooks/usePlayerTheme';
 import AnimatedSidebar from '../../components/AnimatedSidebar';
 import { GlobalLoader } from '../../components/ChessTransformation';
 import { coordinatorLinks } from '../../constants/coordinatorLinks';
+import { getBackendBase } from '../../utils/backendBase';
 
 
 function resolveBlogImage(blog) {
@@ -31,7 +32,7 @@ function resolveBlogImage(blog) {
 
   if (trimmed.startsWith('/')) {
     if (trimmed.startsWith('/uploads') || trimmed.startsWith('/public/uploads')) {
-      const apiBase = process.env.REACT_APP_API_BASE_URL || `${window.location.protocol}//${window.location.hostname}:3001`;
+      const apiBase = getBackendBase() || window.location.origin;
       return `${apiBase}${trimmed}`;
     }
     return trimmed;

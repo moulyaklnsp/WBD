@@ -7,6 +7,7 @@ import ChessBackground from "../components/ChessBackground";
 import AnimatedSidebar from "../components/AnimatedSidebar";
 import { GlassCard, FloatingButton } from "../components/AnimatedCard";
 import { GlobalLoader } from "../components/ChessTransformation";
+import { getSocketServerUrl } from "../utils/socket";
 
 const SOCKET_IO_PATH = '/socket.io/socket.io.js';
 
@@ -17,7 +18,8 @@ function ensureSocketIoLoadedOnce() {
 
   return window.__chesshiveSocketIoLoading = new Promise((resolve) => {
     const script = document.createElement('script');
-    script.src = SOCKET_IO_PATH;
+    const socketBase = (getSocketServerUrl() || '').replace(/\/+$/, '');
+    script.src = socketBase ? `${socketBase}${SOCKET_IO_PATH}` : SOCKET_IO_PATH;
     script.async = true;
     script.onload = () => resolve(true);
     script.onerror = () => resolve(false);
@@ -53,7 +55,7 @@ export default function Signup() {
         const loaded = await ensureSocketIoLoadedOnce();
         if (loaded && window.io && isMounted) {
           const origin = window.location.origin;
-          const url = process.env.REACT_APP_SOCKET_URL || origin;
+          const url = getSocketServerUrl() || origin;
           socketRef.current = window.io(url, { withCredentials: true });
           
           socketRef.current.on('connect', () => {

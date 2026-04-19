@@ -7,6 +7,7 @@ import { coordinatorLinks } from '../../constants/coordinatorLinks';
 import { fetchAsCoordinator } from '../../utils/fetchWithRole';
 import { GlassCard } from '../../components/AnimatedCard';
 import ImageCarousel from '../../components/ImageCarousel';
+import { getBackendBase } from '../../utils/backendBase';
 
 function resolveBlogImages(blog) {
   const arrayImages = Array.isArray(blog?.image_urls)
@@ -29,7 +30,7 @@ function normalizeImageSrc(raw) {
   if (/^https?:\/\//i.test(trimmed) || trimmed.startsWith('data:')) return trimmed;
   if (trimmed.startsWith('/')) {
     if (trimmed.startsWith('/uploads') || trimmed.startsWith('/public/uploads')) {
-      const apiBase = process.env.REACT_APP_API_BASE_URL || `${window.location.protocol}//${window.location.hostname}:3001`;
+      const apiBase = getBackendBase() || window.location.origin;
       return `${apiBase}${trimmed}`;
     }
     return trimmed;

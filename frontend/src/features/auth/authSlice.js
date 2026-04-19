@@ -5,8 +5,7 @@ import { storeTokens, clearTokens, getAccessToken, logoutUser } from '../../util
 // Thunk: login (email + password, no OTP)
 export const login = createAsyncThunk('auth/login', async (credentials, thunkAPI) => {
 	try {
-		const backendBase = 'http://localhost:3000';
-		const res = await fetch(`${backendBase}/api/login`, {
+		const res = await fetch('/api/login', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify(credentials),

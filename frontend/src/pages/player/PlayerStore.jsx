@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchProducts } from '../../features/products/productsSlice';
 import { fetchAsPlayer, safePost } from '../../utils/fetchWithRole';
+import { getBackendBase } from '../../utils/backendBase';
 import usePlayerTheme from '../../hooks/usePlayerTheme';
 import SearchFilter from '../../components/SearchFilter';
 
@@ -358,7 +359,7 @@ function PlayerStore() {
     } catch (e) { console.error('Print failed', e); }
   };
 
-  const apiBase = process.env.REACT_APP_API_BASE_URL || `${window.location.protocol}//${window.location.hostname}:3001`;
+  const apiBase = getBackendBase() || window.location.origin;
   const downloadSlip = async (slip) => {
     if (!slip || !slip.pdf_url) return printSlip(slip);
     try {

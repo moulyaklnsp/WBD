@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { getOrCreateSharedSocket } from '../utils/socket';
+import { getOrCreateSharedSocket, getSocketServerUrl } from '../utils/socket';
 
 const SOCKET_IO_PATH = '/socket.io/socket.io.js';
 
@@ -12,7 +12,8 @@ function ensureSocketIoLoadedOnce() {
 
   window.__chesshiveSocketIoLoading = new Promise((resolve) => {
     const script = document.createElement('script');
-    script.src = SOCKET_IO_PATH;
+    const socketBase = (getSocketServerUrl() || '').replace(/\/+$/, '');
+    script.src = socketBase ? `${socketBase}${SOCKET_IO_PATH}` : SOCKET_IO_PATH;
     script.async = true;
     script.onload = () => resolve(true);
     script.onerror = () => resolve(false);

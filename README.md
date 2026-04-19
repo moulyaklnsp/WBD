@@ -133,6 +133,19 @@ Default frontend URL: `http://localhost:3000`
 
 > `frontend/package.json` uses proxy `http://localhost:3001` for relative `/api/*` requests.
 
+## Deploy (Railway backend + Vercel frontend)
+
+### Backend (Railway)
+
+- Set `NODE_ENV=production`
+- Set `TRUST_PROXY=1`
+- Set `CLIENT_ORIGIN` to your Vercel URL (example: `https://your-app.vercel.app`)
+
+### Frontend (Vercel)
+
+- Set `REACT_APP_API_URL` to your Railway backend URL (example: `https://your-backend.up.railway.app`)
+- Optional (Socket.IO): set `REACT_APP_SOCKET_URL` to the same Railway URL
+
 ## Environment Variables (Backend)
 
 From `backend/.env.example`:

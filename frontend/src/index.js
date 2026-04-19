@@ -7,6 +7,9 @@ import { store } from './app/store';
 import { fetchSession } from './features/auth/authSlice';
 import { BrowserRouter } from 'react-router-dom';
 import { getTabCount, MAX_TABS, isNewTab } from './utils/multiTabManager';
+import { installBackendFetchProxy } from './utils/installBackendFetchProxy';
+
+installBackendFetchProxy();
 
 // Check tab count (supports up to 15 tabs)
 const tabCount = getTabCount();

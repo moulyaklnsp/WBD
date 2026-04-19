@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { createSocket } from '../../utils/socket';
+import { createSocket, getSocketServerUrl } from '../../utils/socket';
 import EmojiPicker from 'emoji-picker-react';
 import ChatChoiceEmblem from '../../components/ChatChoiceEmblem';
 
@@ -66,7 +66,8 @@ function CoordinatorChat() {
       return;
     }
     const script = document.createElement('script');
-    script.src = SOCKET_IO_PATH;
+    const socketBase = (getSocketServerUrl() || '').replace(/\/+$/, '');
+    script.src = socketBase ? `${socketBase}${SOCKET_IO_PATH}` : SOCKET_IO_PATH;
     script.async = true;
     script.onload = () => setSocketReady(true);
     script.onerror = () => setSocketReady(false);

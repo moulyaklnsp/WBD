@@ -1,7 +1,7 @@
 import { TAB_ID, loadDataSafely, mergeData } from './multiTabManager';
 import { getAccessToken, refreshAccessToken } from './tokenManager';
 const API_BASE =
-  process.env.REACT_APP_API_URL || "http://localhost:3001";
+  (process.env.REACT_APP_API_URL || process.env.REACT_APP_API_BASE_URL || '').toString().trim().replace(/\/+$/, '');
 
 // Request queue to prevent duplicate concurrent requests
 const pendingRequests = new Map();

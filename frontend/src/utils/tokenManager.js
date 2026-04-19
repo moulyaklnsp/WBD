@@ -5,7 +5,7 @@
  * Access tokens expire in 30 minutes; refresh tokens last 7 days.
  */
 
-const BACKEND_BASE = 'http://localhost:3000';
+// NOTE: Backend base is resolved by `installBackendFetchProxy` using `REACT_APP_API_URL`.
 
 // ─── Token Storage Keys ──────────────────────────────────────────
 const ACCESS_TOKEN_KEY = 'chesshive_access_token';
@@ -225,7 +225,7 @@ async function doRefresh(isLocked) {
   }
 
   try {
-    const response = await fetch(`${BACKEND_BASE}/api/token/refresh`, {
+    const response = await fetch('/api/token/refresh', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -349,7 +349,7 @@ export async function logoutUser() {
 
   try {
     const accessToken = getAccessToken();
-    await fetch(`${BACKEND_BASE}/api/logout`, {
+    await fetch('/api/logout', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
