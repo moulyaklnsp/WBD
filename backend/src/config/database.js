@@ -13,6 +13,28 @@ let client;
 let db;
 let connectionPromise;
 
+function sameIndexKeys(existingKeys, desiredKeys) {
+  const a = Object.entries(existingKeys || {});
+  const b = Object.entries(desiredKeys || {});
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i][0] !== b[i][0]) return false;
+    if (a[i][1] !== b[i][1]) return false;
+  }
+  return true;
+}
+
+function isIndexConflictError(err) {
+  const codeName = err?.codeName || '';
+  const message = (err?.message || '').toString();
+  return codeName === 'IndexKeySpecsConflict'
+    || codeName === 'IndexOptionsConflict'
+    || codeName === 'IndexAlreadyExists'
+    || message.includes('IndexKeySpecsConflict')
+    || message.includes('IndexOptionsConflict')
+    || message.includes('Index already exists');
+}
+
 const COLLECTION_DEFS = [
   {
     name: 'users',
@@ -92,12 +114,31 @@ async function ensureCollections(dbConn) {
       });
     }
 
-    for (const idx of def.indexes || []) {
+    const indexesToEnsure = def.indexes || [];
+    if (indexesToEnsure.length > 0) {
+      let existingIndexes = [];
       try {
-        await dbConn.collection(def.name).createIndex(idx.keys, idx.options);
+        existingIndexes = await dbConn.collection(def.name).listIndexes().toArray();
       } catch (e) {
-        // Index creation should not prevent the app from starting.
-        console.error(`Index init failed for ${def.name}:`, e);
+        existingIndexes = [];
+      }
+
+      for (const idx of indexesToEnsure) {
+        const desiredName = idx?.options?.name;
+        const alreadyThere = existingIndexes.some((existingIdx) => {
+          if (desiredName && existingIdx?.name === desiredName) return true;
+          return sameIndexKeys(existingIdx?.key, idx?.keys);
+        });
+        if (alreadyThere) continue;
+
+        try {
+          await dbConn.collection(def.name).createIndex(idx.keys, idx.options);
+        } catch (e) {
+          // If another deploy/instance created it first (or a conflicting index exists), skip silently.
+          if (isIndexConflictError(e)) continue;
+          // Index creation should not prevent the app from starting.
+          console.error(`Index init failed for ${def.name}:`, e);
+        }
       }
     }
   }
