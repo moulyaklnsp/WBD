@@ -163,7 +163,11 @@ if (!IS_TEST) {
 // app.use(cors({ origin: ['http://localhost:3000', 'http://localhost:3001'], credentials: true }));
 
 app.use(cors({
-  origin: process.env.CLIENT_ORIGIN || true,
+  origin: (() => {
+    if (!process.env.CLIENT_ORIGIN) return true;
+    const list = parseOrigins(process.env.CLIENT_ORIGIN);
+    return list.length > 0 ? list : true;
+  })(),
   credentials: true
 }));
 
@@ -183,7 +187,7 @@ app.use(session({
   // cookie: { secure: false, sameSite: 'lax', httpOnly: true, maxAge: 24 * 60 * 60 * 1000 }
   cookie: {
   secure: process.env.NODE_ENV === 'production',
-  sameSite: 'lax',
+  sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
   httpOnly: true,
   maxAge: 24 * 60 * 60 * 1000
 }
