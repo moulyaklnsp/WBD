@@ -1,11 +1,7 @@
-version: '3.8'
-
 services:
   mongodb:
     image: mongo:6-jammy
-    container_name: chesshive_mongo
-    ports:
-      - "27017:27017"
+    container_name: chesshive_mongodb
     volumes:
       - mongodb_data:/data/db
     restart: unless-stopped
@@ -17,6 +13,24 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # Optional Solr service for development/search indexing.
+  # Enable with: `docker compose --profile solr up`
+  solr:
+    image: solr:9
+    container_name: chesshive_solr
+    profiles: ["solr"]
+    ports:
+      - "8983:8983"
+    volumes:
+      - solr_data:/var/solr
     restart: unless-stopped
 
   backend:
@@ -25,16 +39,45 @@ services:
       dockerfile: Dockerfile
     container_name: chesshive_backend
     ports:
-      - "5000:5000"
+      - "3001:3001"
+    env_file:
+      - ./backend/.env
     environment:
-      - PORT=5000
-      - MONGODB_URI=mongodb://mongodb:27017/chesshive
+      - NODE_ENV=production
+      - PORT=3001
+      # Use MongoDB Atlas (from `./backend/.env`) for production data.
       - REDIS_URL=redis://redis:6379
-      # Add cloudinary/razorpay secrets here when building real containers
+      - SOLR_ENABLED=${SOLR_ENABLED:-0}
+      - SOLR_URL=${SOLR_URL:-http://solr:8983}
+      - SOLR_BASE_URL=${SOLR_BASE_URL:-http://solr:8983}
+    # Help prevent intermittent `getaddrinfo EAI_AGAIN` when resolving Atlas SRV hosts.
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    dns_opt:
+      - ndots:0
     depends_on:
       - mongodb
       - redis
     restart: unless-stopped
+
+  # Optional containerized test runner:
+  # `docker compose --profile test run --rm backend-test`
+  backend-test:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: test
+    profiles: ["test"]
+    env_file:
+      - ./backend/.env
+    environment:
+      - NODE_ENV=test
+      - MONGODB_URI=mongodb://mongodb:27017/chesshive_test
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - mongodb
+      - redis
 
   frontend:
     build:
@@ -46,10 +89,10 @@ services:
     depends_on:
       - backend
     environment:
-      # React app env vars mapping
-      - REACT_APP_BACKEND_URL=http://localhost:5000
+      - BACKEND_URL=http://backend:3001
     restart: unless-stopped
 
 volumes:
   mongodb_data:
   redis_data:
+  solr_data:

@@ -1,5 +1,7 @@
 import { TAB_ID, loadDataSafely, mergeData } from './multiTabManager';
 import { getAccessToken, refreshAccessToken } from './tokenManager';
+const API_BASE =
+  process.env.REACT_APP_API_URL || "http://localhost:3001";
 
 // Request queue to prevent duplicate concurrent requests
 const pendingRequests = new Map();
@@ -194,19 +196,23 @@ export async function loadWithoutOverwrite(path, options, existingData) {
 }
 
 export function fetchAsAdmin(path, options) {
-  return enhancedFetch(path, mergeOptions(options, { 'X-Role': 'admin' }), { cacheResponse: true });
+  return enhancedFetch(`${API_BASE}${path}`, mergeOptions(options, { 'X-Role': 'admin' }), { cacheResponse: true });
 }
 
 export function fetchAsOrganizer(path, options) {
-  return enhancedFetch(path, mergeOptions(options, { 'X-Role': 'organizer' }), { cacheResponse: true });
+  return enhancedFetch(`${API_BASE}${path}`, mergeOptions(options, { 'X-Role': 'organizer' }), { cacheResponse: true });
 }
 
 export function fetchAsCoordinator(path, options) {
-  return enhancedFetch(path, mergeOptions(options, { 'X-Role': 'coordinator' }), { cacheResponse: true });
+  return enhancedFetch(
+    `${API_BASE}${path}`,
+    mergeOptions(options, { 'X-Role': 'coordinator' }),
+    { cacheResponse: true }
+  );
 }
 
 export function fetchAsPlayer(path, options) {
-  return enhancedFetch(path, mergeOptions(options, { 'X-Role': 'player' }), { cacheResponse: true });
+  return enhancedFetch(`${API_BASE}${path}`, mergeOptions(options, { 'X-Role': 'player' }), { cacheResponse: true });
 }
 
 // Safe POST/PUT/PATCH that validates before sending

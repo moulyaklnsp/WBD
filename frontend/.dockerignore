@@ -1,5 +1,6 @@
 node_modules
 build
+build-ci*
 npm-debug.log
 .env
 logs

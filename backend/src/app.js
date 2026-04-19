@@ -178,7 +178,7 @@ app.get('/slips/:filename', (req, res) => {
     return res.status(500).send('Server error');
   }
 });
-app.use(express.static(path.join(__dirname, '..', 'public')));
+// app.use(express.static(path.join(__dirname, '..', 'public')));
 app.use(helmet());
 
 // ─── Swagger UI ───────────────────────────────────────────────────────────────
@@ -220,7 +220,9 @@ app.use('/coordinator', isCoordinator, coordinatorRoutes);
 app.use('/player',      isPlayer,      playerRoutes);
 
 // ─── Static root ──────────────────────────────────────────────────────────────
-app.get('/', (_req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'index.html')));
+app.get('/', (_req, res) => {
+  res.json({ status: "ChessHive API running" });
+});
 app.get('/favicon.ico', (_req, res) => res.status(204).end());
 
 // ─── Dev mock feedback (development only) ────────────────────────────────────
