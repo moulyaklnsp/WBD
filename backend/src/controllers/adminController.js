@@ -931,7 +931,7 @@ const getPlayerDetails = async (req, res) => {
 const createAdminInvite = async (req, res) => {
   try {
     if (!isSuperAdminRequest(req)) {
-      return res.status(403).json({ success: false, message: required' });
+      return res.status(403).json({ success: false, message: 'Super admin access required' });
     }
 
     const name = String(req.body?.name || '').trim();

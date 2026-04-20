@@ -78,7 +78,7 @@ module.exports = {
     const { name, dob, gender, college, email, phone, password, role, aicf_id, fide_id } = req.body;
     let errors = {};
 
-    if (!name || !/^[A-Za-z]+(?: [A-Za-z]+)*$/.test(name)) errors.name = "Valid full name is required (letters only)";
+    // if (!name || !/^[A-Za-z]+(?: [A-Za-z]+)*$/.test(name)) errors.name = "Valid full name is required (letters only)";
     if (!dob) errors.dob = "Date of Birth is required";
     else {
       const birthDate = new Date(dob);
